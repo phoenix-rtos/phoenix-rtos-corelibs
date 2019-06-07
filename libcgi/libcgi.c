@@ -27,7 +27,7 @@ int libcgi_getRequestMethod(void)
 	char *method = getenv("REQUEST_METHOD");
 
 	if (method == NULL)
-		return -1;
+		return LIBCGI_METHOD_ERROR;
 
 	len = strlen(method);
 
@@ -39,17 +39,24 @@ int libcgi_getRequestMethod(void)
 		else
 			return LIBCGI_METHOD_POST;
 	} else
-		return -1;
+		return LIBCGI_METHOD_ERROR;
 }
 
 
-void libcgi_printHeader(char *content_type, char *content_disposition, char *filename)
+void libcgi_printCode(unsigned code, char *status)
+{
+	printf("HTTP/1.1 %u %s\n", code, status);
+}
+
+void libcgi_printHeaders(char *content_type, char *content_disposition, char *filename, char *raw_headers)
 {
 	/* TODO: validate? */
-	printf("HTTP/1.1 200 OK\n");
 	if (content_disposition != NULL && filename != NULL)
 		printf("Content-Disposition: %s; filename=%s\n", content_disposition, filename);
 	printf("Content-Type: %s\n", content_type);
+	if (raw_headers != NULL)
+		printf("%s\n", raw_headers);
+
 	printf("\n");
 }
 

@@ -20,7 +20,8 @@
 enum {
 	LIBCGI_METHOD_POST,
 	LIBCGI_METHOD_MULTIPART,
-	LIBCGI_METHOD_GET
+	LIBCGI_METHOD_GET,
+	LIBCGI_METHOD_ERROR
 };
 
 
@@ -31,7 +32,10 @@ extern int libcgi_getRequestMethod(void);
 extern char *libcgi_getQueryString(void);
 
 /* output header printing */
-extern void libcgi_printHeader(char *content_type, char *content_disposition, char *filename);
+extern void libcgi_printCode(unsigned code, char *status);
+
+
+extern void libcgi_printHeaders(char *content_type, char *content_disposition, char *filename, char *raw_headers);
 
 
 /* parameter structure */
