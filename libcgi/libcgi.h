@@ -57,5 +57,4 @@ extern void libcgi_freeUrlParams(libcgi_param_t *params_head);
 extern libcgi_param_t *libcgi_getMultipartParams(void);
 extern void libcgi_freeMultipartParams(libcgi_param_t *params_head);
 
-
 #endif /* _LIBCGI_H_ */

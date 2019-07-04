@@ -25,20 +25,23 @@ int libcgi_getRequestMethod(void)
 {
 	int len;
 	char *method = getenv("REQUEST_METHOD");
+	char *content = NULL;
 
 	if (method == NULL)
 		return LIBCGI_METHOD_ERROR;
 
 	len = strlen(method);
 
-	if (len >= 3 && !strncmp(method, "GET", len))
-		return LIBCGI_METHOD_GET;
-	else  if (len >= 4 && !strncmp(method, "POST", len)) {
-		if (!strncasecmp("multipart/form-data", getenv("CONTENT TYPE"), strlen("multipart/form-data")))
+	if (len >= 4 && !strncmp(method, "POST", len)) {
+		content = getenv("CONTENT_TYPE");
+		if (content != NULL && !strncasecmp("multipart/form-data", content, strlen("multipart/form-data")))
 			return LIBCGI_METHOD_MULTIPART;
 		else
 			return LIBCGI_METHOD_POST;
-	} else
+	}
+	else if (len >= 3 && !strncmp(method, "GET", len))
+		return LIBCGI_METHOD_GET;
+	else
 		return LIBCGI_METHOD_ERROR;
 }
 
@@ -63,7 +66,7 @@ void libcgi_printHeaders(char *content_type, char *content_disposition, char *fi
 
 char *libcgi_getQueryString(void)
 {
-	return getenv("QUERY STRING");
+	return getenv("QUERY_STRING");
 }
 
 
@@ -83,9 +86,14 @@ libcgi_param_t *libcgi_getUrlParams(void)
 	len = strlen(urlParams);
 
 	while ((sep = strchr(urlParams, '&')) != NULL)
-		sep = 0;
-	while ((sep = strchr(urlParams, '=')) != NULL)
-		sep = 0;
+		*sep = '=';
+
+	sep = urlParams;
+	while ((sep = strchr(sep, '=')) != NULL) {
+		len--;
+		*sep = 0;
+		sep++;
+	}
 
 	plen = 0;
 	while (plen < len) {
@@ -97,11 +105,11 @@ libcgi_param_t *libcgi_getUrlParams(void)
 		}
 
 		param->key = urlParams;
+		plen += strlen(urlParams);
 		urlParams += strlen(urlParams) + 1;
-		plen += strlen(urlParams) + 1;
 		param->value = urlParams;
+		plen += strlen(urlParams);
 		urlParams += strlen(urlParams) + 1;
-		plen += strlen(urlParams) + 1;
 
 		if (head != param) {
 			tail->next = param;
@@ -286,13 +294,13 @@ char *libcgi_getMultipartParam(char *paramName)
 
 
 /* TODO: raw content */
-libcgi_param_t *libcgi_getRawContent(void)
+char *libcgi_getRawContent(void)
 {
 	return NULL;
 }
 
 
-void libcgi_freeRawContent(libcgi_param_t *params_head)
+void libcgi_freeRawContent(char *params_head)
 {
 
 }
