@@ -235,6 +235,9 @@ char *libcgi_getUrlParam(char *paramName)
 	char *query = libcgi_getQueryString();
 	int pos, len = strlen(query), paramlen = strlen(paramName);
 
+	if (query == NULL)
+		return NULL;
+
 	pos = strcspn(query, paramName);
 	if (pos < len) {
 
