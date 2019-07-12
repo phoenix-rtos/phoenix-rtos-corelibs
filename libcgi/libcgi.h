@@ -19,12 +19,16 @@
 /* request method */
 enum {
 	LIBCGI_METHOD_POST,
-	LIBCGI_METHOD_MULTIPART,
+	LIBCGI_METHOD_POST_MULTIPART,
 	LIBCGI_METHOD_GET,
+	LIBCGI_METHOD_DELETE,
 	LIBCGI_METHOD_ERROR
 };
 
-
+/* auth modes */
+enum {
+	LIBCGI_AUTH_COOKIE_FILE
+};
 
 extern int libcgi_getRequestMethod(void);
 

@@ -1,4 +1,4 @@
-CGI_OBJS := libcgi.o
+CGI_OBJS := libcgi_params.o libcgi_auth.o
 
 $(PREFIX_A)libcgi.a: $(addprefix $(PREFIX_O)libcgi/, $(CGI_OBJS))
 	$(ARCH)

@@ -32,15 +32,17 @@ int libcgi_getRequestMethod(void)
 
 	len = strlen(method);
 
-	if (len >= 4 && !strncmp(method, "POST", len)) {
+	if (!strncmp(method, "POST", len)) {
 		content = getenv("CONTENT_TYPE");
 		if (content != NULL && !strncasecmp("multipart/form-data", content, strlen("multipart/form-data")))
-			return LIBCGI_METHOD_MULTIPART;
+			return LIBCGI_METHOD_POST_MULTIPART;
 		else
 			return LIBCGI_METHOD_POST;
 	}
-	else if (len >= 3 && !strncmp(method, "GET", len))
+	else if (!strncmp(method, "GET", len))
 		return LIBCGI_METHOD_GET;
+	else if (!strncmp(method, "DELETE", len))
+		return LIBCGI_METHOD_DELETE;
 	else
 		return LIBCGI_METHOD_ERROR;
 }
