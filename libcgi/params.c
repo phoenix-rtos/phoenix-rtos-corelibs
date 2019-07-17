@@ -21,51 +21,6 @@
 #include "libcgi.h"
 
 
-int libcgi_getRequestMethod(void)
-{
-	int len;
-	char *method = getenv("REQUEST_METHOD");
-	char *content = NULL;
-
-	if (method == NULL)
-		return LIBCGI_METHOD_ERROR;
-
-	len = strlen(method);
-
-	if (!strncmp(method, "POST", len)) {
-		content = getenv("CONTENT_TYPE");
-		if (content != NULL && !strncasecmp("multipart/form-data", content, strlen("multipart/form-data")))
-			return LIBCGI_METHOD_POST_MULTIPART;
-		else
-			return LIBCGI_METHOD_POST;
-	}
-	else if (!strncmp(method, "GET", len))
-		return LIBCGI_METHOD_GET;
-	else if (!strncmp(method, "DELETE", len))
-		return LIBCGI_METHOD_DELETE;
-	else
-		return LIBCGI_METHOD_ERROR;
-}
-
-
-void libcgi_printCode(unsigned code, char *status)
-{
-	printf("HTTP/1.1 %u %s\n", code, status);
-}
-
-void libcgi_printHeaders(char *content_type, char *content_disposition, char *filename, char *raw_headers)
-{
-	/* TODO: validate? */
-	if (content_disposition != NULL && filename != NULL)
-		printf("Content-Disposition: %s; filename=%s\n", content_disposition, filename);
-	printf("Content-Type: %s\n", content_type);
-	if (raw_headers != NULL)
-		printf("%s\n", raw_headers);
-
-	printf("\n");
-}
-
-
 char *libcgi_getQueryString(void)
 {
 	return getenv("QUERY_STRING");
@@ -144,10 +99,16 @@ void libcgi_freeUrlParams(libcgi_param_t *params_head)
 
 static char *libcgi_getMultipartBoundry(void)
 {
-	char *method = getenv("REQUEST METHOD");
+	char *content = getenv("CONTENT_TYPE");
 	char *boundry, *str;
 
-	str = strchr(method, '=');
+	if (content == NULL)
+		return NULL;
+
+	str = strchr(content, '=');
+	if (str == NULL)
+		return NULL;
+
 	str++;
 	boundry = calloc(1, strlen(str) + 3);
 	boundry[0] = '-';
@@ -158,55 +119,120 @@ static char *libcgi_getMultipartBoundry(void)
 }
 
 
-libcgi_param_t *libcgi_getMultipartParams(void)
+libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 {
-	libcgi_param_t *head = NULL, *tail, *param;
-	char mpl[4096]; /* multipart line */
+	libcgi_param_t *head = NULL, *tail = NULL, *param;
+	char *mp_buf, *tmp_buf; /* multipart line */
+	char file_path[256];
+	char *mp, *key, *tmp = NULL;
+
 	char *boundry = libcgi_getMultipartBoundry();
-	int nl, pos, blen = strlen(boundry);
+	int klen, blen = strlen(boundry);
 
-	/* TODO: handle file upload */
-	while (fgets(mpl, sizeof(mpl), stdin) != NULL) {
+#define RET_ERR  	do { \
+						libcgi_freeMultipartParams(head); \
+						free(mp_buf); \
+						free(tmp_buf); \
+						return NULL; \
+					} while (0)
 
-		if (!strncmp(boundry, mpl, blen)) {
-			nl = strcspn(mpl, "\r\n");
+	mp_buf = calloc(1, 4096);
+	tmp_buf = calloc(1, 128);
+
+	if (mp_buf == NULL || tmp_buf == NULL)
+		RET_ERR;
+
+	mp = fgets(mp_buf, 4096, stdin);
+	while (mp != NULL) {
+
+		if (!strncmp(boundry, mp, blen)) {
+			klen = strcspn(mp, "\r\n");
 			/* check multipart end boundry */
-			if (nl - 2 == blen && strncmp(&mpl[blen], "--", 2))
+			if (klen - 2 == blen && !strncmp(&mp[blen], "--", 2))
 				break;
 
-			param = malloc(sizeof(libcgi_param_t));
-			param->next = NULL;
+			param = calloc(1, sizeof(libcgi_param_t));
 			if (head == NULL) {
 				head = param;
 				tail = head;
 			}
-
-			/* TODO: check for errors */
-			fgets(mpl, sizeof(mpl), stdin);
-			pos = strcspn(mpl, "=\"") + 2;
-			nl = strcspn(mpl + pos, "\"");
-			param->key = calloc(1, nl + 1);
-			memcpy(param->key, mpl + pos, nl);
-
-			/* empty line */
-			do {
-				fgets(mpl, sizeof(mpl), stdin);
-			} while (strcspn(mpl, "\r\n") != 0);
-
-			/* value */
-			fgets(mpl, sizeof(mpl), stdin);
-
-			/* TODO: handle values larger than 4k */
-			nl = strcspn(mpl, "\r\n");
-			param->value = calloc(1, nl + 1);
-			memcpy(param->value, mpl, nl);
-
-			if (head != param) {
+			else {
 				tail->next = param;
 				tail = param;
 			}
+
+			if ((mp = fgets(mp_buf, 4096, stdin)) == NULL)
+				RET_ERR;
+
+			key = strstr(mp, "filename=\"") + strlen("filename=\"");
+			if (key != NULL) {
+				klen = strcspn(key, "\"");
+				param->filename = calloc(1, klen + 1);
+				param->type = LIBCGI_PARAM_FILE;
+				memcpy(param->filename, key, klen);
+			}
+			else {
+				key = strstr(mp, "name=\"") + strlen("name=\"");
+
+				if (key == NULL) RET_ERR;
+
+				klen = strcspn(key, "\"");
+				param->key = calloc(1, klen + 1);
+				memcpy(param->key, key, klen);
+			}
+
+			/* ff to the content */
+			while ((mp = fgets(mp_buf, 4096, stdin)) != NULL) {
+				if (!strcmp(mp, "\r\n"))
+					break;
+			}
+
+			if (mp == NULL)
+				RET_ERR;
+
+			if (param->type != LIBCGI_PARAM_FILE || store_path == NULL) {
+				param->stream = tmpfile();
+			 }
+			 else {
+				sprintf(file_path, "%s/%s", store_path, param->filename);
+				param->stream  = fopen(file_path, "w+");
+			}
+
+			if (param->stream == NULL)
+				RET_ERR;
+
+			while ((mp = fgets(mp_buf, 4096, stdin)) != NULL) {
+				if (!strncmp(boundry, mp, blen)) {
+					break;
+				}
+
+				if (tmp != NULL) {
+					fputs(tmp, param->stream);
+					tmp = NULL;
+				}
+
+				if (!strncmp(mp, "\r\n", 2)) {
+					tmp = fgets(tmp_buf, 128, stdin);
+					if (tmp == NULL)
+						RET_ERR;
+					if (!strncmp(boundry, tmp, blen))
+						break;
+					else {
+						fputs(mp, param->stream);
+						continue;
+					}
+				}
+
+				fputs(mp, param->stream);
+			}
+			fseek(param->stream, 0, SEEK_SET);
 		}
+		else
+			RET_ERR;
 	}
+
+	free(tmp_buf);
+	free(mp_buf);
 	return head;
 }
 
@@ -222,12 +248,13 @@ void libcgi_freeMultipartParams(libcgi_param_t *params_head)
 	while (param != NULL) {
 		victim = param;
 		param = param->next;
-
-		free(victim->key);
-		free(victim->value);
+		if (victim->type == LIBCGI_PARAM_DEFAULT)
+			free(victim->key);
+		else
+			free(victim->filename);
+		fclose(victim->stream);
 		free(victim);
 	}
-
 }
 
 
@@ -295,17 +322,4 @@ char *libcgi_getMultipartParam(char *paramName)
 
 	fseek(stdin, 0, SEEK_SET);
 	return NULL;
-}
-
-
-/* TODO: raw content */
-char *libcgi_getRawContent(void)
-{
-	return NULL;
-}
-
-
-void libcgi_freeRawContent(char *params_head)
-{
-
 }

@@ -16,6 +16,8 @@
 #ifndef _LIBCGI_H_
 #define _LIBCGI_H_
 
+#include <stdio.h>
+
 /* request method */
 enum {
 	LIBCGI_METHOD_POST,
@@ -45,10 +47,15 @@ extern void libcgi_printHeaders(char *content_type, char *content_disposition, c
 /* parameter structure */
 typedef struct _libcgi_param {
 	struct _libcgi_param *next;
-	int type; /* to recognize param type - not used yet */
-	char *key;
-	char *value;
-	char *filename; /* for file types - not used yet*/
+	enum { LIBCGI_PARAM_DEFAULT, LIBCGI_PARAM_FILE } type;
+	union {
+		char *key;
+		char *filename;
+	};
+	union {
+		char *value;
+		FILE *stream;
+	};
 } libcgi_param_t;
 
 
@@ -58,7 +65,7 @@ extern void libcgi_freeUrlParams(libcgi_param_t *params_head);
 
 
 /* multipart parameters */
-extern libcgi_param_t *libcgi_getMultipartParams(void);
+extern libcgi_param_t *libcgi_getMultipartParams(char *store_path);
 extern void libcgi_freeMultipartParams(libcgi_param_t *params_head);
 
 #endif /* _LIBCGI_H_ */
