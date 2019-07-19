@@ -20,3 +20,10 @@
 #include <unistd.h>
 
 #include "libcgi.h"
+
+
+/* override me */
+int __attribute__((weak))libcgi_isLogged(int argc, ...)
+{
+	return 0;
+}
