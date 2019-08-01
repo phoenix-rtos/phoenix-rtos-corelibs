@@ -118,31 +118,30 @@ static char *libcgi_getMultipartBoundry(void)
 	return boundry;
 }
 
+#define CGI_BUF_SIZE 4096
 
 libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 {
 	libcgi_param_t *head = NULL, *tail = NULL, *param;
-	char *mp_buf, *tmp_buf; /* multipart line */
+	char *mp_buf; /* multipart buffer */
 	char file_path[256];
-	char *mp, *key, *tmp = NULL;
+	char *mp, *key;
 
 	char *boundry = libcgi_getMultipartBoundry();
-	int klen, blen = strlen(boundry);
+	int klen, blen = strlen(boundry), i = 0;
 
 #define RET_ERR  	do { \
 						libcgi_freeMultipartParams(head); \
 						free(mp_buf); \
-						free(tmp_buf); \
 						return NULL; \
 					} while (0)
 
-	mp_buf = calloc(1, 4096);
-	tmp_buf = calloc(1, 128);
+	mp_buf = calloc(1, CGI_BUF_SIZE);
 
-	if (mp_buf == NULL || tmp_buf == NULL)
+	if (mp_buf == NULL)
 		RET_ERR;
 
-	mp = fgets(mp_buf, 4096, stdin);
+	mp = fgets(mp_buf, CGI_BUF_SIZE, stdin);
 	while (mp != NULL) {
 
 		if (!strncmp(boundry, mp, blen)) {
@@ -161,7 +160,7 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 				tail = param;
 			}
 
-			if ((mp = fgets(mp_buf, 4096, stdin)) == NULL)
+			if ((mp = fgets(mp_buf, CGI_BUF_SIZE, stdin)) == NULL)
 				RET_ERR;
 
 			key = strstr(mp, "filename=\"") + strlen("filename=\"");
@@ -174,7 +173,8 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 			else {
 				key = strstr(mp, "name=\"") + strlen("name=\"");
 
-				if (key == NULL) RET_ERR;
+				if (key == NULL)
+					RET_ERR;
 
 				klen = strcspn(key, "\"");
 				param->key = calloc(1, klen + 1);
@@ -182,7 +182,7 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 			}
 
 			/* ff to the content */
-			while ((mp = fgets(mp_buf, 4096, stdin)) != NULL) {
+			while ((mp = fgets(mp_buf, CGI_BUF_SIZE, stdin)) != NULL) {
 				if (!strcmp(mp, "\r\n"))
 					break;
 			}
@@ -195,43 +195,82 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 			 }
 			 else {
 				sprintf(file_path, "%s/%s", store_path, param->filename);
-				param->stream  = fopen(file_path, "w+");
+				param->stream = fopen(file_path, "w+");
 			}
 
 			if (param->stream == NULL)
 				RET_ERR;
 
-			while ((mp = fgets(mp_buf, 4096, stdin)) != NULL) {
-				if (!strncmp(boundry, mp, blen)) {
-					break;
-				}
+			mp = mp_buf;
+			/* read byte by byte from stdin to detect cgi boundry */
+			while (fread(mp, 1, 1, stdin) > 0) {
 
-				if (tmp != NULL) {
-					fputs(tmp, param->stream);
-					tmp = NULL;
-				}
-
-				if (!strncmp(mp, "\r\n", 2)) {
-					tmp = fgets(tmp_buf, 128, stdin);
-					if (tmp == NULL)
+				/*check for boundry start */
+				if (*mp == '\r') {
+					mp++;
+					/* check for possible buffer overflow */
+					if (mp - mp_buf >= CGI_BUF_SIZE) {
+						fwrite(mp_buf, 1, CGI_BUF_SIZE - 1, param->stream);
+						mp = mp_buf;
+						*mp++ = '\r';
+					}
+					/* check second character */
+					if (fread(mp, 1 ,1, stdin) < 1)
 						RET_ERR;
-					if (!strncmp(boundry, tmp, blen))
-						break;
+
+					if (*mp == '\n') {
+						/* check if we have space in buffer for whole boundry */
+						if (mp - mp_buf > (CGI_BUF_SIZE - blen - 4)) {
+							fwrite(mp_buf, 1, mp - mp_buf - 1, param->stream);
+							mp = mp_buf;
+							*mp++ = '\r';
+							*mp++ = '\n';
+						}
+						else
+							mp++;
+						/* boundry check */
+						while (i < blen && fread(mp, 1 , 1, stdin) > 0) {
+							*(mp + 1) = 0;
+							if (*mp != boundry[i]) {
+								mp++;
+								i = 0;
+								break;
+							}
+							mp++;
+							i++;
+						}
+						/* boundry found. flush buffer and get to the next element */
+						if (i == blen) {
+							fwrite(mp_buf, 1, mp - mp_buf - blen - 2, param->stream);
+							if (fread(mp, 2 , 1, stdin) < 1)
+								RET_ERR;
+
+							mp[2] = 0;
+							mp = mp - blen;
+							i = 0;
+							break;
+						}
+					}
 					else {
-						fputs(mp, param->stream);
-						continue;
+						mp++;
 					}
 				}
-
-				fputs(mp, param->stream);
+				else {
+					mp++;
+				}
+				/* check if buffer is full */
+				if (mp - mp_buf >= CGI_BUF_SIZE) {
+					fwrite(mp_buf, 1, CGI_BUF_SIZE, param->stream);
+					mp = mp_buf;
+				}
 			}
 			fseek(param->stream, 0, SEEK_SET);
 		}
-		else
+		else {
 			RET_ERR;
+		}
 	}
 
-	free(tmp_buf);
 	free(mp_buf);
 	return head;
 }
@@ -277,49 +316,4 @@ char *libcgi_getUrlParam(char *paramName)
 	}
 
 	return param;
-}
-
-
-char *libcgi_getMultipartParam(char *paramName)
-{
-	char mpl[4096]; /* multipart line */
-	char *boundry = libcgi_getMultipartBoundry();
-	int nl, pos, blen = strlen(boundry);
-	char *param;
-
-	/* TODO: handle file upload */
-	while (fgets(mpl, sizeof(mpl), stdin) != NULL) {
-
-		if (!strncmp(boundry, mpl, blen)) {
-			nl = strcspn(mpl, "\r\n");
-			/* check multipart end boundry */
-			if (nl - 2 == blen && strncmp(&mpl[blen], "--", 2))
-				break;
-
-			/* TODO: check for errors */
-			fgets(mpl, sizeof(mpl), stdin);
-			pos = strcspn(mpl, "=\"") + 2;
-			if (!strncmp(paramName, mpl + pos, strlen(paramName))) {
-
-				/* empty line */
-				do {
-					fgets(mpl, sizeof(mpl), stdin);
-				} while (strcspn(mpl, "\r\n") != 0);
-
-				/* value */
-				fgets(mpl, sizeof(mpl), stdin);
-
-				/* TODO: handle values larger than 4k */
-				nl = strcspn(mpl, "\r\n");
-				param = calloc(1, nl + 1);
-				memcpy(param, mpl, nl);
-				fseek(stdin, 0, SEEK_SET);
-
-				return param;
-			}
-		}
-	}
-
-	fseek(stdin, 0, SEEK_SET);
-	return NULL;
 }
