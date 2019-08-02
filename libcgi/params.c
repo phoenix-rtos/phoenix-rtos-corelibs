@@ -128,7 +128,7 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 	char *mp, *key;
 
 	char *boundry = libcgi_getMultipartBoundry();
-	int klen, blen = strlen(boundry), i = 0;
+	int klen, blen = strlen(boundry), sz = 0;
 
 #define RET_ERR  	do { \
 						libcgi_freeMultipartParams(head); \
@@ -206,11 +206,12 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 			while (fread(mp, 1, 1, stdin) > 0) {
 
 				/*check for boundry start */
-				if (*mp == '\r') {
-					mp++;
-					/* check for possible buffer overflow */
-					if (mp - mp_buf >= CGI_BUF_SIZE) {
-						fwrite(mp_buf, 1, CGI_BUF_SIZE - 1, param->stream);
+				if (*mp++ == '\r') {
+					/* check if boundry will fit the buffer */
+					if (mp - mp_buf - 1 > CGI_BUF_SIZE - blen - 5) {
+						if (fwrite(mp_buf, mp - mp_buf - 1, 1, param->stream) < 1)
+							RET_ERR;
+
 						mp = mp_buf;
 						*mp++ = '\r';
 					}
@@ -218,49 +219,39 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 					if (fread(mp, 1 ,1, stdin) < 1)
 						RET_ERR;
 
-					if (*mp == '\n') {
-						/* check if we have space in buffer for whole boundry */
-						if (mp - mp_buf > (CGI_BUF_SIZE - blen - 4)) {
-							fwrite(mp_buf, 1, mp - mp_buf - 1, param->stream);
-							mp = mp_buf;
-							*mp++ = '\r';
-							*mp++ = '\n';
-						}
-						else
-							mp++;
+					if (*mp++ == '\n') {
 						/* boundry check */
-						while (i < blen && fread(mp, 1 , 1, stdin) > 0) {
-							*(mp + 1) = 0;
-							if (*mp != boundry[i]) {
+						while (sz < blen && fread(mp, 1 , 1, stdin) > 0) {
+							if (*mp != boundry[sz]) {
 								mp++;
-								i = 0;
+								sz = 0;
 								break;
 							}
 							mp++;
-							i++;
+							sz++;
 						}
 						/* boundry found. flush buffer and get to the next element */
-						if (i == blen) {
-							fwrite(mp_buf, 1, mp - mp_buf - blen - 2, param->stream);
+						if (sz == blen) {
+							/* besides boundry buffer may be empty so check size to not get false error */
+							sz = mp - mp_buf - blen - 2;
+							if (sz && fwrite(mp_buf, sz, 1, param->stream) < 1)
+								RET_ERR;
+
 							if (fread(mp, 2 , 1, stdin) < 1)
 								RET_ERR;
 
 							mp[2] = 0;
 							mp = mp - blen;
-							i = 0;
+							sz = 0;
 							break;
 						}
 					}
-					else {
-						mp++;
-					}
-				}
-				else {
-					mp++;
 				}
 				/* check if buffer is full */
 				if (mp - mp_buf >= CGI_BUF_SIZE) {
-					fwrite(mp_buf, 1, CGI_BUF_SIZE, param->stream);
+					if (fwrite(mp_buf, CGI_BUF_SIZE, 1, param->stream) < 1)
+						RET_ERR;
+
 					mp = mp_buf;
 				}
 			}
