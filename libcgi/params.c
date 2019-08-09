@@ -118,7 +118,7 @@ static char *libcgi_getMultipartBoundry(void)
 	return boundry;
 }
 
-#define CGI_BUF_SIZE 4096
+#define CGI_BUF_SIZE (4096*16)
 
 libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 {
@@ -128,7 +128,7 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 	char *mp, *key;
 
 	char *boundry = libcgi_getMultipartBoundry();
-	int klen, blen = strlen(boundry), sz = 0;
+	int klen, blen = strlen(boundry);
 
 #define RET_ERR  	do { \
 						libcgi_freeMultipartParams(head); \
@@ -137,6 +137,15 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 					} while (0)
 
 	mp_buf = calloc(1, CGI_BUF_SIZE);
+
+	char *bbuf;
+	int i = 0, bbuf_len, nitems;
+
+	bbuf = calloc(1, blen + 3);
+	bbuf[0] = '\r';
+	bbuf[1] = '\n';
+	memcpy(&bbuf[2], boundry, blen);
+	bbuf_len = blen + 2;
 
 	if (mp_buf == NULL)
 		RET_ERR;
@@ -150,7 +159,9 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 			if (klen - 2 == blen && !strncmp(&mp[blen], "--", 2))
 				break;
 
+
 			param = calloc(1, sizeof(libcgi_param_t));
+
 			if (head == NULL) {
 				head = param;
 				tail = head;
@@ -202,59 +213,36 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 				RET_ERR;
 
 			mp = mp_buf;
+			nitems = 0;
+			i = 0;
 			/* read byte by byte from stdin to detect cgi boundry */
-			while (fread(mp, 1, 1, stdin) > 0) {
+			while ((nitems += fread(mp, 1, CGI_BUF_SIZE - nitems, stdin)) > 0) {
 
-				/*check for boundry start */
-				if (*mp++ == '\r') {
-					/* check if boundry will fit the buffer */
-					if (mp - mp_buf - 1 > CGI_BUF_SIZE - blen - 5) {
-						if (fwrite(mp_buf, mp - mp_buf - 1, 1, param->stream) < 1)
-							RET_ERR;
-
-						mp = mp_buf;
-						*mp++ = '\r';
-					}
-					/* check second character */
-					if (fread(mp, 1 ,1, stdin) < 1)
-						RET_ERR;
-
-					if (*mp++ == '\n') {
-						/* boundry check */
-						while (sz < blen && fread(mp, 1 , 1, stdin) > 0) {
-							if (*mp != boundry[sz]) {
-								mp++;
-								sz = 0;
-								break;
-							}
-							mp++;
-							sz++;
-						}
-						/* boundry found. flush buffer and get to the next element */
-						if (sz == blen) {
-							/* besides boundry buffer may be empty so check size to not get false error */
-							sz = mp - mp_buf - blen - 2;
-							if (sz && fwrite(mp_buf, sz, 1, param->stream) < 1)
-								RET_ERR;
-
-							if (fread(mp, 2 , 1, stdin) < 1)
-								RET_ERR;
-
-							mp[2] = 0;
-							mp = mp - blen;
-							sz = 0;
-							break;
-						}
-					}
+				while ((mp - mp_buf < nitems)) {
+					if (*mp != bbuf[i])
+						i = 0;
+					else
+						i++;
+					mp++;
+					if (i >= bbuf_len)
+						break;
 				}
-				/* check if buffer is full */
-				if (mp - mp_buf >= CGI_BUF_SIZE) {
-					if (fwrite(mp_buf, CGI_BUF_SIZE, 1, param->stream) < 1)
-						RET_ERR;
 
-					mp = mp_buf;
+				if (fwrite(mp_buf, mp - mp_buf - i, 1, param->stream) < 0)
+					RET_ERR;
+				memmove(mp_buf, mp - i, nitems - (mp - mp_buf - i));
+				nitems = nitems - (mp - mp_buf - i);
+
+				if (i >= bbuf_len) {
+					mp = mp_buf + 2;
+					i = 0;
+					break;
+				}
+				else {
+					mp = mp_buf + nitems;
 				}
 			}
+
 			fseek(param->stream, 0, SEEK_SET);
 		}
 		else {
@@ -262,6 +250,7 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 		}
 	}
 
+	free(bbuf);
 	free(mp_buf);
 	return head;
 }
