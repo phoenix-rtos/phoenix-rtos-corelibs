@@ -17,6 +17,7 @@
 #include <string.h>
 #include <strings.h>
 #include <stdio.h>
+#include <errno.h>
 
 #include "libcgi.h"
 
@@ -130,16 +131,17 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 	char *boundry = libcgi_getMultipartBoundry();
 	int klen, blen = strlen(boundry);
 
+	char *bbuf;
+	int i = 0, bbuf_len, nitems, nlast = 0;
+
 #define RET_ERR  	do { \
 						libcgi_freeMultipartParams(head); \
+						free(bbuf); \
 						free(mp_buf); \
 						return NULL; \
 					} while (0)
 
 	mp_buf = calloc(1, CGI_BUF_SIZE);
-
-	char *bbuf;
-	int i = 0, bbuf_len, nitems;
 
 	bbuf = calloc(1, blen + 3);
 	bbuf[0] = '\r';
@@ -218,11 +220,22 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 			/* read byte by byte from stdin to detect cgi boundry */
 			while ((nitems += fread(mp, 1, CGI_BUF_SIZE - nitems, stdin)) > 0) {
 
+				if (errno == EINTR)
+					continue;
+
+				if (nlast == nitems)
+					RET_ERR;
+
 				while ((mp - mp_buf < nitems)) {
-					if (*mp != bbuf[i])
-						i = 0;
-					else
+					if (*mp != bbuf[i]) {
+						if (*mp != bbuf[0])
+							i = 0;
+						else
+							i = 1;
+					}
+					else {
 						i++;
+					}
 					mp++;
 					if (i >= bbuf_len)
 						break;
@@ -233,6 +246,7 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 				memmove(mp_buf, mp - i, nitems - (mp - mp_buf - i));
 				nitems = nitems - (mp - mp_buf - i);
 
+				nlast = nitems;
 				if (i >= bbuf_len) {
 					mp = mp_buf + 2;
 					i = 0;
