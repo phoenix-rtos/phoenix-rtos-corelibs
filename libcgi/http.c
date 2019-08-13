@@ -23,7 +23,7 @@
 
 void libcgi_printCode(unsigned code, char *status)
 {
-	printf("HTTP/1.1 %u %s\n", code, status);
+	printf("Status: %d\n", code);
 }
 
 void libcgi_printHeaders(char *content_type, char *content_disposition, char *filename, char *raw_headers)
