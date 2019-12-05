@@ -136,6 +136,7 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 
 #define RET_ERR  	do { \
 						libcgi_freeMultipartParams(head); \
+						free(boundry); \
 						free(bbuf); \
 						free(mp_buf); \
 						return NULL; \
@@ -264,6 +265,7 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 		}
 	}
 
+	free(boundry);
 	free(bbuf);
 	free(mp_buf);
 	return head;
