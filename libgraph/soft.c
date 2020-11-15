@@ -7,392 +7,303 @@
  * Copyright 2002-2007 IMMOS
  */
 
-#include <dos.h>
+#include <stdio.h>
+#include <errno.h>
 
 #include "soft.h"
 
 
-int soft_line(graph_t *graph, char *arg)
+int soft_line(graph_t *graph, int x, int y, int dx, int dy, unsigned int stroke, unsigned int color)
 {
-  static int width = graph->width;
-  static int depth = graph->depth;
-  static u16 fbsel = graph->fbsel;
+	int a, b, c, d, e, f; /* ratio, len, step a, step b, address, width */
 
-  asm {
-    push ds
-    mov ebx, [arg]                     // arguments
-    mov esi, dword ptr [depth]         // color size, horizontal step
-    mov eax, dword ptr [width]         // picture width
+	if ((stroke <= 0) || (x < 0) || ((x + dx) < 0) || (y < 0) || ((y + dy) < 0) ||
+	    ((x + stroke) > graph->width) || ((x + dx + stroke) > graph->width) ||
+	    ((y + stroke) > graph->height) || ((y + dy + stroke) > graph->height))
+		return -EINVAL;
 
-    mul esi
-    mov ebp, eax                       // vertical step
-    mov eax, [ebx + 4]                 // line begining y position
-    mul dword ptr [width]              // picture width
-    add eax, [ebx]                     // line begining x position
-    mul esi
-    mov edi, eax                       // line begining address
-    mov eax, [ebx + 16]                // line width
-    push eax
-    push eax
-    dec eax
-    mul esi
-    mov ecx, [ebx + 8]                 // line dx coordinate
-    or ecx, ecx
-    jns line1                          // sign(dx)
-    add edi, eax                       // correct line begining address
-    neg esi                            // neg horizontal step
-    neg ecx                            // mod(dx)
-  }
-line1:
-  asm {
-    mul dword ptr [width]              // picture width
-    add edi, eax
-    mov edx, [ebx + 12]                // line dy coordinate
-    or edx, edx
-    jns line2                          // sign(dy)
-    sub edi, eax                       // correct line begining address
-    neg ebp                            // neg vertical step
-    neg edx                            // mod(dy)
- }
-line2:
-  asm {
-    cmp ecx, edx
-    jnc line12                         // case dx > dy
-    xchg ecx, edx
-    xor eax, eax
-    div ecx
-    mov edx, eax                       // angle tangens
-    mov eax, [ebx + 20]                // line color
-    mov bx, word ptr [fbsel]           // video segment
-    mov ds, bx
-    add esi, ebp                       // correct horizontal
-    mov ebx, dword ptr es:[depth]      // color size
+	if (!dx && !dy)
+		return graph_rect(x, y, stroke, stroke, color, 0);
 
-    cmp ebx, 2
-    jz line22                          // 16bit color
-  }
-line3:
-  asm {
-    push edi
-    push ecx
-    mov ebx, 80000000h                 // subpixel
-  }
-line4:
-  asm {
-    mov [edi], al
-    add ebx, edx
-    jc line5
-    add edi, ebp
-    loop line4
-    jmp line6
-  }
-line5:
-  asm {
-    add edi, esi
-    loop line4
-  }
-line6:
-  asm {
-    mov ecx, [esp + 8]                 // line width
-  }
-line7:
-  asm {
-    mov [edi], al
-    add edi, esi
-    sub edi, ebp
-    loop line7
-    pop ecx
-    pop edi
-    sub edi, ebp
-    dec dword ptr [esp + 4]            // line width
-    jnz line3
-    add edi, ebp
-    dec dword ptr [esp]                // line width
-    jnz line8                          // equal to 1
-    add esp, 8
-    pop ds
-  }
-  return GRAPH_SUCCESS;
+	c = (dx < 0) ? -dx : dx;
+	d = (dy < 0) ? -dy : dy;
 
-line8:
-  asm {
-    add edi, esi
-    sub edi, ebp
-    push edi
-    push ecx
-    mov ebx, 80000000h
-  }
-line9:
-  asm {
-    mov [edi], al
-    add ebx, edx
-    jc line10
-    add edi, ebp
-    loop line9
-    jmp line11
-  }
-line10:
-  asm {
-    add edi, esi
-    loop line9
-  }
-line11:
-  asm {
-    pop ecx
-    pop edi
-    dec dword ptr [esp]                // line width
-    jnz line8
-    add esp, 8
-    pop ds
-  }
-  return GRAPH_SUCCESS;
+	if (d > c) {
+		a = c * 0x10000 / d * 0xffff;
+		b = d;
+		c = graph->width * graph->depth;
+		y += stroke - 1;
+		if (dy < 0) {
+			x += dx;
+			y += dy;
+			dx = -dx;
+		}
+		if (dx < 0) {
+			x += stroke - 1;
+			d = c - graph->depth;
+		}
+		else
+			d = c + graph->depth;
+	}
+	else {
+		a = d * 0x10000 / c * 0xffff;
+		b = c;
+		c = graph->depth;
+		x += stroke - 1;
+		if (dx < 0) {
+			x += dx;
+			y += dy;
+			dy = -dy;
+		}
+		if (dy < 0) {
+			y += stroke - 1;
+			d = c - graph->depth * graph->width;
+		}
+		else
+			d = c + graph->depth * graph->width;
+	}
 
-line12:
-  asm {
-    shl ecx, 16
-    shl edx, 16
-    inc ecx
-    xor eax, eax
-    div ecx
-    shr ecx, 16
-    mov edx, eax                       // angle tangens
-    mov eax, [ebx + 20]                // line color
-    mov bx, word ptr [fbsel]           // video segment
-    mov ds, bx
-    add ebp, esi                       // correct vertical
-    mov ebx, dword ptr es:[depth]      // color size
+	e = (int)graph->data + graph->depth * graph->width * y + graph->depth * x;
+	f = stroke;
+	switch (graph->depth) {
+	case 1:
+		__asm__ volatile (
+                        "movl %0, %%edx; "   /* ratio */
+                        "movl %1, %%ecx; "   /* len */
+                        "movl %2, %%esi; "   /* step a */
+                        "movl %3, %%edi; "   /* step b */
+                        "movl %4, %%ebx; "   /* address */
+                        "movl %6, %%eax; "   /* color */
+                        "line10: "
+                        "pushl %%ebx; "
+                        "pushl %%ecx; "
+                        "pushl %%ebp; "
+                        "movl $0x80000000, %%ebp; "
+                        "line11: "
+                        "movb %%al, (%%ebx); "
+                        "addl %%edx, %%ebp; "
+                        "jc line12; "
+                        "addl %%esi, %%ebx; "
+                        "loop line11; "
+                        "jmp line13; "
+                        "line12: "
+                        "addl %%edi, %%ebx; "
+                        "loop line11; "
+                        "line13: "
+                        "popl %%ebp; "
+                        "movl %7, %%ecx; "   /* stroke */
+                        "line14: "
+                        "movb %%al, (%%ebx); "
+                        "addl %%edi, %%ebx; "
+                        "subl %%esi, %%ebx; "
+                        "loop line14; "
+                        "popl %%ecx; "
+                        "popl %%ebx; "
+                        "subl %%esi, %%ebx; "
+                        "decl %5; "   /* stroke */
+                        "jnz line10; "
+                        "addl %%edi, %%ebx; "
+                        "decl %7; "   /* stroke */
+                        "jz line19; "
+                        "line15: "
+                        "pushl %%ebx; "
+                        "pushl %%ecx; "
+                        "pushl %%ebp; "
+                        "movl $0x80000000, %%ebp; "
+                        "line16: "
+                        "movb %%al, (%%ebx); "
+                        "addl %%edx, %%ebp; "
+                        "jc line17; "
+                        "addl %%esi, %%ebx; "
+                        "loop line16; "
+                        "jmp line18; "
+                        "line17: "
+                        "addl %%edi, %%ebx; "
+                        "loop line16; "
+                        "line18: "
+                        "popl %%ebp; "
+                        "popl %%ecx; "
+                        "popl %%ebx; "
+                        "addl %%edi, %%ebx; "
+                        "subl %%esi, %%ebx; "
+                        "decl %7; "   /* stroke */
+                        "jnz line15; "
+                        "line19: "
+                :
+                : "m" (a), "m" (b), "m" (c), "m" (d), "m" (e), "m" (f), "m" (color), "m" (stroke)
+                : "eax", "ebx", "ecx", "edx", "esi", "edi");
+                return 0;
+        case 2:
+                __asm__ volatile (
+                        "movl %0, %%edx; "
+                        "movl %1, %%ecx; "
+                        "movl %2, %%esi; "
+                        "movl %3, %%edi; "
+                        "movl %4, %%ebx; "
+                        "movl %6, %%eax; "
+                        "line20: "
+                        "pushl %%ebx; "
+                        "pushl %%ecx; "
+                        "pushl %%ebp; "
+                        "movl $0x80000000, %%ebp; "
+                        "line21: "
+                        "movw %%ax, (%%ebx); "
+                        "addl %%edx, %%ebp; "
+                        "jc line22; "
+                        "addl %%esi, %%ebx; "
+                        "loop line21; "
+                        "jmp line23; "
+                        "line22: "
+                        "addl %%edi, %%ebx; "
+                        "loop line21; "
+                        "line23: "
+                        "popl %%ebp; "
+                        "movl %7, %%ecx; "
+                        "line24: "
+                        "movw %%ax, (%%ebx); "
+                        "addl %%edi, %%ebx; "
+                        "subl %%esi, %%ebx; "
+                        "loop line24; "
+                        "popl %%ecx; "
+                        "popl %%ebx; "
+                        "subl %%esi, %%ebx; "
+                        "decl %5; "
+                        "jnz line20; "
+                        "addl %%edi, %%ebx; "
+                        "decl %7; "
+                        "jz line29; "
+                        "line25: "
+                        "pushl %%ebx; "
+                        "pushl %%ecx; "
+                        "pushl %%ebp; "
+                        "movl $0x80000000, %%ebp; "
+                        "line26: "
+                        "movw %%ax, (%%ebx); "
+                        "addl %%edx, %%ebp; "
+                        "jc line27; "
+                        "addl %%esi, %%ebx; "
+                        "loop line26; "
+                        "jmp line28; "
+                        "line27: "
+                        "addl %%edi, %%ebx; "
+                        "loop line26; "
+                        "line28: "
+                        "popl %%ebp; "
+                        "popl %%ecx; "
+                        "popl %%ebx; "
+                        "addl %%edi, %%ebx; "
+                        "subl %%esi, %%ebx; "
+                        "decl %7; "
+                        "jnz line25; "
+                        "line29: "
+                :
+                : "m" (a), "m" (b), "m" (c), "m" (d), "m" (e), "m" (f), "m" (color), "m" (stroke)
+                : "eax", "ebx", "ecx", "edx", "esi", "edi");
+                return 0;
+        case 4:
+                __asm__ volatile (
+                        "movl %0, %%edx; "
+                        "movl %1, %%ecx; "
+                        "movl %2, %%esi; "
+                        "movl %3, %%edi; "
+                        "movl %4, %%ebx; "
+                        "movl %6, %%eax; "
+                        "line40: "
+                        "pushl %%ebx; "
+                        "pushl %%ecx; "
+                        "pushl %%ebp; "
+                        "movl $0x80000000, %%ebp; "
+                        "line41: "
+                        "movl %%eax, (%%ebx); "
+                        "addl %%edx, %%ebp; "
+                        "jc line42; "
+                        "addl %%esi, %%ebx; "
+                        "loop line41; "
+                        "jmp line43; "
+                        "line42: "
+                        "addl %%edi, %%ebx; "
+                        "loop line41; "
+                        "line43: "
+                        "popl %%ebp; "
+                        "movl %7, %%ecx; "
+                        "line44: "
+                        "movl %%eax, (%%ebx); "
+                        "addl %%edi, %%ebx; "
+                        "subl %%esi, %%ebx; "
+                        "loop line44; "
+                        "popl %%ecx; "
+                        "popl %%ebx; "
+                        "subl %%esi, %%ebx; "
+                        "decl %5; "
+                        "jnz line40; "
+                        "addl %%edi, %%ebx; "
+                        "decl %7; "
+                        "jz line49; "
+                        "line45: "
+                        "pushl %%ebx; "
+                        "pushl %%ecx; "
+                        "pushl %%ebp; "
+                        "movl $0x80000000, %%ebp; "
+                        "line46: "
+                        "movl %%eax, (%%ebx); "
+                        "addl %%edx, %%ebp; "
+                        "jc line47; "
+                        "addl %%esi, %%ebx; "
+                        "loop line46; "
+                        "jmp line48; "
+                        "line47: "
+                        "addl %%edi, %%ebx; "
+                        "loop line46; "
+                        "line48: "
+                        "popl %%ebp; "
+                        "popl %%ecx; "
+                        "popl %%ebx; "
+                        "addl %%edi, %%ebx; "
+                        "subl %%esi, %%ebx; "
+                        "decl %7; "
+                        "jnz line45; "
+                        "line49: "
+                :
+                : "m" (a), "m" (b), "m" (c), "m" (d), "m" (e), "m" (f), "m" (color), "m" (stroke)
+                : "eax", "ebx", "ecx", "edx", "esi", "edi");
+                return 0;
+        }
+        return -EINVAL;
 
-    cmp ebx, 2
-    jz line31                          // 16bit color
-  }
-line13:
-  asm {
-    push edi
-    push ecx
-    mov ebx, 80000000h                 // subpixel
-  }
-line14:
-  asm {
-    mov [edi], al
-    add ebx, edx
-    jc line15
-    add edi, esi
-    loop line14
-    jmp line16
-  }
-line15:
-  asm {
-    add edi, ebp
-    loop line14
-  }
-line16:
-  asm {
-    mov ecx, [esp + 8]                 // line width
-  }
-line17:
-  asm {
-    mov [edi], al
-    add edi, esi
-    loop line17
-    pop ecx
-    pop edi
-    sub edi, ebp
-    add edi, esi
-    dec dword ptr [esp + 4]            // line width
-    jnz line13
-    add edi, ebp
-    dec dword ptr [esp]                // line width
-    jnz line18                         // equal to 1
-    add esp, 8
-    pop ds
-  }
-  return GRAPH_SUCCESS;
 
-line18:
-  asm {
-    push edi
-    push ecx
-    mov ebx, 80000000h
-  }
-line19:
-  asm {
-    mov [edi], al
-    add ebx, edx
-    jc line20
-    add edi, esi
-    loop line19
-    jmp line21
-  }
-line20:
-  asm {
-    add edi, ebp
-    loop line19
-  }
-line21:
-  asm {
-    pop ecx
-    pop edi
-    add edi, esi
-    dec dword ptr [esp]                // line width
-    jnz line18
-    add esp, 8
-    pop ds
-  }
-  return GRAPH_SUCCESS;
-
-line22:
-  asm {
-    push edi
-    push ecx
-    mov ebx, 80000000h                 // subpixel
-  }
-line23:
-  asm {
-    mov [edi], ax
-    add ebx, edx
-    jc line24
-    add edi, ebp
-    loop line23
-    jmp line25
-  }
-line24:
-  asm {
-    add edi, esi
-    loop line23
-  }
-line25:
-  asm {
-    mov ecx, [esp + 8]                 // line width
-  }
-line26:
-  asm {
-    mov [edi], ax
-    add edi, esi
-    sub edi, ebp
-    loop line26
-    pop ecx
-    pop edi
-    sub edi, ebp
-    dec dword ptr [esp + 4]            // line width
-    jnz line22
-    add edi, ebp
-    dec dword ptr [esp]                // line width
-    jnz line27                         // equal to 1
-    add esp, 8
-    pop ds
-  }
-  return GRAPH_SUCCESS;
-
-line27:
-  asm {
-    add edi, esi
-    sub edi, ebp
-    push edi
-    push ecx
-    mov ebx, 80000000h
-  }
-line28:
-  asm {
-    mov [edi], ax
-    add ebx, edx
-    jc line29
-    add edi, ebp
-    loop line28
-    jmp line30
-  }
-line29:
-  asm {
-    add edi, esi
-    loop line28
-  }
-line30:
-  asm {
-    pop ecx
-    pop edi
-    dec dword ptr [esp]                // line width
-    jnz line27
-    add esp, 8
-    pop ds
-  }
-  return GRAPH_SUCCESS;
-
-line31:
-  asm {
-    push edi
-    push ecx
-    mov ebx, 80000000h                 // subpixel
-  }
-line32:
-  asm {
-    mov [edi], ax
-    add ebx, edx
-    jc line33
-    add edi, esi
-    loop line32
-    jmp line34
-  }
-line33:
-  asm {
-    add edi, ebp
-    loop line32
-  }
-line34:
-  asm {
-    mov ecx, [esp + 8]                 // line width
-  }
-line35:
-  asm {
-    mov [edi], ax
-    add edi, esi
-    loop line35
-    pop ecx
-    pop edi
-    sub edi, ebp
-    add edi, esi
-    dec dword ptr [esp + 4]            // line width
-    jnz line31
-    add edi, ebp
-    dec dword ptr [esp]                // line width
-    jnz line36                         // equal to 1
-    add esp, 8
-    pop ds
-  }
-  return GRAPH_SUCCESS;
-
-line36:
-  asm {
-    push edi
-    push ecx
-    mov ebx, 80000000h
-  }
-line37:
-  asm {
-    mov [edi], ax
-    add ebx, edx
-    jc line38
-    add edi, esi
-    loop line37
-    jmp line39
-  }
-line38:
-  asm {
-    add edi, ebp
-    loop line37
-  }
-line39:
-  asm {
-    pop ecx
-    pop edi
-    add edi, esi
-    dec dword ptr [esp]                // line width
-    jnz line36
-    add esp, 8
-    pop ds
-  }
   return GRAPH_SUCCESS;
 }
 
 
+int sys_graph_rect(graph_t *graph, int x, int y, unsigned int dx, unsigned int dy, unsigned int color)
+{
+        int fx, fy, lx, ly;
+        
+        fx = (x < 0) ? 0 : x;
+        fy = (y < 0) ? 0 : y;
+        lx = (x + (int)dx) > (int)graph->width ? (int)graph->width : x + dx;
+        ly = (y + (int)dy) > (int)graph->height ? (int)graph->height : y + dy;
+        
+        for (y = fy; y < ly; y++)
+                for (x = fx; x < lx; x++) {
+        
+                        switch (graph->depth) {
+                        case 1:
+                                *(uint8_t *)(graph->data + y * graph->width * graph->depth + x * graph->depth) = (uint8_t)color;
+                                break;
+                        case 2:
+                                *(uint16_t *)(graph->data + y * graph->width * graph->depth + x * graph->depth) = (uint16_t)color;
+                                break;
+                        case 4:
+                                *(uint32_t *)(graph->data + y * graph->width * graph->depth + x * graph->depth) = color;
+                                break;
+                        }
+                }
+        return EOK;
+}
+
+
+#if 0
 int soft_fill(graph_t *graph, char *arg)
 {
   static int width = graph->width;
@@ -1256,3 +1167,4 @@ char10:
   }
   return GRAPH_SUCCESS;
 }
+#endif
