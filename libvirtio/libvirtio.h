@@ -190,7 +190,7 @@ void virtqueue_disableirq(virtio_dev_t *vdev, virtqueue_t *vq);
 
 
 /* Allocates virtqueue */
-virtqueue_t *virtqueue_create(unsigned int idx, unsigned int size);
+virtqueue_t *virtqueue_alloc(unsigned int idx, unsigned int size);
 
 
 /* Releases virtqueue */
