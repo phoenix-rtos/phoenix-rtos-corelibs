@@ -261,7 +261,7 @@ void *virtqueue_dequeue(virtio_dev_t *vdev, virtqueue_t *vq, unsigned int *len)
 	next = virtqueue_read32(vdev, &used->id);
 	buff = vq->buffs[next];
 
-	/* Get number of bytes written do request buffers */
+	/* Get number of bytes written to request buffers */
 	if (len != NULL)
 		*len = virtqueue_read32(vdev, &used->len);
 

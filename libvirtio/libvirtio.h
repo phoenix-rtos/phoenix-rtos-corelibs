@@ -41,7 +41,6 @@ typedef struct {
 	virtio_seg_t *segs;             /* Request segments list */
 	unsigned int rsegs;             /* Number of device readable segments */
 	unsigned int wsegs;             /* Number of device writable segments */
-	unsigned int len;               /* Returned number of bytes written to request buffers */
 } virtio_req_t;
 
 
@@ -99,9 +98,35 @@ typedef struct {
 
 
 typedef struct {
+	uint8_t id;                     /* Vendor ID */
+	uint8_t next;                   /* Next capability offset */
+	uint8_t len;                    /* Capability length */
+	uint8_t type;                   /* Capability type */
+	uint8_t bar;                    /* Capability BAR index */
+	uint8_t pad[3];                 /* Padding */
+	uint32_t offs;                  /* Offset within BAR */
+	uint32_t size;                  /* Capability structure size */
+} __attribute__((packed)) virtio_cap_t;
+
+
+typedef struct {
 	int type;                       /* VirtIO device type */
-	void* base;                     /* Base registers address */
 	uint64_t features;              /* Device features */
+	union {
+		struct {
+			void *bar[6];           /* Device BARs */
+			unsigned long len[6];   /* Device BARs sizes */
+
+			/* Modern VirtIO devices fields */
+			uint8_t* caps;          /* Capability list */
+			void *base;             /* Common configuration */
+			void *isr;              /* Interrupt status */
+			void *notify;           /* Device notification */
+		} pci;
+		struct {
+			void *base;             /* Base registers address */
+		} mmio;
+	};
 } virtio_dev_t;
 
 
@@ -192,7 +217,7 @@ void virtqueue_disableirq(virtio_dev_t *vdev, virtqueue_t *vq);
 int virtqueue_enqueue(virtio_dev_t *vdev, virtqueue_t *vq, virtio_req_t *req);
 
 
-/* Notifies device of new requests in virtqueue */
+/* Notifies device of available requests */
 void virtqueue_notify(virtio_dev_t *vdev, virtqueue_t *vq);
 
 
@@ -200,8 +225,32 @@ void virtqueue_notify(virtio_dev_t *vdev, virtqueue_t *vq);
 void *virtqueue_dequeue(virtio_dev_t *vdev, virtqueue_t *vq, unsigned int *len);
 
 
+/* Returns modern VirtIO PCI device capability */
+virtio_cap_t *virtio_getCap(virtio_dev_t *vdev, unsigned int type);
+
+
+/* Finalizes features negotiation by setting driver supported features */
+void virtio_setFeatures(virtio_dev_t *vdev, uint64_t features);
+
+
+/* Reads VirtIO device status register */
+uint8_t virtio_readStatus(virtio_dev_t *vdev);
+
+
+/* Writes VirtIO device status register */
+void virtio_writeStatus(virtio_dev_t *vdev, uint8_t status);
+
+
+/* Resets VirtIO device */
+void virtio_reset(virtio_dev_t *vdev);
+
+
+/* Destroys VirtIO device */
+void virtio_destroy(virtio_dev_t *vdev);
+
+
 /* Initializes VirtIO device */
-int virtio_init(int type, void *base, virtio_dev_t *vdev);
+int virtio_init(int type, void *dev, virtio_dev_t *vdev);
 
 
 #endif
