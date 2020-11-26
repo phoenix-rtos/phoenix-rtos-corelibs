@@ -23,64 +23,51 @@
 #include "libvirtio.h"
 
 
-uint8_t virtqueue_read8(virtio_dev_t *vdev, volatile void *addr)
+static inline uint8_t virtqueue_read8(virtio_dev_t *vdev, volatile void *addr)
 {
 	return *(volatile uint8_t *)addr;
 }
 
 
-uint16_t virtqueue_read16(virtio_dev_t *vdev, volatile void *addr)
+static inline uint16_t virtqueue_read16(virtio_dev_t *vdev, volatile void *addr)
 {
 	return virtio_vtog16(vdev, *(volatile uint16_t *)addr);
 }
 
 
-uint32_t virtqueue_read32(virtio_dev_t *vdev, volatile void *addr)
+static inline uint32_t virtqueue_read32(virtio_dev_t *vdev, volatile void *addr)
 {
 	return virtio_vtog32(vdev, *(volatile uint32_t *)addr);
 }
 
 
-uint64_t virtqueue_read64(virtio_dev_t *vdev, volatile void *addr)
+static inline uint64_t virtqueue_read64(virtio_dev_t *vdev, volatile void *addr)
 {
 	return virtio_vtog64(vdev, *(volatile uint64_t *)addr);
 }
 
 
-void virtqueue_write8(virtio_dev_t *vdev, volatile void *addr, uint8_t val)
+static inline void virtqueue_write8(virtio_dev_t *vdev, volatile void *addr, uint8_t val)
 {
 	*(volatile uint8_t *)addr = val;
 }
 
 
-void virtqueue_write16(virtio_dev_t *vdev, volatile void *addr, uint16_t val)
+static inline void virtqueue_write16(virtio_dev_t *vdev, volatile void *addr, uint16_t val)
 {
 	*(volatile uint16_t *)addr = virtio_gtov16(vdev, val);
 }
 
 
-void virtqueue_write32(virtio_dev_t *vdev, volatile void *addr, uint32_t val)
+static inline void virtqueue_write32(virtio_dev_t *vdev, volatile void *addr, uint32_t val)
 {
 	*(volatile uint32_t *)addr = virtio_gtov32(vdev, val);
 }
 
 
-void virtqueue_write64(virtio_dev_t *vdev, volatile void *addr, uint64_t val)
+static inline void virtqueue_write64(virtio_dev_t *vdev, volatile void *addr, uint64_t val)
 {
 	*(volatile uint64_t *)addr = virtio_gtov32(vdev, val);
-}
-
-
-void virtqueue_enableirq(virtio_dev_t *vdev, virtqueue_t *vq)
-{
-	virtqueue_write16(vdev, &vq->avail->flags, virtqueue_read16(vdev, &vq->avail->flags) & ~0x1);
-	virtio_mb();
-}
-
-
-void virtqueue_disableirq(virtio_dev_t *vdev, virtqueue_t *vq)
-{
-	virtqueue_write16(vdev, &vq->avail->flags, virtqueue_read16(vdev, &vq->avail->flags) | 0x1);
 }
 
 
@@ -109,7 +96,6 @@ virtqueue_t *virtqueue_alloc(unsigned int idx, unsigned int size)
 		return NULL;
 	}
 
-	memset(vq->buffs, 0, size * sizeof(void *));
 	vq->memsz = (aeoffs + sizeof(uint16_t) + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1);
 
 	/* TODO: allocate contiguous physical memory below 4GB (legacy interface requires 32-bit physical address) */
@@ -156,8 +142,10 @@ virtqueue_t *virtqueue_alloc(unsigned int idx, unsigned int size)
 	vq->free = 0;
 	vq->last = 0;
 
-	for (i = 0; i < size; i++)
+	for (i = 0; i < size; i++) {
 		vq->desc[i].next = i + 1;
+		vq->buffs[i] = NULL;
+	}
 
 	return vq;
 }
@@ -171,6 +159,19 @@ void virtqueue_free(virtqueue_t *vq)
 	munmap(vq->mem, vq->memsz);
 	free(vq->buffs);
 	free(vq);
+}
+
+
+void virtqueue_enableirq(virtio_dev_t *vdev, virtqueue_t *vq)
+{
+	virtqueue_write16(vdev, &vq->avail->flags, virtqueue_read16(vdev, &vq->avail->flags) & ~0x1);
+	virtio_mb();
+}
+
+
+void virtqueue_disableirq(virtio_dev_t *vdev, virtqueue_t *vq)
+{
+	virtqueue_write16(vdev, &vq->avail->flags, virtqueue_read16(vdev, &vq->avail->flags) | 0x1);
 }
 
 
@@ -260,7 +261,7 @@ void *virtqueue_dequeue(virtio_dev_t *vdev, virtqueue_t *vq, unsigned int *len)
 	next = virtqueue_read32(vdev, &used->id);
 	buff = vq->buffs[next];
 
-	/* Get number of bytes written do request buffers */
+	/* Get number of bytes written to request buffers */
 	if (len != NULL)
 		*len = virtqueue_read32(vdev, &used->len);
 
@@ -278,17 +279,6 @@ void *virtqueue_dequeue(virtio_dev_t *vdev, virtqueue_t *vq, unsigned int *len)
 	condSignal(vq->dcond);
 
 	mutexUnlock(vq->lock);
-
-	return buff;
-}
-
-
-void *virtqueue_poll(virtio_dev_t *vdev, virtqueue_t *vq, unsigned int *len)
-{
-	void *buff;
-
-	while ((buff = virtqueue_dequeue(vdev, vq, len)) == NULL)
-		usleep(100);
 
 	return buff;
 }
