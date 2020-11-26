@@ -303,9 +303,156 @@ int sys_graph_rect(graph_t *graph, int x, int y, unsigned int dx, unsigned int d
 }
 
 
-#if 0
 int soft_fill(graph_t *graph, char *arg)
 {
+	int a, b, c, d; /* min, max, address, pitch */
+        
+	d = graph->depth * graph->width;
+	a = (int)graph->data + d;
+	b = (int)graph->data + (img->height - 1) * d;
+        c = (int)img->data + d * y + img->graph->pixelsize * x;
+        if ((c < a) || (c > b))
+                return ERR_ARG;
+        switch (img->graph->pixelsize) {
+        case 1:
+                __asm__ volatile (
+                        "movl %0, %%esi; "   /* min */
+                        "movl %1, %%edi; "   /* max */
+                        "movl %2, %%edx; "   /* address */
+                        "movl %3, %%ecx; "   /* pitch */
+                        "movl %4, %%eax; "   /* color */
+                        "fill10: "
+                        "movl %%edx, %%ebx; "
+                        "xorl %%edx, %%edx; "
+                        "fill11: "
+                        "decl %%ebx; "
+                        "cmpl %%esi, %%ebx; "
+                        "jc fill15; "
+                        "cmpb %%al, (%%ebx); "
+                        "jnz fill11; "
+                        "fill12: "
+                        "incl %%ebx; "
+                        "cmpl %%edi, %%ebx; "
+                        "jnc fill15; "
+                        "cmpb %%al, (%%ebx); "
+                        "jz fill13; "
+                        "movb %%al, (%%ebx); "
+                        "orl %%edx, %%edx; "
+                        "jnz fill12; "
+                        "cmpb %%al, (%%ebx, %%ecx); "
+                        "jz fill12; "
+                        "leal (%%ebx, %%ecx), %%edx; "
+                        "jmp fill12; "
+                        "fill13: "
+                        "orl %%edx, %%edx; "
+                        "jnz fill10; "
+                        "negl %%ecx; "
+                        "jns fill14; "
+                        "movl %2, %%edx; "   /* address */
+                        "addl %%ecx, %%edx; "
+                        "cmpb %%al, (%%edx); "
+                        "jnz fill10; "
+                        "fill14: "
+                        "movl $0, %2; "   /* return */
+                        "fill15: "
+                :
+                : "m" (a), "m" (b), "m" (c), "m" (d), "m" (color)
+                : "eax", "ebx", "ecx", "edx", "esi", "edi");
+                return c ? ERR_ARG : 0;
+        case 2:
+                __asm__ volatile (
+                        "movl %0, %%esi; "
+                        "movl %1, %%edi; "
+                        "movl %2, %%edx; "
+                        "movl %3, %%ecx; "
+                        "movl %4, %%eax; "
+                        "fill20: "
+                        "movl %%edx, %%ebx; "
+                        "xorl %%edx, %%edx; "
+                        "fill21: "
+                        "subl $2, %%ebx; "
+                        "cmpl %%esi, %%ebx; "
+                        "jc fill25; "
+                        "cmpw %%ax, (%%ebx); "
+                        "jnz fill21; "
+                        "fill22: "
+                        "addl $2, %%ebx; "
+                        "cmpl %%edi, %%ebx; "
+                        "jnc fill25; "
+                        "cmpw %%ax, (%%ebx); "
+                        "jz fill23; "
+                        "movw %%ax, (%%ebx); "
+                        "orl %%edx, %%edx; "
+                        "jnz fill22; "
+                        "cmpw %%ax, (%%ebx, %%ecx); "
+                        "jz fill22; "
+                        "leal (%%ebx, %%ecx), %%edx; "
+                        "jmp fill22; "
+                        "fill23: "
+                        "orl %%edx, %%edx; "
+                        "jnz fill20; "
+                        "negl %%ecx; "
+                        "jns fill24; "
+                        "movl %2, %%edx; "
+                        "addl %%ecx, %%edx; "
+                        "cmpw %%ax, (%%edx); "
+                        "jnz fill20; "
+                        "fill24: "
+                        "movl $0, %2; "
+                        "fill25: "
+                :
+                : "m" (a), "m" (b), "m" (c), "m" (d), "m" (color)
+                : "eax", "ebx", "ecx", "edx", "esi", "edi");
+                return c ? ERR_ARG : 0;
+        case 4:
+                __asm__ volatile (
+                        "movl %0, %%esi; "
+                        "movl %1, %%edi; "
+                        "movl %2, %%edx; "
+                        "movl %3, %%ecx; "
+                        "movl %4, %%eax; "
+                        "fill40: "
+                        "movl %%edx, %%ebx; "
+                        "xorl %%edx, %%edx; "
+                        "fill41: "
+                        "subl $4, %%ebx; "
+                        "cmpl %%esi, %%ebx; "
+                        "jc fill45; "
+                        "cmpl %%eax, (%%ebx); "
+                        "jnz fill41; "
+                        "fill42: "
+                        "addl $4, %%ebx; "
+                        "cmpl %%edi, %%ebx; "
+                        "jnc fill45; "
+                        "cmpl %%eax, (%%ebx); "
+                        "jz fill43; "
+                        "movl %%eax, (%%ebx); "
+                        "orl %%edx, %%edx; "
+                        "jnz fill42; "
+                        "cmpl %%eax, (%%ebx, %%ecx); "
+                        "jz fill42; "
+                        "leal (%%ebx, %%ecx), %%edx; "
+                        "jmp fill42; "
+                        "fill43: "
+                        "orl %%edx, %%edx; "
+                        "jnz fill40; "
+                        "negl %%ecx; "
+                        "jns fill44; "
+                        "movl %2, %%edx; "
+                        "addl %%ecx, %%edx; "
+                        "cmpl %%eax, (%%edx); "
+                        "jnz fill40; "
+                        "fill44: "
+                        "movl $0, %2; "
+                        "fill45: "
+                :
+                : "m" (a), "m" (b), "m" (c), "m" (d), "m" (color)
+                : "eax", "ebx", "ecx", "edx", "esi", "edi");
+                return c ? ERR_ARG : 0;
+        }
+        return ERR_ARG;
+
+
   static int width = graph->width;
   static int depth = graph->depth;
   static int size = graph->memsz - graph->cursorsz;
