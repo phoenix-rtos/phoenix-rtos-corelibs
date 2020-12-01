@@ -1,7 +1,7 @@
 /*
  * Phoenix-RTOS
  *
- * VirtIO device core interface
+ * VirtIO library interface
  *
  * Copyright 2020 Phoenix Systems
  * Author: Lukasz Kosinski
@@ -14,17 +14,10 @@
 #ifndef _LIBVIRTIO_H_
 #define _LIBVIRTIO_H_
 
-#include <endian.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #include <sys/types.h>
-
-
-/* VirtIO device type */
-enum {
-	VIRTIO_PCI,                     /* VirtIO PCI device */
-	VIRTIO_MMIO                     /* VirtIO MMIO device */
-};
 
 
 typedef struct _virtio_seg_t virtio_seg_t;
@@ -88,7 +81,7 @@ typedef struct {
 	unsigned int size;              /* Virtqueue size */
 	unsigned int nfree;             /* Number of free descriptors */
 	uint16_t free;                  /* Next free desriptor index */
-	uint16_t last;                  /* Last processed request (trails used ring index) */
+	uint16_t last;                  /* Last processed request */
 
 	/* Synchronization */
 	handle_t dcond;                 /* Free descriptors condition variable */
@@ -97,112 +90,22 @@ typedef struct {
 } virtqueue_t;
 
 
-typedef struct {
-	uint8_t id;                     /* Vendor ID */
-	uint8_t next;                   /* Next capability offset */
-	uint8_t len;                    /* Capability length */
-	uint8_t type;                   /* Capability type */
-	uint8_t bar;                    /* Capability BAR index */
-	uint8_t pad[3];                 /* Padding */
-	uint32_t offs;                  /* Offset within BAR */
-	uint32_t size;                  /* Capability structure size */
-} __attribute__((packed)) virtio_cap_t;
+typedef struct _virtio_dev_t virtio_dev_t;
 
 
-typedef struct {
-	int type;                       /* VirtIO device type */
+struct _virtio_dev_t {
+	enum {
+		vdevPCI,                    /* VirtIO PCI device */
+		vdevMMIO                    /* VirtIO MMIO device */
+	} type;                         /* VirtIO device type */
 	uint64_t features;              /* Device features */
-	union {
-		struct {
-			void *bar[6];           /* Device BARs */
-			unsigned long len[6];   /* Device BARs sizes */
-
-			/* Modern VirtIO devices fields */
-			uint8_t* caps;          /* Capability list */
-			void *base;             /* Common configuration */
-			void *isr;              /* Interrupt status */
-			void *notify;           /* Device notification */
-		} pci;
-		struct {
-			void *base;             /* Base registers address */
-		} mmio;
-	};
-} virtio_dev_t;
-
-
-/* VirtIO modern device */
-static inline int virtio_modern(virtio_dev_t *vdev)
-{
-	return (vdev->features & 0x100000000ULL);
-}
-
-
-/* VirtIO legacy device */
-static inline int virtio_legacy(virtio_dev_t *vdev)
-{
-	return !virtio_modern(vdev);
-}
-
-
-/* VirtIO memory barrier */
-static inline void virtio_mb(void)
-{
-	__asm__ __volatile__("" ::: "memory");
-}
-
-
-/* VirtIO device to guest endian */
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-	#define virtio_vtog(n) \
-	static inline uint##n##_t virtio_vtog##n##(virtio_dev_t *vdev, uint##n##_t val) \
-	{ \
-		return val; \
-	}
-#elif __BYTE_ORDER == __BIG_ENDIAN
-	#define virtio_vtog(n) \
-	static inline uint##n##_t virtio_vtog##n##(virtio_dev_t *vdev, uint##n##_t val) \
-	{ \
-		if (virtio_modern(vdev)) \
-			val = le##n##toh(val); \
-		return val; \
-	}
-#endif
-
-
-virtio_vtog(16)
-virtio_vtog(32)
-virtio_vtog(64)
-
-
-/* Guest to VirtIO device endian */
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-	#define virtio_gtov(n) \
-	static inline uint##n##_t virtio_gtov##n##(virtio_dev_t *vdev, uint##n##_t val) \
-	{ \
-		return val; \
-	}
-#elif __BYTE_ORDER == __BIG_ENDIAN
-	#define virtio_gtov(n) \
-	static inline uint##n##_t virtio_gtov##n##(virtio_dev_t *vdev, uint##n##_t val) \
-	{ \
-		if (virtio_modern(vdev)) \
-			val = htole##n##(val); \
-		return val; \
-	}
-#endif
-
-
-virtio_gtov(16)
-virtio_gtov(32)
-virtio_gtov(64)
-
-
-/* Allocates virtqueue */
-virtqueue_t *virtqueue_alloc(unsigned int idx, unsigned int size);
-
-
-/* Releases virtqueue */
-void virtqueue_free(virtqueue_t *vq);
+	unsigned int irq;               /* Interrupt number */
+	void *base;                     /* Base registers address */
+	void *ntf;                      /* Device notification register address */
+	void *isr;                      /* Interrupt status register address */
+	void *cfg;                      /* Device configuration registers address */
+	virtio_dev_t *prev, *next;      /* Doubly linked list */
+};
 
 
 /* Enables virtqueue interrupts (hint for the host) */
@@ -225,12 +128,46 @@ void virtqueue_notify(virtio_dev_t *vdev, virtqueue_t *vq);
 void *virtqueue_dequeue(virtio_dev_t *vdev, virtqueue_t *vq, unsigned int *len);
 
 
-/* Returns modern VirtIO PCI device capability */
-virtio_cap_t *virtio_getCap(virtio_dev_t *vdev, unsigned int type);
+/* Destroys virtqueue */
+void virtqueue_destroy(virtio_dev_t *vdev, virtqueue_t *vq);
 
 
-/* Finalizes features negotiation by setting driver supported features */
-void virtio_setFeatures(virtio_dev_t *vdev, uint64_t features);
+/* Initializes virtqueue */
+int virtqueue_init(virtio_dev_t *vdev, virtqueue_t *vq, unsigned int idx, unsigned int size);
+
+
+/* Reads from VirtIO device configuration space */
+uint8_t virtio_readConfig8(virtio_dev_t *vdev, unsigned int reg);
+
+
+uint16_t virtio_readConfig16(virtio_dev_t *vdev, unsigned int reg);
+
+
+uint32_t virtio_readConfig32(virtio_dev_t *vdev, unsigned int reg);
+
+
+uint64_t virtio_readConfig64(virtio_dev_t *vdev, unsigned int reg);
+
+
+/* Writes to VirtIO device configuration space */
+void virtio_writeConfig8(virtio_dev_t *vdev, unsigned int reg, uint8_t val);
+
+
+void virtio_writeConfig16(virtio_dev_t *vdev, unsigned int reg, uint16_t val);
+
+
+void virtio_writeConfig32(virtio_dev_t *vdev, unsigned int reg, uint32_t val);
+
+
+void virtio_writeConfig64(virtio_dev_t *vdev, unsigned int reg, uint64_t val);
+
+
+/* Reads VirtIO device supported/negotiated features */
+uint64_t virtio_readFeatures(virtio_dev_t *vdev);
+
+
+/* Writes driver supported features, completes features negotiation */
+int virtio_writeFeatures(virtio_dev_t *vdev, uint64_t features);
 
 
 /* Reads VirtIO device status register */
@@ -241,6 +178,10 @@ uint8_t virtio_readStatus(virtio_dev_t *vdev);
 void virtio_writeStatus(virtio_dev_t *vdev, uint8_t status);
 
 
+/* Reads interrupt status */
+unsigned int virtio_isr(virtio_dev_t *vdev);
+
+
 /* Resets VirtIO device */
 void virtio_reset(virtio_dev_t *vdev);
 
@@ -249,8 +190,8 @@ void virtio_reset(virtio_dev_t *vdev);
 void virtio_destroy(virtio_dev_t *vdev);
 
 
-/* Initializes VirtIO device */
-int virtio_init(int type, void *dev, virtio_dev_t *vdev);
+/* Detects VirtIO devices with specified ID and perform their generic initialization */
+int virtio_init(unsigned int id, unsigned int vdevsz, int (*init)(void *), void **vdevs);
 
 
 #endif

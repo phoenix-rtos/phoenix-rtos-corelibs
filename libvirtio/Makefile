@@ -1,5 +1,5 @@
 #
-# Makefile for VirtIO core interface library
+# Makefile for VirtIO library
 #
 # Copyright 2020 Phoenix Systems
 # Author: Lukasz Kosinski
@@ -9,13 +9,15 @@
 # %LICENSE%
 #
 
+OBJS = virtio.o virtiopci.o virtqueue.o
+
 ifeq ($(TARGET_FAMILY), ia32)
-	VIRTIO_OBJS := virtqueue.o virtio-pci.o
+	OBJS += virtio-ia32.o virtiopci-ia32.o
 else ifeq ($(TARGET_FAMILY),riscv64)
-	VIRTIO_OBJS := virtqueue.o virtio-mmio.o
+	OBJS += virtio-riscv64.o virtiopci-riscv64.o
 endif
 
-$(PREFIX_A)libvirtio.a: $(addprefix $(PREFIX_O)libvirtio/, $(VIRTIO_OBJS))
+$(PREFIX_A)libvirtio.a: $(addprefix $(PREFIX_O)libvirtio/, $OBJS)
 	$(ARCH)
 
 $(PREFIX_H)libvirtio.h: libvirtio/libvirtio.h
