@@ -11,7 +11,9 @@
  * %LICENSE%
  */
 
-#include "virtiopci.h"
+#include <errno.h>
+
+#include "virtio.h"
 
 
 uint8_t virtiopci_read8(void *base, unsigned int reg)
@@ -59,4 +61,10 @@ void virtiopci_write32(void *base, unsigned int reg, uint32_t val)
 void virtiopci_write64(void *base, unsigned int reg, uint64_t val)
 {
 	return;
+}
+
+
+int virtiopci_find(virtio_devinfo_t *info, virtio_dev_t *vdev, virtio_ctx_t *vctx)
+{
+	return -ENODEV;
 }

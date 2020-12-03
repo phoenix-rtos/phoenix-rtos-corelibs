@@ -16,6 +16,8 @@
 
 #include <stdint.h>
 
+#include "libvirtio.h"
+
 
 typedef struct {
 	uint8_t id;     /* Vendor ID */
@@ -27,10 +29,6 @@ typedef struct {
 	uint32_t offs;  /* Offset within BAR */
 	uint32_t size;  /* Capability structure size */
 } __attribute__((packed)) virtiopci_cap_t;
-
-
-/* Returns VirtIO PCI device capability specified by its type */
-extern virtiopci_cap_t *virtiopci_getCap(virtiopci_cap_t *caps, unsigned char type);
 
 
 extern uint8_t virtiopci_read8(void *base, unsigned int reg);
@@ -55,6 +53,26 @@ extern void virtiopci_write32(void *base, unsigned int reg, uint32_t val);
 
 
 extern void virtiopci_write64(void *base, unsigned int reg, uint64_t val);
+
+
+/* Destroys VirtIO PCI device */
+extern void virtiopci_destroyDev(virtio_dev_t *vdev);
+
+
+/* Initializes VirtIO PCI device */
+extern int virtiopci_initDev(virtio_dev_t *vdev);
+
+
+/* Returns first VirtIO PCI capability matching given type */
+extern virtiopci_cap_t *virtiopci_getCap(virtiopci_cap_t *caps, unsigned char type);
+
+
+/* Initalizes VirtIO register based on PCI BAR data */
+extern int virtiopci_initReg(unsigned long base, unsigned long len, unsigned char flags, virtio_reg_t *reg);
+
+
+/* Detects next VirtIO PCI device matching info descriptor */
+extern int virtiopci_find(virtio_devinfo_t *info, virtio_dev_t *vdev, virtio_ctx_t *vctx);
 
 
 #endif

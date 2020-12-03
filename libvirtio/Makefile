@@ -12,12 +12,12 @@
 OBJS = virtio.o virtiopci.o virtqueue.o
 
 ifeq ($(TARGET_FAMILY), ia32)
-	OBJS += virtio-ia32.o virtiopci-ia32.o
+	OBJS += virtiopci-ia32.o
 else ifeq ($(TARGET_FAMILY),riscv64)
-	OBJS += virtio-riscv64.o virtiopci-riscv64.o
+	OBJS += virtiopci-riscv64.o
 endif
 
-$(PREFIX_A)libvirtio.a: $(addprefix $(PREFIX_O)libvirtio/, $OBJS)
+$(PREFIX_A)libvirtio.a: $(addprefix $(PREFIX_O)libvirtio/, $(OBJS))
 	$(ARCH)
 
 $(PREFIX_H)libvirtio.h: libvirtio/libvirtio.h

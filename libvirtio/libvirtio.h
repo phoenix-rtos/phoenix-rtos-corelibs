@@ -14,7 +14,6 @@
 #ifndef _LIBVIRTIO_H_
 #define _LIBVIRTIO_H_
 
-#include <stddef.h>
 #include <stdint.h>
 
 #include <sys/types.h>
@@ -90,108 +89,138 @@ typedef struct {
 } virtqueue_t;
 
 
-typedef struct _virtio_dev_t virtio_dev_t;
+typedef struct {
+	void *addr;                     /* Base register address */
+	size_t len;                     /* Registers memory length */
+} virtio_reg_t;
 
 
-struct _virtio_dev_t {
-	enum {
-		vdevPCI,                    /* VirtIO PCI device */
-		vdevMMIO                    /* VirtIO MMIO device */
-	} type;                         /* VirtIO device type */
-	uint64_t features;              /* Device features */
+typedef enum {
+	vdevPCI,                        /* VirtIO PCI device */
+	vdevMMIO                        /* VirtIO MMIO device */
+} virtio_devtype_t;
+
+
+typedef struct {
+	virtio_devtype_t type;          /* VirtIO device type */
+	unsigned int id;                /* VirtIO device ID */
 	unsigned int irq;               /* Interrupt number */
-	void *base;                     /* Base registers address */
-	void *ntf;                      /* Device notification register address */
-	void *isr;                      /* Interrupt status register address */
-	void *cfg;                      /* Device configuration registers address */
-	virtio_dev_t *prev, *next;      /* Doubly linked list */
-};
+	unsigned int xntf;              /* Notification registers offset multiplier */
+	virtio_reg_t base;              /* Base registers */
+	virtio_reg_t ntf;               /* Notification registers */
+	virtio_reg_t isr;               /* Interrupt status registers */
+	virtio_reg_t cfg;               /* Configuration registers */
+} virtio_devinfo_t;
+
+
+typedef struct {
+	virtio_devinfo_t info;          /* VirtIO device core data */
+	uint64_t features;              /* VirtIO device features */
+} virtio_dev_t;
+
+
+typedef struct {
+	unsigned char reset;            /* Indicates contex reset */
+	unsigned char ctx[32];          /* VirtIO device detection context */
+} virtio_ctx_t;
 
 
 /* Enables virtqueue interrupts (hint for the host) */
-void virtqueue_enableirq(virtio_dev_t *vdev, virtqueue_t *vq);
+extern void virtqueue_enableirq(virtio_dev_t *vdev, virtqueue_t *vq);
 
 
 /* Disables virtqueue interrupts (hint for the host) */
-void virtqueue_disableirq(virtio_dev_t *vdev, virtqueue_t *vq);
+extern void virtqueue_disableirq(virtio_dev_t *vdev, virtqueue_t *vq);
 
 
 /* Enqueues request in virtqueue */
-int virtqueue_enqueue(virtio_dev_t *vdev, virtqueue_t *vq, virtio_req_t *req);
+extern int virtqueue_enqueue(virtio_dev_t *vdev, virtqueue_t *vq, virtio_req_t *req);
 
 
 /* Notifies device of available requests */
-void virtqueue_notify(virtio_dev_t *vdev, virtqueue_t *vq);
+extern void virtqueue_notify(virtio_dev_t *vdev, virtqueue_t *vq);
 
 
 /* Dequeues request from virtqueue (returns request head buffer) */
-void *virtqueue_dequeue(virtio_dev_t *vdev, virtqueue_t *vq, unsigned int *len);
+extern void *virtqueue_dequeue(virtio_dev_t *vdev, virtqueue_t *vq, unsigned int *len);
 
 
 /* Destroys virtqueue */
-void virtqueue_destroy(virtio_dev_t *vdev, virtqueue_t *vq);
+extern void virtqueue_destroy(virtio_dev_t *vdev, virtqueue_t *vq);
 
 
 /* Initializes virtqueue */
-int virtqueue_init(virtio_dev_t *vdev, virtqueue_t *vq, unsigned int idx, unsigned int size);
+extern int virtqueue_init(virtio_dev_t *vdev, virtqueue_t *vq, unsigned int idx, unsigned int size);
 
 
 /* Reads from VirtIO device configuration space */
-uint8_t virtio_readConfig8(virtio_dev_t *vdev, unsigned int reg);
+extern uint8_t virtio_readConfig8(virtio_dev_t *vdev, unsigned int reg);
 
 
-uint16_t virtio_readConfig16(virtio_dev_t *vdev, unsigned int reg);
+extern uint16_t virtio_readConfig16(virtio_dev_t *vdev, unsigned int reg);
 
 
-uint32_t virtio_readConfig32(virtio_dev_t *vdev, unsigned int reg);
+extern uint32_t virtio_readConfig32(virtio_dev_t *vdev, unsigned int reg);
 
 
-uint64_t virtio_readConfig64(virtio_dev_t *vdev, unsigned int reg);
+extern uint64_t virtio_readConfig64(virtio_dev_t *vdev, unsigned int reg);
 
 
 /* Writes to VirtIO device configuration space */
-void virtio_writeConfig8(virtio_dev_t *vdev, unsigned int reg, uint8_t val);
+extern void virtio_writeConfig8(virtio_dev_t *vdev, unsigned int reg, uint8_t val);
 
 
-void virtio_writeConfig16(virtio_dev_t *vdev, unsigned int reg, uint16_t val);
+extern void virtio_writeConfig16(virtio_dev_t *vdev, unsigned int reg, uint16_t val);
 
 
-void virtio_writeConfig32(virtio_dev_t *vdev, unsigned int reg, uint32_t val);
+extern void virtio_writeConfig32(virtio_dev_t *vdev, unsigned int reg, uint32_t val);
 
 
-void virtio_writeConfig64(virtio_dev_t *vdev, unsigned int reg, uint64_t val);
+extern void virtio_writeConfig64(virtio_dev_t *vdev, unsigned int reg, uint64_t val);
 
 
 /* Reads VirtIO device supported/negotiated features */
-uint64_t virtio_readFeatures(virtio_dev_t *vdev);
+extern uint64_t virtio_readFeatures(virtio_dev_t *vdev);
 
 
 /* Writes driver supported features, completes features negotiation */
-int virtio_writeFeatures(virtio_dev_t *vdev, uint64_t features);
+extern int virtio_writeFeatures(virtio_dev_t *vdev, uint64_t features);
 
 
 /* Reads VirtIO device status register */
-uint8_t virtio_readStatus(virtio_dev_t *vdev);
+extern uint8_t virtio_readStatus(virtio_dev_t *vdev);
 
 
 /* Writes VirtIO device status register */
-void virtio_writeStatus(virtio_dev_t *vdev, uint8_t status);
+extern void virtio_writeStatus(virtio_dev_t *vdev, uint8_t status);
 
 
 /* Reads interrupt status */
-unsigned int virtio_isr(virtio_dev_t *vdev);
+extern unsigned int virtio_isr(virtio_dev_t *vdev);
 
 
 /* Resets VirtIO device */
-void virtio_reset(virtio_dev_t *vdev);
+extern void virtio_reset(virtio_dev_t *vdev);
 
 
 /* Destroys VirtIO device */
-void virtio_destroy(virtio_dev_t *vdev);
+extern void virtio_destroyDev(virtio_dev_t *vdev);
 
 
-/* Detects VirtIO devices with specified ID and perform their generic initialization */
-int virtio_init(unsigned int id, unsigned int vdevsz, int (*init)(void *), void **vdevs);
+/* Initializes VirtIO device */
+extern int virtio_initDev(virtio_dev_t *vdev);
+
+
+/* Detects next VirtIO device matching info descriptor */
+extern int virtio_find(virtio_devinfo_t *info, virtio_dev_t *vdev, virtio_ctx_t *ctx);
+
+
+/* Destroys VirtIO library */
+extern void virtio_done(void);
+
+
+/* Initializes VirtIO library */
+extern int virtio_init(void);
 
 
 #endif

@@ -71,6 +71,109 @@ static inline void virtqueue_write64(virtio_dev_t *vdev, volatile void *addr, ui
 }
 
 
+static void virtqueue_select(virtio_dev_t *vdev, unsigned int idx)
+{
+	if (vdev->info.type == vdevPCI) {
+		virtio_write16(vdev, vdev->info.base.addr, virtio_legacy(vdev) ? 0x0e : 0x16, idx);
+		virtio_mb();
+		return;
+	}
+
+	virtio_write32(vdev, vdev->info.base.addr, 0x30, idx);
+	virtio_mb();
+}
+
+
+static int virtqueue_enable(virtio_dev_t * vdev, unsigned int idx, unsigned int *size)
+{
+	unsigned int maxsz;
+
+	virtqueue_select(vdev, idx);
+
+	if (vdev->info.type == vdevPCI) {
+		if (virtio_legacy(vdev)) {
+			if (!(maxsz = virtio_read16(vdev, vdev->info.base.addr, 0x0c)) || virtio_read32(vdev, vdev->info.base.addr, 0x08))
+				return -ENOENT;
+
+			*size = maxsz;
+			return EOK;
+		}
+
+		if (!(maxsz = virtio_read16(vdev, vdev->info.base.addr, 0x18)) || virtio_read16(vdev, vdev->info.base.addr, 0x1c))
+			return -ENOENT;
+		
+		if (*size > maxsz)
+			*size = maxsz;
+
+		return EOK;
+	}
+
+	if (!(maxsz = virtio_read32(vdev, vdev->info.base.addr, 0x34)) || virtio_read32(vdev, vdev->info.base.addr, virtio_legacy(vdev) ? 0x40 : 0x44))
+		return -ENOENT;
+
+	if (*size > maxsz)
+		*size = maxsz;
+
+	return EOK;
+}
+
+
+static int virtqueue_activate(virtio_dev_t *vdev, virtqueue_t *vq)
+{
+	uint64_t addr;
+
+	if (vdev->info.type == vdevPCI) {
+		if (virtio_legacy(vdev)) {
+			if ((addr = va2pa((void *)vq->desc) / _PAGE_SIZE) >> 32)
+				return -EFAULT;
+
+			virtio_write32(vdev, vdev->info.base.addr, 0x08, addr);
+
+			return EOK;
+		}
+
+		virtio_write16(vdev, vdev->info.base.addr, 0x18, vq->size);
+		virtio_write64(vdev, vdev->info.base.addr, 0x20, va2pa((void *)vq->desc));
+		virtio_write64(vdev, vdev->info.base.addr, 0x28, va2pa((void *)vq->avail));
+		virtio_write64(vdev, vdev->info.base.addr, 0x30, va2pa((void *)vq->used));
+
+		virtio_mb();
+		virtio_write16(vdev, vdev->info.base.addr, 0x1c, 1);
+
+		return EOK;
+	}
+
+	virtio_write32(vdev, vdev->info.base.addr, 0x38, vq->size);
+
+	if (virtio_legacy(vdev)) {
+		if ((addr = va2pa((void *)vq->desc) / _PAGE_SIZE) >> 32)
+			return -EFAULT;
+
+		virtio_write32(vdev, vdev->info.base.addr, 0x3c, _PAGE_SIZE);
+		virtio_write32(vdev, vdev->info.base.addr, 0x40, addr);
+
+		return EOK;
+	}
+
+	addr = va2pa((void *)vq->desc);
+	virtio_write32(vdev, vdev->info.base.addr, 0x80, addr);
+	virtio_write32(vdev, vdev->info.base.addr, 0x84, addr >> 32);
+
+	addr = va2pa((void *)vq->avail);
+	virtio_write32(vdev, vdev->info.base.addr, 0x90, addr);
+	virtio_write32(vdev, vdev->info.base.addr, 0x94, addr >> 32);
+
+	addr = va2pa((void *)vq->used);
+	virtio_write32(vdev, vdev->info.base.addr, 0xa0, addr);
+	virtio_write32(vdev, vdev->info.base.addr, 0xa4, addr >> 32);
+
+	virtio_mb();
+	virtio_write32(vdev, vdev->info.base.addr, 0x44, 1);
+
+	return EOK;
+}
+
+
 void virtqueue_enableirq(virtio_dev_t *vdev, virtqueue_t *vq)
 {
 	virtqueue_write16(vdev, &vq->avail->flags, virtqueue_read16(vdev, &vq->avail->flags) & ~0x1);
@@ -142,14 +245,26 @@ void virtqueue_notify(virtio_dev_t *vdev, virtqueue_t *vq)
 	/* Ensure avail index is visible to device */
 	virtio_mb();
 
-	if (!virtqueue_read16(vdev, &vq->avail->flags))
-		virtio_notify(vdev, vq);
+	if (!virtqueue_read16(vdev, &vq->avail->flags)) {
+		if (vdev->info.type == vdevPCI) {
+			if (virtio_legacy(vdev)) {
+				virtio_write16(vdev, vdev->info.base.addr, 0x10, vq->idx);
+				return;
+			}
+
+			virtqueue_select(vdev, vq->idx);
+			virtio_write16(vdev, vdev->info.ntf.addr, vdev->info.xntf * virtio_read16(vdev, vdev->info.base.addr, 0x1e), vq->idx);
+			return;
+		}
+
+		virtio_write32(vdev, vdev->info.base.addr, 0x50, vq->idx);
+	}
 }
 
 
 void *virtqueue_dequeue(virtio_dev_t *vdev, virtqueue_t *vq, unsigned int *len)
 {
-	virtio_used_elem_t *used;
+	volatile virtio_used_elem_t *used;
 	uint16_t idx, next;
 	void *buff;
 
@@ -207,8 +322,8 @@ int virtqueue_init(virtio_dev_t *vdev, virtqueue_t *vq, unsigned int idx, unsign
 	unsigned int ueoffs = aoffs + sizeof(virtio_avail_t) + size * sizeof(uint16_t);
 	unsigned int uoffs = (ueoffs + sizeof(uint16_t) + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1);
 	unsigned int aeoffs = uoffs + sizeof(virtio_used_t) + size * sizeof(virtio_used_elem_t);
-	unsigned int i, err, maxsz;
-	uint64_t addr;
+	unsigned int i;
+	int err;
 
 	/* Virtqueue index has to be a 2-byte value */
 	if (idx > 0xffff)
@@ -218,42 +333,10 @@ int virtqueue_init(virtio_dev_t *vdev, virtqueue_t *vq, unsigned int idx, unsign
 	if (!size || (size > 0xffff) || ((size - 1) & size))
 		return -EINVAL;
 
-	/* Select virtqueue slot and get max virtqueue size */
-	switch (vdev->type) {
-	case VIRTIO_PCI:
-		if (virtio_legacy(vdev)) {
-			virtio_write16(vdev, vdev->base, 0x0e, idx);
-
-			if (!(maxsz = virtio_read16(vdev, vdev->base, 0x0c)) || virtio_read32(vdev, vdev->base, 0x08))
-				return -ENOENT;
-
-			/* Legacy VirtIO PCI devices can't control virtqueue size */
-			size = maxsz;
-		}
-		else {
-			/* Check if virtqueue index is valid */
-			if (idx >= virtio_read16(vdev, vdev->base, 0x12))
-				return -ENOENT;
-
-			virtio_write16(vdev, vdev->base, 0x16, idx);
-
-			if (!(maxsz = virtio_read16(vdev, vdev->base, 0x18)) || virtio_read16(vdev, vdev->base, 0x1c))
-				return -ENOENT;
-		}
-		break;
-
-	case VIRTIO_MMIO:
-		virtio_write32(vdev, vdev->base, 0x30, idx);
-
-		if (!(maxsz = virtio_read32(vdev, vdev->base, 0x34)) || virtio_read32(vdev, vdev->base, virtio_legacy(vdev) ? 0x40 : 0x44))
-			return -ENOENT;
-		break;
-	}
+	if ((err = virtqueue_enable(vdev, idx, &size)) < 0)
+		return err;
 
 	/* Initialize virtqueue memory */
-	if (size > maxsz)
-		size = maxsz;
-
 	if ((vq->buffs = malloc(size * sizeof(void *))) == NULL)
 		return -ENOMEM;
 
@@ -304,56 +387,9 @@ int virtqueue_init(virtio_dev_t *vdev, virtqueue_t *vq, unsigned int idx, unsign
 		vq->buffs[i] = NULL;
 	}
 
-	/* Activate virtqueue */
-	switch (vdev->type) {
-	case VIRTIO_PCI:
-		if (virtio_legacy(vdev)) {
-			/* Legacy interface requires 32-bit descriptors page address */
-			if ((addr = va2pa((void *)vq->desc) / _PAGE_SIZE) >> 32) {
-				virtqueue_destroy(vdev, vq);
-				return -EFAULT;
-			}
-
-			virtio_write32(vdev, vdev->base, 0x08, addr);
-		}
-		else {
-			virtio_write16(vdev, vdev->base, 0x18, size);
-
-			virtio_write64(vdev, vdev->base, 0x20, va2pa((void *)vq->desc));
-			virtio_write64(vdev, vdev->base, 0x28, va2pa((void *)vq->avail));
-			virtio_write64(vdev, vdev->base, 0x30, va2pa((void *)vq->used));
-		}
-		break;
-
-	case VIRTIO_MMIO:
-		virtio_write32(vdev, vdev->base, 0x38, size);
-
-		if (virtio_legacy(vdev)) {
-			/* Legacy interface requires 32-bit descriptors page address */
-			if ((addr = va2pa((void *)vq->desc) / _PAGE_SIZE) >> 32) {
-				virtqueue_destroy(vdev, vq);
-				return -EFAULT;
-			}
-
-			virtio_write32(vdev, vdev->base, 0x3c, _PAGE_SIZE);
-			virtio_write32(vdev, vdev->base, 0x40, addr);
-		}
-		else {
-			addr = va2pa((void *)vq->desc);
-			virtio_write32(vdev, vdev->base, 0x80, addr);
-			virtio_write32(vdev, vdev->base, 0x84, addr >> 32);
-
-			addr = va2pa((void *)vq->avail);
-			virtio_write32(vdev, vdev->base, 0x90, addr);
-			virtio_write32(vdev, vdev->base, 0x94, addr >> 32);
-
-			addr = va2pa((void *)vq->used);
-			virtio_write32(vdev, vdev->base, 0xa0, addr);
-			virtio_write32(vdev, vdev->base, 0xa4, addr >> 32);
-
-			virtio_write32(vdev, vdev->base, 0x44, 1);
-		}
-		break;
+	if ((err = virtqueue_activate(vdev, vq)) < 0) {
+		virtqueue_destroy(vdev, vq);
+		return err;
 	}
 
 	return EOK;
