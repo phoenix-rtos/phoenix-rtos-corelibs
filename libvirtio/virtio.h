@@ -20,20 +20,6 @@
 #include "virtiopci.h"
 
 
-/* VirtIO modern device */
-static inline int virtio_modern(virtio_dev_t *vdev)
-{
-	return (vdev->features & (1ULL << 32));
-}
-
-
-/* VirtIO legacy device */
-static inline int virtio_legacy(virtio_dev_t *vdev)
-{
-	return !virtio_modern(vdev);
-}
-
-
 /* VirtIO memory barrier */
 static inline void virtio_mb(void)
 {

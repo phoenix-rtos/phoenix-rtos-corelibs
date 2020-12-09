@@ -86,8 +86,6 @@ int virtiopci_initDev(virtio_dev_t *vdev)
 			virtiopci_unmapReg(&vdev->info.isr);
 			return err;
 		}
-
-		return err;
 	}
 
 	virtio_reset(vdev);
@@ -111,7 +109,7 @@ virtiopci_cap_t *virtiopci_getCap(virtiopci_cap_t *caps, unsigned char type)
 }
 
 
-int virtiopci_initReg(unsigned long base, unsigned long len, unsigned char flags, virtio_reg_t *reg)
+int virtiopci_initReg(unsigned long base, unsigned long len, unsigned char flags, unsigned char ext, virtio_reg_t *reg)
 {
 	if (!base || !len)
 		return -ENOENT;
@@ -122,8 +120,8 @@ int virtiopci_initReg(unsigned long base, unsigned long len, unsigned char flags
 		reg->len = len;
 	}
 
-	/* Check for not supported 64-bit memory space register */
-	if ((flags & 0x4) && (sizeof(void *) < 8))
+	/* Check for 64-bit memory space register support */
+	if ((flags & (1 << 2)) && (sizeof(void *) < 8) && (!ext || base > base + len))
 		return -ENOTSUP;
 
 	reg->addr = (void *)base;

@@ -25,12 +25,13 @@ typedef struct {
 } virtiommio_ctx_t;
 
 
-/* Return VirtIO device configuratino space address */
+/* Returns VirtIO device configuraton space address */
 static void *virtio_configBase(virtio_dev_t *vdev)
 {
 	if (vdev->info.type == vdevPCI) {
 		if (virtio_legacy(vdev))
 			return vdev->info.base.addr;
+
 		return vdev->info.cfg.addr;
 	}
 
@@ -38,12 +39,13 @@ static void *virtio_configBase(virtio_dev_t *vdev)
 }
 
 
-/* Converts VirtIO device configuration space registers offsets */
+/* Returns VirtIO device configuration space registers offset */
 static unsigned int virtio_configReg(virtio_dev_t *vdev, unsigned int reg)
 {
 	if (vdev->info.type == vdevPCI) {
 		if (virtio_legacy(vdev))
 			return reg + 0x14;
+
 		return reg;
 	}
 
@@ -209,8 +211,12 @@ int virtio_writeFeatures(virtio_dev_t *vdev, uint64_t features)
 
 uint8_t virtio_readStatus(virtio_dev_t *vdev)
 {
-	if (vdev->info.type == vdevPCI)
-		return virtio_read8(vdev, vdev->info.base.addr, virtio_legacy(vdev) ? 0x12 : 0x14);
+	if (vdev->info.type == vdevPCI) {
+		if (virtio_legacy(vdev))
+			return virtio_read8(vdev, vdev->info.base.addr, 0x12);
+
+		return virtio_read8(vdev, vdev->info.base.addr, 0x14);
+	}
 
 	return virtio_read32(vdev, vdev->info.base.addr, 0x70);
 }
@@ -219,7 +225,13 @@ uint8_t virtio_readStatus(virtio_dev_t *vdev)
 void virtio_writeStatus(virtio_dev_t *vdev, uint8_t status)
 {
 	if (vdev->info.type == vdevPCI) {
-		virtio_write8(vdev, vdev->info.base.addr, (virtio_legacy(vdev)) ? 0x12 : 0x14, status);
+		if (virtio_legacy(vdev)) {
+			virtio_write8(vdev, vdev->info.base.addr, 0x12, status);
+			virtio_mb();
+			return;
+		}
+
+		virtio_write8(vdev, vdev->info.base.addr, 0x14, status);
 		virtio_mb();
 		return;
 	}
@@ -236,6 +248,7 @@ unsigned int virtio_isr(virtio_dev_t *vdev)
 	if (vdev->info.type == vdevPCI) {
 		if (virtio_legacy(vdev))
 			return virtio_read8(vdev, vdev->info.base.addr, 0x13);
+
 		return virtio_read8(vdev, vdev->info.isr.addr, 0x00);
 	}
 
@@ -264,8 +277,10 @@ void virtio_reset(virtio_dev_t *vdev)
 
 void virtio_destroyDev(virtio_dev_t *vdev)
 {
-	if (vdev->info.type == vdevPCI)
+	if (vdev->info.type == vdevPCI) {
 		virtiopci_destroyDev(vdev);
+		return;
+	}
 
 	munmap(vdev->info.base.addr, (vdev->info.base.len + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1));
 }
@@ -273,7 +288,7 @@ void virtio_destroyDev(virtio_dev_t *vdev)
 
 int virtio_initDev(virtio_dev_t *vdev)
 {
-	unsigned int ver;
+	unsigned int ver, id;
 	int err;
 
 	if (vdev->info.type == vdevPCI)
@@ -282,16 +297,15 @@ int virtio_initDev(virtio_dev_t *vdev)
 	if ((vdev->info.base.addr = mmap(NULL, (vdev->info.base.len + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1), PROT_READ | PROT_WRITE, MAP_DEVICE | MAP_UNCACHED, OID_PHYSMEM, (uintptr_t)vdev->info.base.addr)) == MAP_FAILED)
 		return -ENOMEM;
 
-	vdev->features = 0;
-	do {
-		if (virtio_read32(vdev, vdev->info.base.addr, 0x00) != 0x74726976) {
-			vdev->features = (1ULL << 32);
-			if (virtio_read32(vdev, vdev->info.base.addr, 0x00) != 0x74726976) {
-				err = -ENODEV;
-				break;
-			}
-		}
+	vdev->features = 0ULL;
+	if (virtio_read32(vdev, vdev->info.base.addr, 0x00) != 0x74726976) {
+		vdev->features = (1ULL << 32);
 
+		if (virtio_read32(vdev, vdev->info.base.addr, 0x00) != 0x74726976)
+			return -ENODEV;
+	}
+
+	do {
 		if ((ver = virtio_read32(vdev, vdev->info.base.addr, 0x04)) == 1) {
 			vdev->features = 0;
 		}
@@ -303,10 +317,11 @@ int virtio_initDev(virtio_dev_t *vdev)
 			break;
 		}
 
-		if (!virtio_read32(vdev, vdev->info.base.addr, 0x08)) {
+		if (!(id = virtio_read32(vdev, vdev->info.base.addr, 0x08)) || (vdev->info.id && (vdev->info.id != id))) {
 			err = -ENODEV;
 			break;
 		}
+		vdev->info.id = id;
 
 		virtio_reset(vdev);
 		virtio_writeStatus(vdev, virtio_readStatus(vdev) | 0x03);
@@ -330,7 +345,7 @@ int virtio_initDev(virtio_dev_t *vdev)
 }
 
 
-int virtio_find(virtio_devinfo_t *info, virtio_dev_t *vdev, virtio_ctx_t *vctx)
+int virtio_find(const virtio_devinfo_t *info, virtio_dev_t *vdev, virtio_ctx_t *vctx)
 {
 	virtiommio_ctx_t *ctx = (virtiommio_ctx_t *)vctx->ctx;
 
@@ -338,13 +353,14 @@ int virtio_find(virtio_devinfo_t *info, virtio_dev_t *vdev, virtio_ctx_t *vctx)
 		return virtiopci_find(info, vdev, vctx);
 
 	if (vctx->reset)
-		memset(ctx, 0, sizeof(virtiommio_ctx_t));
+		memset(vctx, 0, sizeof(virtio_ctx_t));
 	vdev->info = *info;
 
 	/* Direct MMIO configuration */
-	if (info->base.addr) {
+	if (info->base.len) {
 		if (ctx->found)
 			return -ENODEV;
+
 		ctx->found = 1;
 		return EOK;
 	}

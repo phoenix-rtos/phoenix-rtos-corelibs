@@ -64,7 +64,7 @@ void virtiopci_write64(void *base, unsigned int reg, uint64_t val)
 }
 
 
-int virtiopci_find(virtio_devinfo_t *info, virtio_dev_t *vdev, virtio_ctx_t *vctx)
+int virtiopci_find(const virtio_devinfo_t *info, virtio_dev_t *vdev, virtio_ctx_t *vctx)
 {
 	return -ENODEV;
 }

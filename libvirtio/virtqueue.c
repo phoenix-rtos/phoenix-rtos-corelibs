@@ -74,7 +74,13 @@ static inline void virtqueue_write64(virtio_dev_t *vdev, volatile void *addr, ui
 static void virtqueue_select(virtio_dev_t *vdev, unsigned int idx)
 {
 	if (vdev->info.type == vdevPCI) {
-		virtio_write16(vdev, vdev->info.base.addr, virtio_legacy(vdev) ? 0x0e : 0x16, idx);
+		if (virtio_legacy(vdev)) {
+			virtio_write16(vdev, vdev->info.base.addr, 0x0e, idx);
+			virtio_mb();
+			return;
+		}
+
+		virtio_write16(vdev, vdev->info.base.addr, 0x16, idx);
 		virtio_mb();
 		return;
 	}
@@ -128,7 +134,6 @@ static int virtqueue_activate(virtio_dev_t *vdev, virtqueue_t *vq)
 				return -EFAULT;
 
 			virtio_write32(vdev, vdev->info.base.addr, 0x08, addr);
-
 			return EOK;
 		}
 
@@ -139,7 +144,6 @@ static int virtqueue_activate(virtio_dev_t *vdev, virtqueue_t *vq)
 
 		virtio_mb();
 		virtio_write16(vdev, vdev->info.base.addr, 0x1c, 1);
-
 		return EOK;
 	}
 
@@ -151,7 +155,6 @@ static int virtqueue_activate(virtio_dev_t *vdev, virtqueue_t *vq)
 
 		virtio_write32(vdev, vdev->info.base.addr, 0x3c, _PAGE_SIZE);
 		virtio_write32(vdev, vdev->info.base.addr, 0x40, addr);
-
 		return EOK;
 	}
 
@@ -169,19 +172,18 @@ static int virtqueue_activate(virtio_dev_t *vdev, virtqueue_t *vq)
 
 	virtio_mb();
 	virtio_write32(vdev, vdev->info.base.addr, 0x44, 1);
-
 	return EOK;
 }
 
 
-void virtqueue_enableirq(virtio_dev_t *vdev, virtqueue_t *vq)
+void virtqueue_enableIRQ(virtio_dev_t *vdev, virtqueue_t *vq)
 {
 	virtqueue_write16(vdev, &vq->avail->flags, virtqueue_read16(vdev, &vq->avail->flags) & ~0x1);
 	virtio_mb();
 }
 
 
-void virtqueue_disableirq(virtio_dev_t *vdev, virtqueue_t *vq)
+void virtqueue_disableIRQ(virtio_dev_t *vdev, virtqueue_t *vq)
 {
 	virtqueue_write16(vdev, &vq->avail->flags, virtqueue_read16(vdev, &vq->avail->flags) | 0x1);
 }

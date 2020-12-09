@@ -169,7 +169,7 @@ void virtiopci_write64(void *base, unsigned int reg, uint64_t val)
 }
 
 
-int virtiopci_find(virtio_devinfo_t *info, virtio_dev_t *vdev, virtio_ctx_t *vctx)
+int virtiopci_find(const virtio_devinfo_t *info, virtio_dev_t *vdev, virtio_ctx_t *vctx)
 {
 	platformctl_t pctl = { .action = pctl_get, .type = pctl_pci };
 	virtiopci_ctx_t *ctx = (virtiopci_ctx_t *)vctx->ctx;
@@ -178,13 +178,14 @@ int virtiopci_find(virtio_devinfo_t *info, virtio_dev_t *vdev, virtio_ctx_t *vct
 	int err;
 
 	if (vctx->reset)
-		memset(ctx, 0, sizeof(virtiopci_ctx_t));
+		memset(vctx, 0, sizeof(virtio_ctx_t));
 	vdev->info = *info;
 
 	/* Direct PCI configuration */
-	if (info->base.addr) {
+	if (info->base.len) {
 		if (ctx->found)
 			return -ENODEV;
+
 		ctx->found = 1;
 		return EOK;
 	}
@@ -200,51 +201,64 @@ int virtiopci_find(virtio_devinfo_t *info, virtio_dev_t *vdev, virtio_ctx_t *vct
 	pctl.pci.dev.func = ctx->func;
 	pctl.pci.caps = caps;
 
-	if ((err = platformctl(&pctl)) < 0)
-		return err;
+	do {
+		if ((err = platformctl(&pctl)) < 0)
+			break;
 
-	vdev->features = (pctl.pci.dev.revision) ? (1ULL << 32) : 0;
-	vdev->info.irq = pctl.pci.dev.irq;
+		vdev->features = (pctl.pci.dev.revision && (pctl.pci.dev.status & (1 << 4))) ? (1ULL << 32) : 0ULL;
+		vdev->info.irq = pctl.pci.dev.irq;
 
-	if (virtio_legacy(vdev)) {
-		if ((err = virtiopci_initReg(pctl.pci.dev.resources[0].base, pctl.pci.dev.resources[0].limit, pctl.pci.dev.resources[0].flags, &vdev->info.base)) < 0)
-			return err;
-		ctx->func++;
-		return EOK;
-	}
+		if (virtio_legacy(vdev)) {
+			if ((err = virtiopci_initReg(pctl.pci.dev.resources[0].base, pctl.pci.dev.resources[0].limit, pctl.pci.dev.resources[0].flags, !pctl.pci.dev.resources[1].base, &vdev->info.base)) < 0)
+				break;
 
-	if (!(pctl.pci.dev.status & 0x10))
-		return -ENOENT;
+			err = EOK;
+			break;
+		}
 
-	if (((cap = virtiopci_getCap((virtiopci_cap_t *)caps, 0x01)) == NULL) || (cap->size < 0x38) || (cap->bar > 5))
-		return -ENOENT;
+		if (((cap = virtiopci_getCap((virtiopci_cap_t *)caps, 0x01)) == NULL) || (cap->size < 0x38) || (cap->bar > 5)) {
+			err = -ENOENT;
+			break;
+		}
 
-	if ((err = virtiopci_initReg(pctl.pci.dev.resources[cap->bar].base, pctl.pci.dev.resources[cap->bar].limit, pctl.pci.dev.resources[cap->bar].flags, &vdev->info.base)) < 0)
-		return err;
-	vdev->info.base.addr = (void *)((uintptr_t)vdev->info.base.addr + cap->offs);
+		if ((err = virtiopci_initReg(pctl.pci.dev.resources[cap->bar].base, pctl.pci.dev.resources[cap->bar].limit, pctl.pci.dev.resources[cap->bar].flags, (cap->bar < 5) && !pctl.pci.dev.resources[cap->bar + 1].base, &vdev->info.base)) < 0)
+			break;
+		vdev->info.base.addr = (void *)((uintptr_t)vdev->info.base.addr + cap->offs);
 
-	if (((cap = virtiopci_getCap((virtiopci_cap_t *)caps, 0x02)) == NULL) || (cap->size < 0x14) || (cap->bar > 5))
-		return -ENOENT;
+		if (((cap = virtiopci_getCap((virtiopci_cap_t *)caps, 0x02)) == NULL) || (cap->size < 0x14) || (cap->bar > 5)) {
+			err = -ENOENT;
+			break;
+		}
 
-	if ((err = virtiopci_initReg(pctl.pci.dev.resources[cap->bar].base, pctl.pci.dev.resources[cap->bar].limit, pctl.pci.dev.resources[cap->bar].flags, &vdev->info.ntf)) < 0)
-		return err;
-	vdev->info.ntf.addr = (void *)((uintptr_t)vdev->info.ntf.addr + cap->offs);
-	vdev->info.xntf = *(uint32_t *)((uintptr_t)cap + sizeof(virtiopci_cap_t));
+		if ((err = virtiopci_initReg(pctl.pci.dev.resources[cap->bar].base, pctl.pci.dev.resources[cap->bar].limit, pctl.pci.dev.resources[cap->bar].flags, (cap->bar < 5) && !pctl.pci.dev.resources[cap->bar + 1].base, &vdev->info.ntf)) < 0)
+			break;
+		vdev->info.ntf.addr = (void *)((uintptr_t)vdev->info.ntf.addr + cap->offs);
+		vdev->info.xntf = *(uint32_t *)((uintptr_t)cap + sizeof(virtiopci_cap_t));
 
-	if (((cap = virtiopci_getCap((virtiopci_cap_t *)caps, 0x03)) == NULL) || (cap->size < 0x1) || (cap->bar > 5))
-		return -ENOENT;
+		if (((cap = virtiopci_getCap((virtiopci_cap_t *)caps, 0x03)) == NULL) || (cap->size < 0x1) || (cap->bar > 5)) {
+			err = -ENOENT;
+			break;
+		}
 
-	if ((err = virtiopci_initReg(pctl.pci.dev.resources[cap->bar].base, pctl.pci.dev.resources[cap->bar].limit, pctl.pci.dev.resources[cap->bar].flags, &vdev->info.isr)) < 0)
-		return err;
-	vdev->info.isr.addr = (void *)((uintptr_t)vdev->info.isr.addr + cap->offs);
+		if ((err = virtiopci_initReg(pctl.pci.dev.resources[cap->bar].base, pctl.pci.dev.resources[cap->bar].limit, pctl.pci.dev.resources[cap->bar].flags, (cap->bar < 5) && !pctl.pci.dev.resources[cap->bar + 1].base, &vdev->info.isr)) < 0)
+			break;
+		vdev->info.isr.addr = (void *)((uintptr_t)vdev->info.isr.addr + cap->offs);
 
-	if (((cap = virtiopci_getCap((virtiopci_cap_t *)caps, 0x04)) == NULL) || (cap->bar > 5))
-		return -ENOENT;
+		if (((cap = virtiopci_getCap((virtiopci_cap_t *)caps, 0x04)) == NULL) || (cap->bar > 5)) {
+			err = -ENOENT;
+			break;
+		}
 
-	if ((err = virtiopci_initReg(pctl.pci.dev.resources[cap->bar].base, pctl.pci.dev.resources[cap->bar].limit, pctl.pci.dev.resources[cap->bar].flags, &vdev->info.cfg)) < 0)
-		return err;
-	vdev->info.cfg.addr = (void *)((uintptr_t)vdev->info.cfg.addr + cap->offs);
+		if ((err = virtiopci_initReg(pctl.pci.dev.resources[cap->bar].base, pctl.pci.dev.resources[cap->bar].limit, pctl.pci.dev.resources[cap->bar].flags, (cap->bar < 5) && !pctl.pci.dev.resources[cap->bar + 1].base, &vdev->info.cfg)) < 0)
+			break;
+		vdev->info.cfg.addr = (void *)((uintptr_t)vdev->info.cfg.addr + cap->offs);
 
-	ctx->func++;
-	return EOK;
+		err = EOK;
+	} while (0);
+
+	ctx->bus = pctl.pci.dev.bus;
+	ctx->dev = pctl.pci.dev.dev;
+	ctx->func = pctl.pci.dev.func + 1;
+
+	return err;
 }

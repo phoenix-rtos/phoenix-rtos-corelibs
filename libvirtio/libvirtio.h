@@ -19,6 +19,13 @@
 #include <sys/types.h>
 
 
+typedef enum {
+	vdevNONE                = 0x00, /* No VirtIO device */
+	vdevPCI                 = 0x01, /* VirtIO PCI device */
+	vdevMMIO                = 0x02  /* VirtIO MMIO device */
+} virtio_devtype_t;
+
+
 typedef struct _virtio_seg_t virtio_seg_t;
 
 
@@ -95,12 +102,6 @@ typedef struct {
 } virtio_reg_t;
 
 
-typedef enum {
-	vdevPCI,                        /* VirtIO PCI device */
-	vdevMMIO                        /* VirtIO MMIO device */
-} virtio_devtype_t;
-
-
 typedef struct {
 	virtio_devtype_t type;          /* VirtIO device type */
 	unsigned int id;                /* VirtIO device ID */
@@ -120,17 +121,31 @@ typedef struct {
 
 
 typedef struct {
-	unsigned char reset;            /* Indicates contex reset */
+	unsigned char reset;            /* Indicates that context needs reset */
 	unsigned char ctx[32];          /* VirtIO device detection context */
 } virtio_ctx_t;
 
 
+/* VirtIO legacy device */
+static inline int virtio_legacy(virtio_dev_t *vdev)
+{
+	return !(vdev->features & (1ULL << 32));
+}
+
+
+/* VirtIO modern device */
+static inline int virtio_modern(virtio_dev_t *vdev)
+{
+	return !virtio_legacy(vdev);
+}
+
+
 /* Enables virtqueue interrupts (hint for the host) */
-extern void virtqueue_enableirq(virtio_dev_t *vdev, virtqueue_t *vq);
+extern void virtqueue_enableIRQ(virtio_dev_t *vdev, virtqueue_t *vq);
 
 
 /* Disables virtqueue interrupts (hint for the host) */
-extern void virtqueue_disableirq(virtio_dev_t *vdev, virtqueue_t *vq);
+extern void virtqueue_disableIRQ(virtio_dev_t *vdev, virtqueue_t *vq);
 
 
 /* Enqueues request in virtqueue */
@@ -211,8 +226,8 @@ extern void virtio_destroyDev(virtio_dev_t *vdev);
 extern int virtio_initDev(virtio_dev_t *vdev);
 
 
-/* Detects next VirtIO device matching info descriptor */
-extern int virtio_find(virtio_devinfo_t *info, virtio_dev_t *vdev, virtio_ctx_t *ctx);
+/* Detects next VirtIO device matching given deivce descriptor */
+extern int virtio_find(const virtio_devinfo_t *info, virtio_dev_t *vdev, virtio_ctx_t *vctx);
 
 
 /* Destroys VirtIO library */

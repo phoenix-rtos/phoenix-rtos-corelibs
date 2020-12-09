@@ -68,11 +68,11 @@ extern virtiopci_cap_t *virtiopci_getCap(virtiopci_cap_t *caps, unsigned char ty
 
 
 /* Initalizes VirtIO register based on PCI BAR data */
-extern int virtiopci_initReg(unsigned long base, unsigned long len, unsigned char flags, virtio_reg_t *reg);
+extern int virtiopci_initReg(unsigned long base, unsigned long len, unsigned char flags, unsigned char ext, virtio_reg_t *reg);
 
 
 /* Detects next VirtIO PCI device matching info descriptor */
-extern int virtiopci_find(virtio_devinfo_t *info, virtio_dev_t *vdev, virtio_ctx_t *vctx);
+extern int virtiopci_find(const virtio_devinfo_t *info, virtio_dev_t *vdev, virtio_ctx_t *vctx);
 
 
 #endif
