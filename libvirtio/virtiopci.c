@@ -67,20 +67,20 @@ int virtiopci_initDev(virtio_dev_t *vdev)
 
 	if (virtio_modern(vdev)) {
 		if ((err = virtiopci_mapReg(&vdev->info.ntf)) < 0) {
-			virtio_writeStatus(vdev, virtio_readStatus(vdev) | 0x80);
+			virtio_writeStatus(vdev, virtio_readStatus(vdev) | (1 << 7));
 			virtiopci_unmapReg(&vdev->info.base);
 			return err;
 		}
 
 		if ((err = virtiopci_mapReg(&vdev->info.isr)) < 0) {
-			virtio_writeStatus(vdev, virtio_readStatus(vdev) | 0x80);
+			virtio_writeStatus(vdev, virtio_readStatus(vdev) | (1 << 7));
 			virtiopci_unmapReg(&vdev->info.base);
 			virtiopci_unmapReg(&vdev->info.ntf);
 			return err;
 		}
 
 		if ((err = virtiopci_mapReg(&vdev->info.cfg)) < 0) {
-			virtio_writeStatus(vdev, virtio_readStatus(vdev) | 0x80);
+			virtio_writeStatus(vdev, virtio_readStatus(vdev) | (1 << 7));
 			virtiopci_unmapReg(&vdev->info.base);
 			virtiopci_unmapReg(&vdev->info.ntf);
 			virtiopci_unmapReg(&vdev->info.isr);
@@ -89,7 +89,7 @@ int virtiopci_initDev(virtio_dev_t *vdev)
 	}
 
 	virtio_reset(vdev);
-	virtio_writeStatus(vdev, virtio_readStatus(vdev) | 0x03);
+	virtio_writeStatus(vdev, virtio_readStatus(vdev) | (1 << 0) | (1 << 1));
 	vdev->features = virtio_getFeatures(vdev);
 
 	return EOK;
@@ -118,10 +118,12 @@ int virtiopci_initReg(unsigned long base, unsigned long len, unsigned char flags
 	if (flags & 0x1) {
 		reg->addr = (void *)(base | 0x1);
 		reg->len = len;
+
+		return EOK;
 	}
 
 	/* Check for 64-bit memory space register support */
-	if ((flags & (1 << 2)) && (sizeof(void *) < 8) && (!ext || base > base + len))
+	if ((flags & (1 << 2)) && (sizeof(void *) < 8) && (!ext || (base > base + len)))
 		return -ENOTSUP;
 
 	reg->addr = (void *)base;

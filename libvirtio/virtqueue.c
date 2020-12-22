@@ -71,6 +71,7 @@ static inline void virtqueue_write64(virtio_dev_t *vdev, volatile void *addr, ui
 }
 
 
+/* Selects virtqueue with given index */
 static void virtqueue_select(virtio_dev_t *vdev, unsigned int idx)
 {
 	if (vdev->info.type == vdevPCI) {
@@ -90,11 +91,10 @@ static void virtqueue_select(virtio_dev_t *vdev, unsigned int idx)
 }
 
 
-static int virtqueue_enable(virtio_dev_t * vdev, unsigned int idx, unsigned int *size)
+/* Checks if virtqueue is available and validates its size */
+static int virtqueue_enable(virtio_dev_t * vdev, unsigned int *size)
 {
 	unsigned int maxsz;
-
-	virtqueue_select(vdev, idx);
 
 	if (vdev->info.type == vdevPCI) {
 		if (virtio_legacy(vdev)) {
@@ -124,6 +124,7 @@ static int virtqueue_enable(virtio_dev_t * vdev, unsigned int idx, unsigned int 
 }
 
 
+/* Activates virtqueue */
 static int virtqueue_activate(virtio_dev_t *vdev, virtqueue_t *vq)
 {
 	uint64_t addr;
@@ -137,6 +138,7 @@ static int virtqueue_activate(virtio_dev_t *vdev, virtqueue_t *vq)
 			return EOK;
 		}
 
+		vq->noffs = virtio_read16(vdev, vdev->info.base.addr, 0x1e);
 		virtio_write16(vdev, vdev->info.base.addr, 0x18, vq->size);
 		virtio_write64(vdev, vdev->info.base.addr, 0x20, va2pa((void *)vq->desc));
 		virtio_write64(vdev, vdev->info.base.addr, 0x28, va2pa((void *)vq->avail));
@@ -247,20 +249,20 @@ void virtqueue_notify(virtio_dev_t *vdev, virtqueue_t *vq)
 	/* Ensure avail index is visible to device */
 	virtio_mb();
 
-	if (!virtqueue_read16(vdev, &vq->avail->flags)) {
-		if (vdev->info.type == vdevPCI) {
-			if (virtio_legacy(vdev)) {
-				virtio_write16(vdev, vdev->info.base.addr, 0x10, vq->idx);
-				return;
-			}
+	if (virtqueue_read16(vdev, &vq->used->flags) & 0x01)
+		return;
 
-			virtqueue_select(vdev, vq->idx);
-			virtio_write16(vdev, vdev->info.ntf.addr, vdev->info.xntf * virtio_read16(vdev, vdev->info.base.addr, 0x1e), vq->idx);
+	if (vdev->info.type == vdevPCI) {
+		if (virtio_legacy(vdev)) {
+			virtio_write16(vdev, vdev->info.base.addr, 0x10, vq->idx);
 			return;
 		}
 
-		virtio_write32(vdev, vdev->info.base.addr, 0x50, vq->idx);
+		virtio_write16(vdev, vdev->info.ntf.addr, vq->noffs * vdev->info.xntf, vq->idx);
+		return;
 	}
+
+	virtio_write32(vdev, vdev->info.base.addr, 0x50, vq->idx);
 }
 
 
@@ -335,7 +337,9 @@ int virtqueue_init(virtio_dev_t *vdev, virtqueue_t *vq, unsigned int idx, unsign
 	if (!size || (size > 0xffff) || ((size - 1) & size))
 		return -EINVAL;
 
-	if ((err = virtqueue_enable(vdev, idx, &size)) < 0)
+	virtqueue_select(vdev, idx);
+
+	if ((err = virtqueue_enable(vdev, &size)) < 0)
 		return err;
 
 	/* Initialize virtqueue memory */

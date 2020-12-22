@@ -194,15 +194,15 @@ uint64_t virtio_readFeatures(virtio_dev_t *vdev)
 
 int virtio_writeFeatures(virtio_dev_t *vdev, uint64_t features)
 {
-	vdev->features &= features | 0x3ff0000000ULL;
+	vdev->features &= features | (1ULL << 32);
 	virtio_setFeatures(vdev, vdev->features);
 
 	if (virtio_legacy(vdev))
 		return EOK;
 
-	virtio_writeStatus(vdev, virtio_readStatus(vdev) | 0x08);
+	virtio_writeStatus(vdev, virtio_readStatus(vdev) | (1 << 3));
 
-	if (!(virtio_readStatus(vdev) & 0x08))
+	if (!(virtio_readStatus(vdev) & (1 << 3)))
 		return -ENOTSUP;
 
 	return EOK;
@@ -252,8 +252,8 @@ unsigned int virtio_isr(virtio_dev_t *vdev)
 		return virtio_read8(vdev, vdev->info.isr.addr, 0x00);
 	}
 
-	if ((isr = virtio_read32(vdev, vdev->info.base.addr, 0x60)))
-		virtio_write32(vdev, vdev->info.base.addr, 0x64, isr);
+	isr = virtio_read32(vdev, vdev->info.base.addr, 0x60);
+	virtio_write32(vdev, vdev->info.base.addr, 0x64, isr);
 
 	return isr;
 }
@@ -261,7 +261,7 @@ unsigned int virtio_isr(virtio_dev_t *vdev)
 
 void virtio_reset(virtio_dev_t *vdev)
 {
-	virtio_writeStatus(vdev, 0x00);
+	virtio_writeStatus(vdev, 0);
 
 	if (vdev->info.type == vdevPCI) {
 		if (virtio_legacy(vdev)) {
@@ -324,7 +324,7 @@ int virtio_initDev(virtio_dev_t *vdev)
 		vdev->info.id = id;
 
 		virtio_reset(vdev);
-		virtio_writeStatus(vdev, virtio_readStatus(vdev) | 0x03);
+		virtio_writeStatus(vdev, virtio_readStatus(vdev) | (1 << 0) | (1 << 1));
 		vdev->features = virtio_getFeatures(vdev);
 
 		if (virtio_legacy(vdev)) {
@@ -338,7 +338,7 @@ int virtio_initDev(virtio_dev_t *vdev)
 		return EOK;
 	} while (0);
 
-	virtio_writeStatus(vdev, virtio_readStatus(vdev) | 0x80);
+	virtio_writeStatus(vdev, virtio_readStatus(vdev) | (1 << 7));
 	virtio_destroyDev(vdev);
 
 	return err;
