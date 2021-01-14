@@ -85,10 +85,10 @@ typedef struct {
 	unsigned int memsz;             /* Allocated virtqueue memory size */
 	unsigned int idx;               /* Virtqueue index */
 	unsigned int size;              /* Virtqueue size */
-	unsigned int noffs;             /* Virtqueue notification area offset */
+	unsigned int noffs;             /* Virtqueue notification area offset (modern VirtIO PCI device only) */
 	unsigned int nfree;             /* Number of free descriptors */
 	uint16_t free;                  /* Next free desriptor index */
-	uint16_t last;                  /* Last processed request */
+	uint16_t last;                  /* Last processed request index */
 
 	/* Synchronization */
 	handle_t dcond;                 /* Free descriptors condition variable */
@@ -109,8 +109,8 @@ typedef struct {
 	unsigned int irq;               /* Interrupt number */
 	unsigned int xntf;              /* Notification registers offset multiplier */
 	virtio_reg_t base;              /* Base registers */
-	virtio_reg_t ntf;               /* Notification registers */
-	virtio_reg_t isr;               /* Interrupt status registers */
+	virtio_reg_t ntf;               /* Notification register */
+	virtio_reg_t isr;               /* Interrupt status register */
 	virtio_reg_t cfg;               /* Configuration registers */
 } virtio_devinfo_t;
 
@@ -227,7 +227,7 @@ extern void virtio_destroyDev(virtio_dev_t *vdev);
 extern int virtio_initDev(virtio_dev_t *vdev);
 
 
-/* Detects next VirtIO device matching given deivce descriptor */
+/* Detects next VirtIO device matching given device descriptor */
 extern int virtio_find(const virtio_devinfo_t *info, virtio_dev_t *vdev, virtio_ctx_t *vctx);
 
 
