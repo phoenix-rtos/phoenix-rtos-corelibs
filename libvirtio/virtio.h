@@ -14,67 +14,12 @@
 #ifndef _VIRTIO_H_
 #define _VIRTIO_H_
 
-#include <endian.h>
-
 #include "libvirtio.h"
 #include "virtiopci.h"
 
 
-/* VirtIO memory barrier */
-static inline void virtio_mb(void)
-{
-	__asm__ __volatile__("" ::: "memory");
-}
-
-
 /* Reads VirtIO device supported features */
 extern uint64_t virtio_getFeatures(virtio_dev_t *vdev);
-
-
-/* VirtIO device to guest endian */
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-	#define virtio_vtog(n) \
-	static inline uint##n##_t virtio_vtog##n(virtio_dev_t *vdev, uint##n##_t val) \
-	{ \
-		return val; \
-	}
-#else
-	#define virtio_vtog(n) \
-	static inline uint##n##_t virtio_vtog##n(virtio_dev_t *vdev, uint##n##_t val) \
-	{ \
-		if (virtio_modern(vdev)) \
-			val = le##n##toh(val); \
-		return val; \
-	}
-#endif
-
-
-virtio_vtog(16)
-virtio_vtog(32)
-virtio_vtog(64)
-
-
-/* Guest to VirtIO device endian */
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-	#define virtio_gtov(n) \
-	static inline uint##n##_t virtio_gtov##n(virtio_dev_t *vdev, uint##n##_t val) \
-	{ \
-		return val; \
-	}
-#else
-	#define virtio_gtov(n) \
-	static inline uint##n##_t virtio_gtov##n(virtio_dev_t *vdev, uint##n##_t val) \
-	{ \
-		if (virtio_modern(vdev)) \
-			val = htole##n##(val); \
-		return val; \
-	}
-#endif
-
-
-virtio_gtov(16)
-virtio_gtov(32)
-virtio_gtov(64)
 
 
 static inline uint8_t virtio_read8(virtio_dev_t *vdev, void *base, unsigned int reg)
