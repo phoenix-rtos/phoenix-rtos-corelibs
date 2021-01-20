@@ -22,14 +22,15 @@
 #include "virtio.h"
 
 
-typedef struct {
-	union {
-		unsigned char found;    /* Direct PCI device detection status */
-		struct {
-			unsigned char bus;  /* PCI bus index */
-			unsigned char dev;  /* PCI device index */
-			unsigned char func; /* PCI function index */
-		};
+typedef union {
+	/* Direct PCI device detection status */
+	unsigned char found;
+
+	/* PCI device detection progress */
+	struct {
+		unsigned char bus;  /* PCI bus index */
+		unsigned char dev;  /* PCI device index */
+		unsigned char func; /* PCI function index */
 	};
 } virtiopci_ctx_t;
 

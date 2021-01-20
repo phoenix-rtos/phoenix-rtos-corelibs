@@ -348,8 +348,8 @@ int virtqueue_init(virtio_dev_t *vdev, virtqueue_t *vq, unsigned int idx, unsign
 
 	vq->memsz = (aeoffs + sizeof(uint16_t) + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1);
 
-	/* TODO: allocate contiguous physical memory below 4GB (legacy interface requires 32-bit physical address) */
-	if ((vq->mem = mmap(NULL, vq->memsz, PROT_READ | PROT_WRITE, MAP_UNCACHED | MAP_ANONYMOUS, OID_NULL, 0)) == MAP_FAILED) {
+	/* TODO: allocate physcial memory below 4GB (legacy interface requires 32-bit physical address) */
+	if ((vq->mem = mmap(NULL, vq->memsz, PROT_READ | PROT_WRITE, MAP_UNCACHED | MAP_ANONYMOUS, OID_CONTIGUOUS, 0)) == MAP_FAILED) {
 		free(vq->buffs);
 		return -ENOMEM;
 	}

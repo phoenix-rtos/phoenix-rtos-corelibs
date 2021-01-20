@@ -20,8 +20,12 @@
 #include "virtio.h"
 
 
-typedef struct {
+typedef union {
+	/* Direct MMIO device detection status */
 	unsigned char found;
+
+	/* MMIO device detection progress */
+	/* TODO: track MMIO device enumeration */
 } virtiommio_ctx_t;
 
 
