@@ -92,8 +92,7 @@ typedef struct {
 	uint16_t last;                  /* Last processed request index */
 
 	/* Synchronization */
-	handle_t dcond;                 /* Free descriptors condition variable */
-	handle_t dlock;                 /* Free descriptors mutex */
+	handle_t cond;                  /* Free descriptors condition variable */
 	handle_t lock;                  /* Virtqueue mutex */
 } virtqueue_t;
 

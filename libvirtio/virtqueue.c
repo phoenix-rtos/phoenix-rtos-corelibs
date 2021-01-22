@@ -203,13 +203,11 @@ int virtqueue_enqueue(virtio_dev_t *vdev, virtqueue_t *vq, virtio_req_t *req)
 	else if (n > vq->size)
 		return -ENOSPC;
 
-	mutexLock(vq->dlock);
+	mutexLock(vq->lock);
 
 	/* Wait for n free descriptors */
 	while (vq->nfree < n)
-		condWait(vq->dcond, vq->dlock, 0);
-
-	mutexLock(vq->lock);
+		condWait(vq->cond, vq->lock, 0);
 
 	/* Fill out request descriptors */
 	id = vq->free;
@@ -238,7 +236,6 @@ int virtqueue_enqueue(virtio_dev_t *vdev, virtqueue_t *vq, virtio_req_t *req)
 	virtqueue_write16(vdev, &vq->avail->idx, idx + 1);
 
 	mutexUnlock(vq->lock);
-	mutexUnlock(vq->dlock);
 
 	return EOK;
 }
@@ -302,7 +299,7 @@ void *virtqueue_dequeue(virtio_dev_t *vdev, virtqueue_t *vq, unsigned int *len)
 	} while (virtqueue_read16(vdev, &vq->desc[idx].flags) & 0x1);
 
 	/* Signal free descriptors */
-	condSignal(vq->dcond);
+	condSignal(vq->cond);
 
 	mutexUnlock(vq->lock);
 
@@ -313,8 +310,7 @@ void *virtqueue_dequeue(virtio_dev_t *vdev, virtqueue_t *vq, unsigned int *len)
 void virtqueue_destroy(virtio_dev_t *vdev, virtqueue_t *vq)
 {
 	resourceDestroy(vq->lock);
-	resourceDestroy(vq->dlock);
-	resourceDestroy(vq->dcond);
+	resourceDestroy(vq->cond);
 	munmap(vq->mem, vq->memsz);
 	free(vq->buffs);
 }
@@ -354,22 +350,14 @@ int virtqueue_init(virtio_dev_t *vdev, virtqueue_t *vq, unsigned int idx, unsign
 		return -ENOMEM;
 	}
 
-	if ((err = condCreate(&vq->dcond)) < 0) {
-		munmap(vq->mem, vq->memsz);
-		free(vq->buffs);
-		return err;
-	}
-
-	if ((err = mutexCreate(&vq->dlock)) < 0) {
-		resourceDestroy(vq->dcond);
-		munmap(vq->mem, vq->memsz);
-		free(vq->buffs);
-		return err;
-	}
-
 	if ((err = mutexCreate(&vq->lock)) < 0) {
-		resourceDestroy(vq->dlock);
-		resourceDestroy(vq->dcond);
+		munmap(vq->mem, vq->memsz);
+		free(vq->buffs);
+		return err;
+	}
+
+	if ((err = condCreate(&vq->cond)) < 0) {
+		resourceDestroy(vq->lock);
 		munmap(vq->mem, vq->memsz);
 		free(vq->buffs);
 		return err;
