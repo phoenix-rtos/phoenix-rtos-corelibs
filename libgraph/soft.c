@@ -1,277 +1,173 @@
 /*
- * Graph library for DPMI32
+ * Phoenix-RTOS
  *
  * Software operations
  *
- * Copyright 2009 Phoenix Systems
+ * Copyright 2009, 2021 Phoenix Systems
  * Copyright 2002-2007 IMMOS
+ * Author: Lukasz Kosinski, Michal Slomczynski
+ *
+ * This file is part of Phoenix-RTOS.
+ *
+ * %LICENSE%
  */
 
-#include <stdio.h>
 #include <errno.h>
+#include <stdint.h>
 
 #include "soft.h"
 
 
 int soft_line(graph_t *graph, int x, int y, int dx, int dy, unsigned int stroke, unsigned int color)
 {
-	int a, b, c, d, e, f; /* ratio, len, step a, step b, address, width */
+	uintptr_t data, buff;
+	uint32_t a, acc, tmp;
+	int i, j, n;
 
-	if ((stroke <= 0) || (x < 0) || ((x + dx) < 0) || (y < 0) || ((y + dy) < 0) ||
-	    ((x + stroke) > graph->width) || ((x + dx + stroke) > graph->width) ||
-	    ((y + stroke) > graph->height) || ((y + dy + stroke) > graph->height))
+	if (!stroke || (x < 0) || (x + dx < 0) || (y < 0) || (y + dy < 0) ||
+		(x + stroke > graph->width) || (x + dx + stroke > graph->width) ||
+		(y + stroke > graph->height) || (y + dy + stroke > graph->height))
 		return -EINVAL;
 
 	if (!dx && !dy)
 		return graph_rect(x, y, stroke, stroke, color, 0);
 
-	c = (dx < 0) ? -dx : dx;
-	d = (dy < 0) ? -dy : dy;
+	data = (uintptr_t)graph->data + graph->depth * ((y + stroke - 1) * graph->width + x);
+	y = graph->width * graph->depth;
+	x = graph->depth;
 
-	if (d > c) {
-		a = c * 0x10000 / d * 0xffff;
-		b = d;
-		c = graph->width * graph->depth;
-		y += stroke - 1;
-		if (dy < 0) {
-			x += dx;
-			y += dy;
-			dx = -dx;
-		}
-		if (dx < 0) {
-			x += stroke - 1;
-			d = c - graph->depth;
-		}
-		else
-			d = c + graph->depth;
+	if (dx < 0) {
+		data += (stroke - 1) * x;
+		dx = -dx;
+		x = -x;
+	}
+
+	if (dy < 0) {
+		data -= (stroke - 1) * y;
+		dy = -dy;
+		y = -y;
+	}
+
+	if (dx > dy) {
+		a = dy * 0x10000 / dx * 0xffff;
+		y += x;
+		n = y;
+		y = x;
+		x = n;
+		n = dx;
+		dx = x - y;
+		dy = y;
 	}
 	else {
-		a = d * 0x10000 / c * 0xffff;
-		b = c;
-		c = graph->depth;
-		x += stroke - 1;
-		if (dx < 0) {
-			x += dx;
-			y += dy;
-			dy = -dy;
-		}
-		if (dy < 0) {
-			y += stroke - 1;
-			d = c - graph->depth * graph->width;
-		}
-		else
-			d = c + graph->depth * graph->width;
+		a = dx * 0x10000 / dy * 0xffff;
+		x += y;
+		n = dy;
+		dx = y;
+		dy = x - y;
 	}
 
-	e = (int)graph->data + graph->depth * graph->width * y + graph->depth * x;
-	f = stroke;
 	switch (graph->depth) {
 	case 1:
-		__asm__ volatile (
-                        "movl %0, %%edx; "   /* ratio */
-                        "movl %1, %%ecx; "   /* len */
-                        "movl %2, %%esi; "   /* step a */
-                        "movl %3, %%edi; "   /* step b */
-                        "movl %4, %%ebx; "   /* address */
-                        "movl %6, %%eax; "   /* color */
-                        "line10: "
-                        "pushl %%ebx; "
-                        "pushl %%ecx; "
-                        "pushl %%ebp; "
-                        "movl $0x80000000, %%ebp; "
-                        "line11: "
-                        "movb %%al, (%%ebx); "
-                        "addl %%edx, %%ebp; "
-                        "jc line12; "
-                        "addl %%esi, %%ebx; "
-                        "loop line11; "
-                        "jmp line13; "
-                        "line12: "
-                        "addl %%edi, %%ebx; "
-                        "loop line11; "
-                        "line13: "
-                        "popl %%ebp; "
-                        "movl %7, %%ecx; "   /* stroke */
-                        "line14: "
-                        "movb %%al, (%%ebx); "
-                        "addl %%edi, %%ebx; "
-                        "subl %%esi, %%ebx; "
-                        "loop line14; "
-                        "popl %%ecx; "
-                        "popl %%ebx; "
-                        "subl %%esi, %%ebx; "
-                        "decl %5; "   /* stroke */
-                        "jnz line10; "
-                        "addl %%edi, %%ebx; "
-                        "decl %7; "   /* stroke */
-                        "jz line19; "
-                        "line15: "
-                        "pushl %%ebx; "
-                        "pushl %%ecx; "
-                        "pushl %%ebp; "
-                        "movl $0x80000000, %%ebp; "
-                        "line16: "
-                        "movb %%al, (%%ebx); "
-                        "addl %%edx, %%ebp; "
-                        "jc line17; "
-                        "addl %%esi, %%ebx; "
-                        "loop line16; "
-                        "jmp line18; "
-                        "line17: "
-                        "addl %%edi, %%ebx; "
-                        "loop line16; "
-                        "line18: "
-                        "popl %%ebp; "
-                        "popl %%ecx; "
-                        "popl %%ebx; "
-                        "addl %%edi, %%ebx; "
-                        "subl %%esi, %%ebx; "
-                        "decl %7; "   /* stroke */
-                        "jnz line15; "
-                        "line19: "
-                :
-                : "m" (a), "m" (b), "m" (c), "m" (d), "m" (e), "m" (f), "m" (color), "m" (stroke)
-                : "eax", "ebx", "ecx", "edx", "esi", "edi");
-                return 0;
-        case 2:
-                __asm__ volatile (
-                        "movl %0, %%edx; "
-                        "movl %1, %%ecx; "
-                        "movl %2, %%esi; "
-                        "movl %3, %%edi; "
-                        "movl %4, %%ebx; "
-                        "movl %6, %%eax; "
-                        "line20: "
-                        "pushl %%ebx; "
-                        "pushl %%ecx; "
-                        "pushl %%ebp; "
-                        "movl $0x80000000, %%ebp; "
-                        "line21: "
-                        "movw %%ax, (%%ebx); "
-                        "addl %%edx, %%ebp; "
-                        "jc line22; "
-                        "addl %%esi, %%ebx; "
-                        "loop line21; "
-                        "jmp line23; "
-                        "line22: "
-                        "addl %%edi, %%ebx; "
-                        "loop line21; "
-                        "line23: "
-                        "popl %%ebp; "
-                        "movl %7, %%ecx; "
-                        "line24: "
-                        "movw %%ax, (%%ebx); "
-                        "addl %%edi, %%ebx; "
-                        "subl %%esi, %%ebx; "
-                        "loop line24; "
-                        "popl %%ecx; "
-                        "popl %%ebx; "
-                        "subl %%esi, %%ebx; "
-                        "decl %5; "
-                        "jnz line20; "
-                        "addl %%edi, %%ebx; "
-                        "decl %7; "
-                        "jz line29; "
-                        "line25: "
-                        "pushl %%ebx; "
-                        "pushl %%ecx; "
-                        "pushl %%ebp; "
-                        "movl $0x80000000, %%ebp; "
-                        "line26: "
-                        "movw %%ax, (%%ebx); "
-                        "addl %%edx, %%ebp; "
-                        "jc line27; "
-                        "addl %%esi, %%ebx; "
-                        "loop line26; "
-                        "jmp line28; "
-                        "line27: "
-                        "addl %%edi, %%ebx; "
-                        "loop line26; "
-                        "line28: "
-                        "popl %%ebp; "
-                        "popl %%ecx; "
-                        "popl %%ebx; "
-                        "addl %%edi, %%ebx; "
-                        "subl %%esi, %%ebx; "
-                        "decl %7; "
-                        "jnz line25; "
-                        "line29: "
-                :
-                : "m" (a), "m" (b), "m" (c), "m" (d), "m" (e), "m" (f), "m" (color), "m" (stroke)
-                : "eax", "ebx", "ecx", "edx", "esi", "edi");
-                return 0;
-        case 4:
-                __asm__ volatile (
-                        "movl %0, %%edx; "
-                        "movl %1, %%ecx; "
-                        "movl %2, %%esi; "
-                        "movl %3, %%edi; "
-                        "movl %4, %%ebx; "
-                        "movl %6, %%eax; "
-                        "line40: "
-                        "pushl %%ebx; "
-                        "pushl %%ecx; "
-                        "pushl %%ebp; "
-                        "movl $0x80000000, %%ebp; "
-                        "line41: "
-                        "movl %%eax, (%%ebx); "
-                        "addl %%edx, %%ebp; "
-                        "jc line42; "
-                        "addl %%esi, %%ebx; "
-                        "loop line41; "
-                        "jmp line43; "
-                        "line42: "
-                        "addl %%edi, %%ebx; "
-                        "loop line41; "
-                        "line43: "
-                        "popl %%ebp; "
-                        "movl %7, %%ecx; "
-                        "line44: "
-                        "movl %%eax, (%%ebx); "
-                        "addl %%edi, %%ebx; "
-                        "subl %%esi, %%ebx; "
-                        "loop line44; "
-                        "popl %%ecx; "
-                        "popl %%ebx; "
-                        "subl %%esi, %%ebx; "
-                        "decl %5; "
-                        "jnz line40; "
-                        "addl %%edi, %%ebx; "
-                        "decl %7; "
-                        "jz line49; "
-                        "line45: "
-                        "pushl %%ebx; "
-                        "pushl %%ecx; "
-                        "pushl %%ebp; "
-                        "movl $0x80000000, %%ebp; "
-                        "line46: "
-                        "movl %%eax, (%%ebx); "
-                        "addl %%edx, %%ebp; "
-                        "jc line47; "
-                        "addl %%esi, %%ebx; "
-                        "loop line46; "
-                        "jmp line48; "
-                        "line47: "
-                        "addl %%edi, %%ebx; "
-                        "loop line46; "
-                        "line48: "
-                        "popl %%ebp; "
-                        "popl %%ecx; "
-                        "popl %%ebx; "
-                        "addl %%edi, %%ebx; "
-                        "subl %%esi, %%ebx; "
-                        "decl %7; "
-                        "jnz line45; "
-                        "line49: "
-                :
-                : "m" (a), "m" (b), "m" (c), "m" (d), "m" (e), "m" (f), "m" (color), "m" (stroke)
-                : "eax", "ebx", "ecx", "edx", "esi", "edi");
-                return 0;
-        }
-        return -EINVAL;
+		for (i = 0; i < stroke; i++) {
+			buff = data - i * dx;
+			acc = 0x80000000;
 
+			for (j = 0; j < n; j++) {
+				*(uint8_t *)buff = color;
+				tmp = acc;
+				acc += a;
+				buff += (acc < tmp) ? x : y;
+			}
 
-  return GRAPH_SUCCESS;
+			for (j = 0; j < stroke; j++) {
+				*(uint8_t *)buff = color;
+				buff += dy;
+			}
+		}
+
+		data -= (stroke - 1) * dx;
+		for (i = 1; i < stroke; i++) {
+			buff = data + i * dy;
+			acc = 0x80000000;
+
+			for (j = 0; j < n; j++) {
+				*(uint8_t *)buff = color;
+				tmp = acc;
+				acc += a;
+				buff += (acc < tmp) ? x : y;
+			}
+		}
+		break;
+
+	case 2:
+		for (i = 0; i < stroke; i++) {
+			buff = data - i * dx;
+			acc = 0x80000000;
+
+			for (j = 0; j < n; j++) {
+				*(uint16_t *)buff = color;
+				tmp = acc;
+				acc += a;
+				buff += (acc < tmp) ? x : y;
+			}
+
+			for (j = 0; j < stroke; j++) {
+				*(uint16_t *)buff = color;
+				buff += dy;
+			}
+		}
+
+		data -= (stroke - 1) * dx;
+		for (i = 1; i < stroke; i++) {
+			buff = data + i * dy;
+			acc = 0x80000000;
+
+			for (j = 0; j < n; j++) {
+				*(uint16_t *)buff = color;
+				tmp = acc;
+				acc += a;
+				buff += (acc < tmp) ? x : y;
+			}
+		}
+		break;
+
+	case 4:
+		for (i = 0; i < stroke; i++) {
+			buff = data - i * dx;
+			acc = 0x80000000;
+
+			for (j = 0; j < n; j++) {
+				*(uint32_t *)buff = color;
+				tmp = acc;
+				acc += a;
+				buff += (acc < tmp) ? x : y;
+			}
+
+			for (j = 0; j < stroke; j++) {
+				*(uint32_t *)buff = color;
+				buff += dy;
+			}
+		}
+
+		data -= (stroke - 1) * dx;
+		for (i = 1; i < stroke; i++) {
+			buff = data + i * dy;
+			acc = 0x80000000;
+
+			for (j = 0; j < n; j++) {
+				*(uint32_t *)buff = color;
+				tmp = acc;
+				acc += a;
+				buff += (acc < tmp) ? x : y;
+			}
+		}
+		break;
+
+	default:
+		return -EINVAL;
+	}
+
+	return EOK;
 }
 
 
