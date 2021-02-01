@@ -318,11 +318,7 @@ void virtqueue_destroy(virtio_dev_t *vdev, virtqueue_t *vq)
 
 int virtqueue_init(virtio_dev_t *vdev, virtqueue_t *vq, unsigned int idx, unsigned int size)
 {
-	unsigned int aoffs = size * sizeof(virtio_desc_t);
-	unsigned int ueoffs = aoffs + sizeof(virtio_avail_t) + size * sizeof(uint16_t);
-	unsigned int uoffs = (ueoffs + sizeof(uint16_t) + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1);
-	unsigned int aeoffs = uoffs + sizeof(virtio_used_t) + size * sizeof(virtio_used_elem_t);
-	unsigned int i;
+	unsigned int i, aoffs, ueoffs, uoffs, aeoffs;
 	int err;
 
 	/* Virtqueue index has to be a 2-byte value */
@@ -333,10 +329,16 @@ int virtqueue_init(virtio_dev_t *vdev, virtqueue_t *vq, unsigned int idx, unsign
 	if (!size || (size > 0xffff) || ((size - 1) & size))
 		return -EINVAL;
 
+	/* Select virtqueue and negotiate its size */
 	virtqueue_select(vdev, idx);
-
 	if ((err = virtqueue_enable(vdev, &size)) < 0)
 		return err;
+
+	/* Calculate offsets */
+	aoffs = size * sizeof(virtio_desc_t);
+	ueoffs = aoffs + sizeof(virtio_avail_t) + size * sizeof(uint16_t);
+	uoffs = (ueoffs + sizeof(uint16_t) + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1);
+	aeoffs = uoffs + sizeof(virtio_used_t) + size * sizeof(virtio_used_elem_t);
 
 	/* Initialize virtqueue memory */
 	if ((vq->buffs = malloc(size * sizeof(void *))) == NULL)
