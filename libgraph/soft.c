@@ -18,13 +18,13 @@
 #include "soft.h"
 
 
-int soft_line(graph_t *graph, int x, int y, int dx, int dy, unsigned int stroke, unsigned int color)
+int soft_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, unsigned int stroke, unsigned int color)
 {
 	uintptr_t data, buff;
 	uint32_t a, acc, tmp;
-	int i, j, n;
+	int i, j, n, sx, sy;
 
-	if (!stroke || (x < 0) || (x + dx < 0) || (y < 0) || (y + dy < 0) ||
+	if (!stroke || ((int)x + dx < 0) || ((int)y + dy < 0) ||
 		(x + stroke > graph->width) || (x + dx + stroke > graph->width) ||
 		(y + stroke > graph->height) || (y + dy + stroke > graph->height))
 		return -EINVAL;
@@ -33,37 +33,37 @@ int soft_line(graph_t *graph, int x, int y, int dx, int dy, unsigned int stroke,
 		return graph_rect(x, y, stroke, stroke, color, 0);
 
 	data = (uintptr_t)graph->data + graph->depth * ((y + stroke - 1) * graph->width + x);
-	y = graph->width * graph->depth;
-	x = graph->depth;
+	sy = graph->width * graph->depth;
+	sx = graph->depth;
 
 	if (dx < 0) {
-		data += (stroke - 1) * x;
+		data += (stroke - 1) * sx;
 		dx = -dx;
-		x = -x;
+		sx = -sx;
 	}
 
 	if (dy < 0) {
-		data -= (stroke - 1) * y;
+		data -= (stroke - 1) * sy;
 		dy = -dy;
-		y = -y;
+		sy = -sy;
 	}
 
 	if (dx > dy) {
 		a = dy * 0x10000 / dx * 0xffff;
-		y += x;
-		n = y;
-		y = x;
-		x = n;
+		sy += sx;
+		n = sy;
+		sy = sx;
+		sx = n;
 		n = dx;
-		dx = x - y;
-		dy = y;
+		dx = sx - sy;
+		dy = sy;
 	}
 	else {
 		a = dx * 0x10000 / dy * 0xffff;
-		x += y;
+		sx += sy;
 		n = dy;
-		dx = y;
-		dy = x - y;
+		dx = sy;
+		dy = sx - sy;
 	}
 
 	switch (graph->depth) {
@@ -76,7 +76,7 @@ int soft_line(graph_t *graph, int x, int y, int dx, int dy, unsigned int stroke,
 				*(uint8_t *)buff = color;
 				tmp = acc;
 				acc += a;
-				buff += (acc < tmp) ? x : y;
+				buff += (acc < tmp) ? sx : sy;
 			}
 
 			for (j = 0; j < stroke; j++) {
@@ -94,7 +94,7 @@ int soft_line(graph_t *graph, int x, int y, int dx, int dy, unsigned int stroke,
 				*(uint8_t *)buff = color;
 				tmp = acc;
 				acc += a;
-				buff += (acc < tmp) ? x : y;
+				buff += (acc < tmp) ? sx : sy;
 			}
 		}
 		break;
@@ -108,7 +108,7 @@ int soft_line(graph_t *graph, int x, int y, int dx, int dy, unsigned int stroke,
 				*(uint16_t *)buff = color;
 				tmp = acc;
 				acc += a;
-				buff += (acc < tmp) ? x : y;
+				buff += (acc < tmp) ? sx : sy;
 			}
 
 			for (j = 0; j < stroke; j++) {
@@ -126,7 +126,7 @@ int soft_line(graph_t *graph, int x, int y, int dx, int dy, unsigned int stroke,
 				*(uint16_t *)buff = color;
 				tmp = acc;
 				acc += a;
-				buff += (acc < tmp) ? x : y;
+				buff += (acc < tmp) ? sx : sy;
 			}
 		}
 		break;
@@ -140,7 +140,7 @@ int soft_line(graph_t *graph, int x, int y, int dx, int dy, unsigned int stroke,
 				*(uint32_t *)buff = color;
 				tmp = acc;
 				acc += a;
-				buff += (acc < tmp) ? x : y;
+				buff += (acc < tmp) ? sx : sy;
 			}
 
 			for (j = 0; j < stroke; j++) {
@@ -158,7 +158,7 @@ int soft_line(graph_t *graph, int x, int y, int dx, int dy, unsigned int stroke,
 				*(uint32_t *)buff = color;
 				tmp = acc;
 				acc += a;
-				buff += (acc < tmp) ? x : y;
+				buff += (acc < tmp) ? sx : sy;
 			}
 		}
 		break;

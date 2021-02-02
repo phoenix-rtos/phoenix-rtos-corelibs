@@ -17,12 +17,13 @@
 #include "soft.h"
 
 
-int soft_line(graph_t *graph, int x, int y, int dx, int dy, unsigned int stroke, unsigned int color)
+int soft_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, unsigned int stroke, unsigned int color)
 {
-	unsigned int i, n, a;
 	void *data, *buff;
+	unsigned int i, n, a;
+	int sx, sy;
 
-	if (!stroke || (x < 0) || (x + dx < 0) || (y < 0) || (y + dy < 0) ||
+	if (!stroke || ((int)x + dx < 0) || ((int)y + dy < 0) ||
 		(x + stroke > graph->width) || (x + dx + stroke > graph->width) ||
 		(y + stroke > graph->height) || (y + dy + stroke > graph->height))
 		return -EINVAL;
@@ -31,37 +32,37 @@ int soft_line(graph_t *graph, int x, int y, int dx, int dy, unsigned int stroke,
 		return graph_rect(x, y, stroke, stroke, color, 0);
 
 	data = graph->data + graph->depth * ((y + stroke - 1) * graph->width + x);
-	y = graph->width * graph->depth;
-	x = graph->depth;
+	sy = graph->width * graph->depth;
+	sx = graph->depth;
 
 	if (dx < 0) {
-		data += (stroke - 1) * x;
+		data += (stroke - 1) * sx;
 		dx = -dx;
-		x = -x;
+		sx = -sx;
 	}
 
 	if (dy < 0) {
-		data -= (stroke - 1) * y;
+		data -= (stroke - 1) * sy;
 		dy = -dy;
-		y = -y;
+		sy = -sy;
 	}
 
 	if (dx > dy) {
 		a = dy * 0x10000 / dx * 0xffff;
-		y += x;
-		n = y;
-		y = x;
-		x = n;
+		sy += sx;
+		n = sy;
+		sy = sx;
+		sx = n;
 		n = dx;
-		dx = x - y;
-		dy = y;
+		dx = sx - sy;
+		dy = sy;
 	}
 	else {
 		a = dx * 0x10000 / dy * 0xffff;
-		x += y;
+		sx += sy;
 		n = dy;
-		dx = y;
-		dy = x - y;
+		dx = sy;
+		dy = sx - sy;
 	}
 
 	switch (graph->depth) {
@@ -69,8 +70,8 @@ int soft_line(graph_t *graph, int x, int y, int dx, int dy, unsigned int stroke,
 		__asm__ volatile (
 		"movl %4, %%edi; "  /* data */
 		"movl %5, %%edx; "  /* a */
-		"movl %7, %%esi; "  /* x */
-		"movl %8, %%ebp; "  /* y */
+		"movl %7, %%esi; "  /* sx */
+		"movl %8, %%ebp; "  /* sy */
 		"movl %11, %%ebx; " /* stroke */
 		"movl %12, %%eax; " /* color */
 		"line1: "
@@ -127,7 +128,7 @@ int soft_line(graph_t *graph, int x, int y, int dx, int dy, unsigned int stroke,
 		"jnz line6; "
 		"line10: "
 		: "=m" (buff), "=m" (i)
-		: "m" (buff), "m" (i), "m" (data), "m" (a), "m" (n), "m" (x), "m" (y), "m" (dx), "m" (dy), "m" (stroke), "m" (color)
+		: "m" (buff), "m" (i), "m" (data), "m" (a), "m" (n), "m" (sx), "m" (sy), "m" (dx), "m" (dy), "m" (stroke), "m" (color)
 		: "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "memory");
 		break;
 
@@ -135,8 +136,8 @@ int soft_line(graph_t *graph, int x, int y, int dx, int dy, unsigned int stroke,
 		__asm__ volatile (
 		"movl %4, %%edi; "  /* data */
 		"movl %5, %%edx; "  /* a */
-		"movl %7, %%esi; "  /* x */
-		"movl %8, %%ebp; "  /* y */
+		"movl %7, %%esi; "  /* sx */
+		"movl %8, %%ebp; "  /* sy */
 		"movl %11, %%ebx; " /* stroke */
 		"movl %12, %%eax; " /* color */
 		"line11: "
@@ -193,7 +194,7 @@ int soft_line(graph_t *graph, int x, int y, int dx, int dy, unsigned int stroke,
 		"jnz line16; "
 		"line20: "
 		: "=m" (buff), "=m" (i)
-		: "m" (buff), "m" (i), "m" (data), "m" (a), "m" (n), "m" (x), "m" (y), "m" (dx), "m" (dy), "m" (stroke), "m" (color)
+		: "m" (buff), "m" (i), "m" (data), "m" (a), "m" (n), "m" (sx), "m" (sy), "m" (dx), "m" (dy), "m" (stroke), "m" (color)
 		: "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "memory");
 		break;
 
@@ -201,8 +202,8 @@ int soft_line(graph_t *graph, int x, int y, int dx, int dy, unsigned int stroke,
 		__asm__ volatile (
 		"movl %4, %%edi; "  /* data */
 		"movl %5, %%edx; "  /* a */
-		"movl %7, %%esi; "  /* x */
-		"movl %8, %%ebp; "  /* y */
+		"movl %7, %%esi; "  /* sx */
+		"movl %8, %%ebp; "  /* sy */
 		"movl %11, %%ebx; " /* stroke */
 		"movl %12, %%eax; " /* color */
 		"line21: "
@@ -259,7 +260,7 @@ int soft_line(graph_t *graph, int x, int y, int dx, int dy, unsigned int stroke,
 		"jnz line26; "
 		"line30: "
 		: "=m" (buff), "=m" (i)
-		: "m" (buff), "m" (i), "m" (data), "m" (a), "m" (n), "m" (x), "m" (y), "m" (dx), "m" (dy), "m" (stroke), "m" (color)
+		: "m" (buff), "m" (i), "m" (data), "m" (a), "m" (n), "m" (sx), "m" (sy), "m" (dx), "m" (dy), "m" (stroke), "m" (color)
 		: "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "memory");
 		break;
 

@@ -12,7 +12,7 @@
 #include "graph.h"
 
 
-extern int soft_line(graph_t *graph, int x, int y, int dx, int dy, unsigned int stroke, unsigned int color);
+extern int soft_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, unsigned int stroke, unsigned int color);
 
 
 extern int soft_fill(graph_t *graph, char *arg);
