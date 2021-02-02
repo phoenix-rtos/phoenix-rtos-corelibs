@@ -1,9 +1,15 @@
 /*
- * Graph library for DPMI32
+ * Phoenix-RTOS
  *
  * Software operations
  *
+ * Copyright 2009, 2021 Phoenix Systems
  * Copyright 2002-2007 IMMOS
+ * Author: Lukasz Kosinski
+ *
+ * This file is part of Phoenix-RTOS.
+ *
+ * %LICENSE%
  */
 
 #ifndef _SOFT_H_
@@ -15,9 +21,10 @@
 extern int soft_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, unsigned int stroke, unsigned int color);
 
 
-extern int soft_fill(graph_t *graph, char *arg);
+extern int soft_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color);
 
-extern int soft_rect(graph_t *graph, char *arg);
+
+extern int soft_fill(graph_t *graph, char *arg);
 
 extern int soft_move(graph_t *graph, char *arg);
 
@@ -32,5 +39,5 @@ extern int soft_copyout(graph_t *graph, char *arg);
 extern int soft_char(graph_t *graph, char *arg);
 
 
-#endif // _SOFT_H_
+#endif
 

@@ -171,31 +171,44 @@ int soft_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, un
 }
 
 
-int sys_graph_rect(graph_t *graph, int x, int y, unsigned int dx, unsigned int dy, unsigned int color)
+int soft_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color)
 {
-        int fx, fy, lx, ly;
-        
-        fx = (x < 0) ? 0 : x;
-        fy = (y < 0) ? 0 : y;
-        lx = (x + (int)dx) > (int)graph->width ? (int)graph->width : x + dx;
-        ly = (y + (int)dy) > (int)graph->height ? (int)graph->height : y + dy;
-        
-        for (y = fy; y < ly; y++)
-                for (x = fx; x < lx; x++) {
-        
-                        switch (graph->depth) {
-                        case 1:
-                                *(uint8_t *)(graph->data + y * graph->width * graph->depth + x * graph->depth) = (uint8_t)color;
-                                break;
-                        case 2:
-                                *(uint16_t *)(graph->data + y * graph->width * graph->depth + x * graph->depth) = (uint16_t)color;
-                                break;
-                        case 4:
-                                *(uint32_t *)(graph->data + y * graph->width * graph->depth + x * graph->depth) = color;
-                                break;
-                        }
-                }
-        return EOK;
+	unsigned int n;
+	uintptr_t buff;
+
+	if ((x + dx > graph->width) || (y + dy > graph->height))
+		return -EINVAL;
+
+	if (!dx || !dy)
+		return EOK;
+
+	buff = (uintptr_t)graph->data + graph->depth * (y * graph->width + x);
+	n = graph->depth * (graph->width - dx);
+
+	for (y = 0; y < dy; y++) {
+		for (x = 0; x < dx; x++) {
+			switch (graph->depth) {
+			case 1:
+				*(uint8_t *)buff = color;
+				break;
+
+			case 2:
+				*(uint16_t *)buff = color;
+				break;
+
+			case 4:
+				*(uint32_t *)buff = color;
+				break;
+
+			default:
+				return -EINVAL;
+			}
+			buff += graph->depth;
+		}
+		buff += n;
+	}
+
+	return EOK;
 }
 
 
@@ -524,60 +537,6 @@ fill13:
 fill14:
   asm pop es;
 
-  return GRAPH_SUCCESS;
-}
-
-
-int soft_rect(graph_t *graph, char *arg)
-{
-  static int width = graph->width;
-  static int depth = graph->depth;
-  static u16 fbsel = graph->fbsel;
-
-  asm {
-    push es
-    mov ax, word ptr [fbsel]           // video segment
-    mov es, ax
-    mov ebx, [arg]                     // function arguments
-    mov eax, [ebx + 4]                 // rect y
-    mul dword ptr [width]              // picture width
-    add eax, [ebx]                     // rect x
-    mov ecx, dword ptr [depth]         // color size
-    mul ecx
-    mov edi, eax                       // rect address
-    mov eax, dword ptr [width]         // picture width
-    sub eax, [ebx + 8]                 // rect width
-    mul ecx
-    mov esi, eax
-    mov eax, [ebx + 16]                // rect color
-    mov edx, [ebx + 12]                // rect height
-    mov ebx, [ebx + 8]                 // rect width
-    cld
-    cmp ecx, 2
-    jz rect2                           // 16 bit color
-  }
-rect1:
-  asm {
-    mov ecx, ebx
-    rep
-    stosb                              // rect line
-    add edi, esi
-    dec edx
-    jnz rect1
-    pop es
-  }
-  return GRAPH_SUCCESS;
-
-rect2:
-  asm {
-    mov ecx, ebx
-    rep
-    stosw                              // rect line
-    add edi, esi
-    dec edx
-    jnz rect2
-    pop es
-  }
   return GRAPH_SUCCESS;
 }
 

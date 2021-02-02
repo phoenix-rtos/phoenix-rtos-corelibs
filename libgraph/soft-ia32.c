@@ -270,3 +270,80 @@ int soft_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, un
 
 	return EOK;
 }
+
+
+int soft_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color)
+{
+	unsigned int n;
+	void *data;
+
+	if ((x + dx > graph->width) || (y + dy > graph->height))
+		return -EINVAL;
+
+	if (!dx || !dy)
+		return EOK;
+
+	data = graph->data + graph->depth * (y * graph->width + x);
+	n = graph->depth * (graph->width - dx);
+
+	switch (graph->depth) {
+	case 1:
+		__asm__ volatile (
+		"movl %0, %%edi; " /* data */
+		"movl %1, %%esi; " /* n */
+		"movl %2, %%ebx; " /* dx */
+		"movl %3, %%edx; " /* dy */
+		"movl %4, %%eax; " /* color */
+		"rect1: "
+		"movl %%ebx, %%ecx; "
+		"rep stosb; "
+		"addl %%esi, %%edi; "
+		"decl %%edx; "
+		"jnz rect1; "
+		:
+		: "m" (data), "m" (n), "m" (dx), "m" (dy), "m" (color)
+		: "eax", "ebx", "ecx", "edx", "esi", "edi", "memory");
+		break;
+
+	case 2:
+		__asm__ volatile (
+		"movl %0, %%edi; " /* data */
+		"movl %1, %%esi; " /* n */
+		"movl %2, %%ebx; " /* dx */
+		"movl %3, %%edx; " /* dy */
+		"movl %4, %%eax; " /* color */
+		"rect2: "
+		"movl %%ebx, %%ecx; "
+		"rep stosw; "
+		"addl %%esi, %%edi; "
+		"decl %%edx; "
+		"jnz rect2; "
+		:
+		: "m" (data), "m" (n), "m" (dx), "m" (dy), "m" (color)
+		: "eax", "ebx", "ecx", "edx", "esi", "edi", "memory");
+		break;
+
+	case 4:
+		__asm__ volatile (
+		"movl %0, %%edi; " /* data */
+		"movl %1, %%esi; " /* n */
+		"movl %2, %%ebx; " /* dx */
+		"movl %3, %%edx; " /* dy */
+		"movl %4, %%eax; " /* color */
+		"rect3: "
+		"movl %%ebx, %%ecx; "
+		"rep stosl; "
+		"addl %%esi, %%edi; "
+		"decl %%edx; "
+		"jnz rect3; "
+		:
+		: "m" (data), "m" (n), "m" (dx), "m" (dy), "m" (color)
+		: "eax", "ebx", "ecx", "edx", "esi", "edi", "memory");
+		break;
+
+	default:
+		return -EINVAL;
+	}
+
+	return EOK;
+}
