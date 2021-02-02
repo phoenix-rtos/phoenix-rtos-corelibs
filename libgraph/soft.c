@@ -85,7 +85,7 @@ int soft_line(graph_t *graph, int x, int y, int dx, int dy, unsigned int stroke,
 			}
 		}
 
-		data -= (stroke - 1) * dx;
+		data -= (int)(stroke - 1) * dx;
 		for (i = 1; i < stroke; i++) {
 			buff = data + i * dy;
 			acc = 0x80000000;
@@ -117,7 +117,7 @@ int soft_line(graph_t *graph, int x, int y, int dx, int dy, unsigned int stroke,
 			}
 		}
 
-		data -= (stroke - 1) * dx;
+		data -= (int)(stroke - 1) * dx;
 		for (i = 1; i < stroke; i++) {
 			buff = data + i * dy;
 			acc = 0x80000000;
@@ -149,7 +149,7 @@ int soft_line(graph_t *graph, int x, int y, int dx, int dy, unsigned int stroke,
 			}
 		}
 
-		data -= (stroke - 1) * dx;
+		data -= (int)(stroke - 1) * dx;
 		for (i = 1; i < stroke; i++) {
 			buff = data + i * dy;
 			acc = 0x80000000;
