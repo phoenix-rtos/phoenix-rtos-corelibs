@@ -14,15 +14,23 @@
 
 #include <errno.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #include "soft.h"
 
 
+/* Returns pixel data address */
+static inline uintptr_t soft_data(graph_t *graph, unsigned int x, unsigned int y)
+{
+	return (uintptr_t)graph->data + graph->depth * (y * graph->width + x);
+}
+
+
 int soft_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, unsigned int stroke, unsigned int color)
 {
-	uintptr_t data, buff;
-	uint32_t a, acc, tmp;
 	int i, j, n, sx, sy;
+	uint32_t a, acc, tmp;
+	uintptr_t data, buff;
 
 	if (!stroke || ((int)x + dx < 0) || ((int)y + dy < 0) ||
 		(x + stroke > graph->width) || (x + dx + stroke > graph->width) ||
@@ -32,7 +40,7 @@ int soft_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, un
 	if (!dx && !dy)
 		return graph_rect(x, y, stroke, stroke, color, 0);
 
-	data = (uintptr_t)graph->data + graph->depth * ((y + stroke - 1) * graph->width + x);
+	data = soft_data(graph, x, y + stroke - 1);
 	sy = graph->width * graph->depth;
 	sx = graph->depth;
 
@@ -174,7 +182,7 @@ int soft_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, un
 int soft_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color)
 {
 	unsigned int n;
-	uintptr_t buff;
+	uintptr_t data;
 
 	if ((x + dx > graph->width) || (y + dy > graph->height))
 		return -EINVAL;
@@ -182,362 +190,191 @@ int soft_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, u
 	if (!dx || !dy)
 		return EOK;
 
-	buff = (uintptr_t)graph->data + graph->depth * (y * graph->width + x);
+	data = soft_data(graph, x, y);
 	n = graph->depth * (graph->width - dx);
 
 	for (y = 0; y < dy; y++) {
 		for (x = 0; x < dx; x++) {
 			switch (graph->depth) {
 			case 1:
-				*(uint8_t *)buff = color;
+				*(uint8_t *)data = color;
 				break;
 
 			case 2:
-				*(uint16_t *)buff = color;
+				*(uint16_t *)data = color;
 				break;
 
 			case 4:
-				*(uint32_t *)buff = color;
+				*(uint32_t *)data = color;
 				break;
 
 			default:
 				return -EINVAL;
 			}
-			buff += graph->depth;
+			data += graph->depth;
 		}
-		buff += n;
+		data += n;
 	}
 
 	return EOK;
 }
 
 
-int soft_fill(graph_t *graph, char *arg)
+int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color)
 {
-	int a, b, c, d; /* min, max, address, pitch */
-        
-	d = graph->depth * graph->width;
-	a = (int)graph->data + d;
-	b = (int)graph->data + (img->height - 1) * d;
-        c = (int)img->data + d * y + img->graph->pixelsize * x;
-        if ((c < a) || (c > b))
-                return ERR_ARG;
-        switch (img->graph->pixelsize) {
-        case 1:
-                __asm__ volatile (
-                        "movl %0, %%esi; "   /* min */
-                        "movl %1, %%edi; "   /* max */
-                        "movl %2, %%edx; "   /* address */
-                        "movl %3, %%ecx; "   /* pitch */
-                        "movl %4, %%eax; "   /* color */
-                        "fill10: "
-                        "movl %%edx, %%ebx; "
-                        "xorl %%edx, %%edx; "
-                        "fill11: "
-                        "decl %%ebx; "
-                        "cmpl %%esi, %%ebx; "
-                        "jc fill15; "
-                        "cmpb %%al, (%%ebx); "
-                        "jnz fill11; "
-                        "fill12: "
-                        "incl %%ebx; "
-                        "cmpl %%edi, %%ebx; "
-                        "jnc fill15; "
-                        "cmpb %%al, (%%ebx); "
-                        "jz fill13; "
-                        "movb %%al, (%%ebx); "
-                        "orl %%edx, %%edx; "
-                        "jnz fill12; "
-                        "cmpb %%al, (%%ebx, %%ecx); "
-                        "jz fill12; "
-                        "leal (%%ebx, %%ecx), %%edx; "
-                        "jmp fill12; "
-                        "fill13: "
-                        "orl %%edx, %%edx; "
-                        "jnz fill10; "
-                        "negl %%ecx; "
-                        "jns fill14; "
-                        "movl %2, %%edx; "   /* address */
-                        "addl %%ecx, %%edx; "
-                        "cmpb %%al, (%%edx); "
-                        "jnz fill10; "
-                        "fill14: "
-                        "movl $0, %2; "   /* return */
-                        "fill15: "
-                :
-                : "m" (a), "m" (b), "m" (c), "m" (d), "m" (color)
-                : "eax", "ebx", "ecx", "edx", "esi", "edi");
-                return c ? ERR_ARG : 0;
-        case 2:
-                __asm__ volatile (
-                        "movl %0, %%esi; "
-                        "movl %1, %%edi; "
-                        "movl %2, %%edx; "
-                        "movl %3, %%ecx; "
-                        "movl %4, %%eax; "
-                        "fill20: "
-                        "movl %%edx, %%ebx; "
-                        "xorl %%edx, %%edx; "
-                        "fill21: "
-                        "subl $2, %%ebx; "
-                        "cmpl %%esi, %%ebx; "
-                        "jc fill25; "
-                        "cmpw %%ax, (%%ebx); "
-                        "jnz fill21; "
-                        "fill22: "
-                        "addl $2, %%ebx; "
-                        "cmpl %%edi, %%ebx; "
-                        "jnc fill25; "
-                        "cmpw %%ax, (%%ebx); "
-                        "jz fill23; "
-                        "movw %%ax, (%%ebx); "
-                        "orl %%edx, %%edx; "
-                        "jnz fill22; "
-                        "cmpw %%ax, (%%ebx, %%ecx); "
-                        "jz fill22; "
-                        "leal (%%ebx, %%ecx), %%edx; "
-                        "jmp fill22; "
-                        "fill23: "
-                        "orl %%edx, %%edx; "
-                        "jnz fill20; "
-                        "negl %%ecx; "
-                        "jns fill24; "
-                        "movl %2, %%edx; "
-                        "addl %%ecx, %%edx; "
-                        "cmpw %%ax, (%%edx); "
-                        "jnz fill20; "
-                        "fill24: "
-                        "movl $0, %2; "
-                        "fill25: "
-                :
-                : "m" (a), "m" (b), "m" (c), "m" (d), "m" (color)
-                : "eax", "ebx", "ecx", "edx", "esi", "edi");
-                return c ? ERR_ARG : 0;
-        case 4:
-                __asm__ volatile (
-                        "movl %0, %%esi; "
-                        "movl %1, %%edi; "
-                        "movl %2, %%edx; "
-                        "movl %3, %%ecx; "
-                        "movl %4, %%eax; "
-                        "fill40: "
-                        "movl %%edx, %%ebx; "
-                        "xorl %%edx, %%edx; "
-                        "fill41: "
-                        "subl $4, %%ebx; "
-                        "cmpl %%esi, %%ebx; "
-                        "jc fill45; "
-                        "cmpl %%eax, (%%ebx); "
-                        "jnz fill41; "
-                        "fill42: "
-                        "addl $4, %%ebx; "
-                        "cmpl %%edi, %%ebx; "
-                        "jnc fill45; "
-                        "cmpl %%eax, (%%ebx); "
-                        "jz fill43; "
-                        "movl %%eax, (%%ebx); "
-                        "orl %%edx, %%edx; "
-                        "jnz fill42; "
-                        "cmpl %%eax, (%%ebx, %%ecx); "
-                        "jz fill42; "
-                        "leal (%%ebx, %%ecx), %%edx; "
-                        "jmp fill42; "
-                        "fill43: "
-                        "orl %%edx, %%edx; "
-                        "jnz fill40; "
-                        "negl %%ecx; "
-                        "jns fill44; "
-                        "movl %2, %%edx; "
-                        "addl %%ecx, %%edx; "
-                        "cmpl %%eax, (%%edx); "
-                        "jnz fill40; "
-                        "fill44: "
-                        "movl $0, %2; "
-                        "fill45: "
-                :
-                : "m" (a), "m" (b), "m" (c), "m" (d), "m" (color)
-                : "eax", "ebx", "ecx", "edx", "esi", "edi");
-                return c ? ERR_ARG : 0;
-        }
-        return ERR_ARG;
+	int *stack, *sp, lx, rx, dy;
+	unsigned int bgcolor;
+	uintptr_t data, tmp;
 
+#define PUSH(lx, rx, y, dy) \
+	if ((y + dy >= 0) && (y + dy < graph->height)) { \
+		*sp++ = lx; \
+		*sp++ = rx; \
+		*sp++ = y; \
+		*sp++ = dy; \
+	}
 
-  static int width = graph->width;
-  static int depth = graph->depth;
-  static int size = graph->memsz - graph->cursorsz;
-  static u16 fbsel = graph->fbsel;
+#define POP(lx, rx, y, dy) \
+	dy = *--sp; \
+	y = *--sp + dy; \
+	rx = *--sp; \
+	lx = *--sp;
 
-  asm {
-    push es
-    mov ax, word ptr [fbsel]           // video segment
-    mov es, ax
-    mov ebx, [arg]                     // function arguments
-    mov eax, [ebx + 4]                 // fill y
-    mul dword ptr [width]              // picture width
-    add eax, [ebx]                     // fill x
-    mov ecx, dword ptr [depth]         // color size
-    mul ecx
-    mov esi, eax
-    push eax                           // save fill address
-    mov eax, dword ptr [width]         // picture width
-    mul ecx                            // color size
-    mov edi, eax                       // vertical step
-    mov ebp, edi
-    neg ebp                            // revers vertical step
-    mov eax, [ebx + 8]                 // color
-    mov edx, -1
-    cmp ecx, 2
-    jz fill7                           // 16 bit color
-  }
-fill1:
-  asm {
-    dec esi
-    cmp esi, dword ptr [size]
-    jnc fill13                         // filled out
-    cmp es:[esi], al
-    jnz fill1
-    add ebp, esi
-  }
-fill2:
-  asm {
-    inc esi
-    inc ebp
-    cmp ebp, dword ptr [size]
-    jnc fill13                         // filled out
-    cmp es:[esi], al
-    jz fill3
-    mov es:[esi], al
-    cmp es:[ebp], al
-    jz fill2
-    cmp edx, -1
-    jnz fill2
-    mov edx, ebp
-    jmp fill2
-  }
-fill3:
-  asm {
-    mov ebp, edi
-    neg ebp
-    mov esi, edx
-    mov edx, -1
-    cmp esi, edx
-    jnz fill1
-    pop esi
-    add esi, edi
-  }
-fill4:
-  asm {
-    dec esi
-    cmp esi, dword ptr [size]
-    jnc fill14                         // filled out
-    cmp es:[esi], al
-    jnz fill4
-    add edi, esi
-  }
-fill5:
-  asm {
-    inc esi
-    inc edi
-    cmp edi, dword ptr [size]
-    jnc fill14                         // filled out
-    cmp es:[esi], al
-    jz fill6
-    mov es:[esi], al
-    cmp es:[edi], al
-    jz fill5
-    cmp edx, -1
-    jnz fill5
-    mov edx, edi
-    jmp fill5
-  }
-fill6:
-  asm {
-    mov edi, ebp
-    neg edi
-    mov esi, edx
-    mov edx, -1
-    cmp esi, edx
-    jnz fill4
-    pop es
-  }
-  return GRAPH_SUCCESS;
+	if ((x > graph->width) || (y > graph->height))
+		return -EINVAL;
 
-fill7:
-  asm {
-    sub esi, 2
-    cmp esi, dword ptr [size]
-    jnc fill13                         // filled out
-    cmp es:[esi], ax
-    jnz fill7
-    add ebp, esi
-  }
-fill8:
-  asm {
-    add esi, 2
-    add ebp, 2
-    cmp ebp, dword ptr [size]
-    jnc fill13                         // filled out
-    cmp es:[esi], ax
-    jz fill9
-    mov es:[esi], ax
-    cmp es:[ebp], ax
-    jz fill8
-    cmp edx, -1
-    jnz fill8
-    mov edx, ebp
-    jmp fill8
-  }
-fill9:
-  asm {
-    mov ebp, edi
-    neg ebp
-    mov esi, edx
-    mov edx, -1
-    cmp esi, edx
-    jnz fill7
-    pop esi
-    add esi, edi
-  }
-fill10:
-  asm {
-    sub esi, 2
-    cmp esi, dword ptr [size]
-    jnc fill14                         // filled out
-    cmp es:[esi], ax
-    jnz fill10
-    add edi, esi
-  }
-fill11:
-  asm {
-    add esi, 2
-    add edi, 2
-    cmp edi, dword ptr [size]
-    jnc fill14                         // filled out
-    cmp es:[esi], ax
-    jz fill12
-    mov es:[esi], ax
-    cmp es:[edi], ax
-    jz fill11
-    cmp edx, -1
-    jnz fill11
-    mov edx, edi
-    jmp fill11
-  }
-fill12:
-  asm {
-    mov edi, ebp
-    neg edi
-    mov esi, edx
-    mov edx, -1
-    cmp esi, edx
-    jnz fill10
-  }
-fill13:
-  asm pop eax
-fill14:
-  asm pop es;
+	if ((sp = stack = malloc(0x10000)) == NULL)
+		return -ENOMEM;
 
-  return GRAPH_SUCCESS;
+	data = soft_data(graph, x, y);
+	PUSH(x, x, y, 1);
+	PUSH(x, x, y + 1, -1);
+
+	switch (graph->depth) {
+	case 1:
+		if ((bgcolor = *(uint8_t *)data) == color)
+			break;
+
+		while (sp > stack) {
+			POP(x, rx, y, dy);
+			data = soft_data(graph, x, y);
+
+			for (tmp = data, lx = x; (lx >= 0) && (*(uint8_t *)tmp == bgcolor); tmp--, lx--)
+				*(uint8_t *)tmp = color;
+
+			if (lx == x) {
+				for (; (x <= rx) && (*(uint8_t *)data != bgcolor); data++, x++);
+
+				if (x > rx)
+					continue;
+				lx = x;
+			}
+			else {
+				if (++lx < x)
+					PUSH(lx, x - 1, y, -dy);
+				data++;
+				x++;
+			}
+
+			do {
+				for (; (x < graph->width) && (*(uint8_t *)data == bgcolor); data++, x++)
+					*(uint8_t *)data = color;
+
+				PUSH(lx, x - 1, y, dy);
+				if (x > rx + 1)
+					PUSH(rx + 1, x - 1, y, -dy);
+
+				for (; (x <= rx) && (*(uint8_t *)data != bgcolor); data++, x++);
+				lx = x;
+			} while (x <= rx);
+		}
+		break;
+
+	case 2:
+		if ((bgcolor = *(uint16_t *)data) == color)
+			break;
+
+		while (sp > stack) {
+			POP(x, rx, y, dy);
+			data = soft_data(graph, x, y);
+
+			for (tmp = data, lx = x; (lx >= 0) && (*(uint16_t *)tmp == bgcolor); tmp -= 2, lx--)
+				*(uint16_t *)tmp = color;
+
+			if (lx == x) {
+				for (; (x <= rx) && (*(uint16_t *)data != bgcolor); data += 2, x++);
+
+				if (x > rx)
+					continue;
+				lx = x;
+			}
+			else {
+				if (++lx < x)
+					PUSH(lx, x - 1, y, -dy);
+				data += 2;
+				x++;
+			}
+
+			do {
+				for (; (x < graph->width) && (*(uint16_t *)data == bgcolor); data += 2, x++)
+					*(uint16_t *)data = color;
+
+				PUSH(lx, x - 1, y, dy);
+				if (x > rx + 1)
+					PUSH(rx + 1, x - 1, y, -dy);
+
+				for (; (x <= rx) && (*(uint16_t *)data != bgcolor); data += 2, x++);
+				lx = x;
+			} while (x <= rx);
+		}
+		break;
+
+	case 4:
+		if ((bgcolor = *(uint32_t *)data) == color)
+			break;
+
+		while (sp > stack) {
+			POP(x, rx, y, dy);
+			data = soft_data(graph, x, y);
+
+			for (tmp = data, lx = x; (lx >= 0) && (*(uint32_t *)tmp == bgcolor); tmp -= 4, lx--)
+				*(uint32_t *)tmp = color;
+
+			if (lx == x) {
+				for (; (x <= rx) && (*(uint32_t *)data != bgcolor); data += 4, x++);
+
+				if (x > rx)
+					continue;
+				lx = x;
+			}
+			else {
+				if (++lx < x)
+					PUSH(lx, x - 1, y, -dy);
+				data += 4;
+				x++;
+			}
+
+			do {
+				for (; (x < graph->width) && (*(uint32_t *)data == bgcolor); data += 4, x++)
+					*(uint32_t *)data = color;
+
+				PUSH(lx, x - 1, y, dy);
+				if (x > rx + 1)
+					PUSH(rx + 1, x - 1, y, -dy);
+
+				for (; (x <= rx) && (*(uint32_t *)data != bgcolor); data += 4, x++);
+				lx = x;
+			} while (x <= rx);
+		}
+		break;
+
+	default:
+		free(stack);
+		return -EINVAL;
+	}
+
+	free(stack);
+	return EOK;
 }
 
 

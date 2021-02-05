@@ -24,7 +24,8 @@ extern int soft_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int
 extern int soft_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color);
 
 
-extern int soft_fill(graph_t *graph, char *arg);
+extern int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color);
+
 
 extern int soft_move(graph_t *graph, char *arg);
 
