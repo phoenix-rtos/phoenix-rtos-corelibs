@@ -26,6 +26,49 @@ static inline uintptr_t soft_data(graph_t *graph, unsigned int x, unsigned int y
 }
 
 
+/* Returns pixel color */
+static inline unsigned int soft_get(graph_t *graph, uintptr_t data)
+{
+	switch (graph->depth) {
+	case 1:
+		return *(uint8_t *)data;
+
+	case 2:
+		return *(uint16_t *)data;
+
+	case 4:
+		return *(uint32_t *)data;
+
+	default:
+		return -EINVAL;
+	}
+}
+
+
+/* Sets pixel to given color */
+static inline int soft_set(graph_t *graph, uintptr_t data, unsigned int color)
+{
+	switch (graph->depth) {
+	case 1:
+		*(uint8_t *)data = color;
+		break;
+
+	case 2:
+		*(uint16_t *)data = color;
+		break;
+
+	case 4:
+		*(uint32_t *)data = color;
+		break;
+
+	default:
+		return -EINVAL;
+	}
+
+	return EOK;
+}
+
+
 int soft_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, unsigned int stroke, unsigned int color)
 {
 	int i, j, n, sx, sy;
@@ -195,22 +238,7 @@ int soft_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, u
 
 	for (y = 0; y < dy; y++) {
 		for (x = 0; x < dx; x++) {
-			switch (graph->depth) {
-			case 1:
-				*(uint8_t *)data = color;
-				break;
-
-			case 2:
-				*(uint16_t *)data = color;
-				break;
-
-			case 4:
-				*(uint32_t *)data = color;
-				break;
-
-			default:
-				return -EINVAL;
-			}
+			soft_set(graph, data, color);
 			data += graph->depth;
 		}
 		data += n;
@@ -220,10 +248,23 @@ int soft_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, u
 }
 
 
-int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color)
+static int cmp_flood(unsigned int data, unsigned int color)
 {
+	return data == color;
+}
+
+
+static int cmp_bound(unsigned int data, unsigned int color)
+{
+	return data != color;
+}
+
+
+int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color, fill_t type)
+{
+	int (*cmp)(unsigned int, unsigned int);
 	int *stack, *sp, lx, rx, dy;
-	unsigned int bgcolor;
+	unsigned int cmpcolor;
 	uintptr_t data, tmp;
 
 #define PUSH(lx, rx, y, dy) \
@@ -243,128 +284,135 @@ int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color
 	if ((x > graph->width) || (y > graph->height))
 		return -EINVAL;
 
+	data = soft_data(graph, x, y);
+	switch (type) {
+	case FILL_FLOOD:
+		if ((cmpcolor = soft_get(graph, data)) == color)
+			return EOK;
+		cmp = cmp_flood;
+		break;
+
+	case FILL_BOUND:
+		cmpcolor = color;
+		cmp = cmp_bound;
+		break;
+
+	default:
+		return -EINVAL;
+	}
+
 	if ((sp = stack = malloc(0x10000)) == NULL)
 		return -ENOMEM;
 
-	data = soft_data(graph, x, y);
 	PUSH(x, x, y, 1);
 	PUSH(x, x, y + 1, -1);
 
 	switch (graph->depth) {
 	case 1:
-		if ((bgcolor = *(uint8_t *)data) == color)
-			break;
-
 		while (sp > stack) {
 			POP(x, rx, y, dy);
 			data = soft_data(graph, x, y);
+			lx = x;
 
-			for (tmp = data, lx = x; (lx >= 0) && (*(uint8_t *)tmp == bgcolor); tmp--, lx--)
-				*(uint8_t *)tmp = color;
+			if (cmp(*(uint8_t *)data, cmpcolor)) {
+				for (tmp = data - 1; lx && cmp(*(uint8_t *)tmp, cmpcolor); tmp--, lx--)
+					*(uint8_t *)tmp = color;
+			}
 
-			if (lx == x) {
-				for (; (x <= rx) && (*(uint8_t *)data != bgcolor); data++, x++);
+			if (lx < x) {
+				PUSH(lx, x - 1, y, -dy);
+			}
+			else {
+				for (; (x <= rx) && !cmp(*(uint8_t *)data, cmpcolor); data++, x++);
 
 				if (x > rx)
 					continue;
 				lx = x;
 			}
-			else {
-				if (++lx < x)
-					PUSH(lx, x - 1, y, -dy);
-				data++;
-				x++;
-			}
 
-			do {
-				for (; (x < graph->width) && (*(uint8_t *)data == bgcolor); data++, x++)
+			while (x <= rx) {
+				for (; (x < graph->width) && cmp(*(uint8_t *)data, cmpcolor); data++, x++)
 					*(uint8_t *)data = color;
 
 				PUSH(lx, x - 1, y, dy);
 				if (x > rx + 1)
 					PUSH(rx + 1, x - 1, y, -dy);
 
-				for (; (x <= rx) && (*(uint8_t *)data != bgcolor); data++, x++);
+				for (x++, data++; (x <= rx) && !cmp(*(uint8_t *)data, cmpcolor); data++, x++);
 				lx = x;
-			} while (x <= rx);
+			}
 		}
 		break;
 
 	case 2:
-		if ((bgcolor = *(uint16_t *)data) == color)
-			break;
-
 		while (sp > stack) {
 			POP(x, rx, y, dy);
 			data = soft_data(graph, x, y);
+			lx = x;
 
-			for (tmp = data, lx = x; (lx >= 0) && (*(uint16_t *)tmp == bgcolor); tmp -= 2, lx--)
-				*(uint16_t *)tmp = color;
+			if (cmp(*(uint16_t *)data, cmpcolor)) {
+				for (tmp = data - 2; lx && cmp(*(uint16_t *)tmp, cmpcolor); tmp -= 2, lx--)
+					*(uint16_t *)tmp = color;
+			}
 
-			if (lx == x) {
-				for (; (x <= rx) && (*(uint16_t *)data != bgcolor); data += 2, x++);
+			if (lx < x) {
+				PUSH(lx, x - 1, y, -dy);
+			}
+			else {
+				for (; (x <= rx) && !cmp(*(uint16_t *)data, cmpcolor); data += 2, x++);
 
 				if (x > rx)
 					continue;
 				lx = x;
 			}
-			else {
-				if (++lx < x)
-					PUSH(lx, x - 1, y, -dy);
-				data += 2;
-				x++;
-			}
 
-			do {
-				for (; (x < graph->width) && (*(uint16_t *)data == bgcolor); data += 2, x++)
+			while (x <= rx) {
+				for (; (x < graph->width) && cmp(*(uint16_t *)data, cmpcolor); data += 2, x++)
 					*(uint16_t *)data = color;
 
 				PUSH(lx, x - 1, y, dy);
 				if (x > rx + 1)
 					PUSH(rx + 1, x - 1, y, -dy);
 
-				for (; (x <= rx) && (*(uint16_t *)data != bgcolor); data += 2, x++);
+				for (x++, data += 2; (x <= rx) && !cmp(*(uint16_t *)data, cmpcolor); data += 2, x++);
 				lx = x;
-			} while (x <= rx);
+			}
 		}
 		break;
 
 	case 4:
-		if ((bgcolor = *(uint32_t *)data) == color)
-			break;
-
 		while (sp > stack) {
 			POP(x, rx, y, dy);
 			data = soft_data(graph, x, y);
+			lx = x;
 
-			for (tmp = data, lx = x; (lx >= 0) && (*(uint32_t *)tmp == bgcolor); tmp -= 4, lx--)
-				*(uint32_t *)tmp = color;
+			if (cmp(*(uint32_t *)data, cmpcolor)) {
+				for (tmp = data - 4; lx && cmp(*(uint32_t *)tmp, cmpcolor); tmp -= 4, lx--)
+					*(uint32_t *)tmp = color;
+			}
 
-			if (lx == x) {
-				for (; (x <= rx) && (*(uint32_t *)data != bgcolor); data += 4, x++);
+			if (lx < x) {
+				PUSH(lx, x - 1, y, -dy);
+			}
+			else {
+				for (; (x <= rx) && !cmp(*(uint32_t *)data, cmpcolor); data += 4, x++);
 
 				if (x > rx)
 					continue;
 				lx = x;
 			}
-			else {
-				if (++lx < x)
-					PUSH(lx, x - 1, y, -dy);
-				data += 4;
-				x++;
-			}
 
-			do {
-				for (; (x < graph->width) && (*(uint32_t *)data == bgcolor); data += 4, x++)
+			while (x <= rx) {
+				for (; (x < graph->width) && cmp(*(uint32_t *)data, cmpcolor); data += 4, x++)
 					*(uint32_t *)data = color;
 
 				PUSH(lx, x - 1, y, dy);
 				if (x > rx + 1)
 					PUSH(rx + 1, x - 1, y, -dy);
 
-				for (; (x <= rx) && (*(uint32_t *)data != bgcolor); data += 4, x++);
+				for (x++, data += 4; (x <= rx) && !cmp(*(uint32_t *)data, cmpcolor); data += 4, x++);
 				lx = x;
-			} while (x <= rx);
+			}
 		}
 		break;
 
