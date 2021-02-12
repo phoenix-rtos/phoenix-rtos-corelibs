@@ -27,6 +27,9 @@ extern int soft_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned in
 extern int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color, fill_t type);
 
 
+extern int soft_char(graph_t *graph, unsigned int x, unsigned int y, unsigned char dx, unsigned char dy, unsigned char *bmp, unsigned char width, unsigned char height, unsigned char span, unsigned int color);
+
+
 extern int soft_move(graph_t *graph, char *arg);
 
 extern int soft_copyin(graph_t *graph, char *arg);
@@ -36,8 +39,6 @@ extern int soft_copyto(graph_t *graph, char *arg);
 extern int soft_copyfrom(graph_t *graph, char *arg);
 
 extern int soft_copyout(graph_t *graph, char *arg);
-
-extern int soft_char(graph_t *graph, char *arg);
 
 
 #endif

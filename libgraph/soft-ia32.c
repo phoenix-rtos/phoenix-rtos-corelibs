@@ -358,8 +358,8 @@ int soft_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, u
 int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color, fill_t type)
 {
 	int *stack, *sp, rx, y1, y2, ret = EOK;
-	unsigned int gheight, gwidth;
-	void *gdata, *data;
+	unsigned int gh, gw;
+	void *gd, *data;
 
 	if ((x > graph->width) || (y > graph->height))
 		return -EINVAL;
@@ -383,9 +383,9 @@ int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color
 
 	/* Save graph data on stack */
 	data = soft_data(graph, x, y);
-	gheight = graph->height;
-	gwidth = graph->width;
-	gdata = graph->data;
+	gh = graph->height;
+	gw = graph->width;
+	gd = graph->data;
 
 	switch (graph->depth) {
 	case 1:
@@ -531,7 +531,7 @@ int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color
 			"jmp fill8; "
 			"fill15: "
 			: "=m" (sp), "=m" (rx), "=m" (y1), "=m" (y2), "=m" (x), "=m" (y)
-			: "m" (data), "m" (gdata), "m" (gwidth), "m" (gheight), "m" (stack), "m" (sp), "m" (rx), "m" (y1), "m" (y2), "m" (x), "m" (y), "m" (color)
+			: "m" (data), "m" (gd), "m" (gw), "m" (gh), "m" (stack), "m" (sp), "m" (rx), "m" (y1), "m" (y2), "m" (x), "m" (y), "m" (color)
 			: "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "memory");
 			break;
 
@@ -664,7 +664,7 @@ int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color
 			"jmp fill23; "
 			"fill30: "
 			: "=m" (sp), "=m" (y1), "=m" (y2), "=m" (x), "=m" (y)
-			: "m" (gdata), "m" (gwidth), "m" (gheight), "m" (stack), "m" (sp), "m" (y1), "m" (y2), "m" (x), "m" (y), "m" (color)
+			: "m" (gd), "m" (gw), "m" (gh), "m" (stack), "m" (sp), "m" (y1), "m" (y2), "m" (x), "m" (y), "m" (color)
 			: "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "memory");
 			break;
 
@@ -816,7 +816,7 @@ int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color
 			"jmp fill38; "
 			"fill45: "
 			: "=m" (sp), "=m" (rx), "=m" (y1), "=m" (y2), "=m" (x), "=m" (y)
-			: "m" (data), "m" (gdata), "m" (gwidth), "m" (gheight), "m" (stack), "m" (sp), "m" (rx), "m" (y1), "m" (y2), "m" (x), "m" (y), "m" (color)
+			: "m" (data), "m" (gd), "m" (gw), "m" (gh), "m" (stack), "m" (sp), "m" (rx), "m" (y1), "m" (y2), "m" (x), "m" (y), "m" (color)
 			: "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "memory");
 			break;
 
@@ -949,7 +949,7 @@ int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color
 			"jmp fill53; "
 			"fill60: "
 			: "=m" (sp), "=m" (y1), "=m" (y2), "=m" (x), "=m" (y)
-			: "m" (gdata), "m" (gwidth), "m" (gheight), "m" (stack), "m" (sp), "m" (y1), "m" (y2), "m" (x), "m" (y), "m" (color)
+			: "m" (gd), "m" (gw), "m" (gh), "m" (stack), "m" (sp), "m" (y1), "m" (y2), "m" (x), "m" (y), "m" (color)
 			: "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "memory");
 			break;
 
@@ -1101,7 +1101,7 @@ int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color
 			"jmp fill68; "
 			"fill75: "
 			: "=m" (sp), "=m" (rx), "=m" (y1), "=m" (y2), "=m" (x), "=m" (y)
-			: "m" (data), "m" (gdata), "m" (gwidth), "m" (gheight), "m" (stack), "m" (sp), "m" (rx), "m" (y1), "m" (y2), "m" (x), "m" (y), "m" (color)
+			: "m" (data), "m" (gd), "m" (gw), "m" (gh), "m" (stack), "m" (sp), "m" (rx), "m" (y1), "m" (y2), "m" (x), "m" (y), "m" (color)
 			: "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "memory");
 			break;
 
@@ -1234,7 +1234,7 @@ int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color
 			"jmp fill83; "
 			"fill90: "
 			: "=m" (sp), "=m" (y1), "=m" (y2), "=m" (x), "=m" (y)
-			: "m" (gdata), "m" (gwidth), "m" (gheight), "m" (stack), "m" (sp), "m" (y1), "m" (y2), "m" (x), "m" (y), "m" (color)
+			: "m" (gd), "m" (gw), "m" (gh), "m" (stack), "m" (sp), "m" (y1), "m" (y2), "m" (x), "m" (y), "m" (color)
 			: "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "memory");
 			break;
 
@@ -1249,4 +1249,100 @@ int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color
 
 	free(stack);
 	return ret;
+}
+
+
+int soft_char(graph_t *graph, unsigned int x, unsigned int y, unsigned char dx, unsigned char dy, unsigned char *bmp, unsigned char width, unsigned char height, unsigned char span, unsigned int color)
+{
+	unsigned int sl, dl, line[0x100];
+	void *data;
+
+	if ((x + dx > graph->width) || (y + dy > graph->height) || (dx > width) || (dy > height))
+		return -EINVAL;
+
+	data = soft_data(graph, x, y);
+	sl = span - ((((unsigned int)width + 31) >> 3) & 0xfc);
+	dl = graph->depth * (graph->width - dx);
+	x = ((unsigned int)width << 8) | (((unsigned int)dx * 0x10000 / (unsigned int)width * 0xffff) >> 24);
+	y = ((unsigned int)height << 8) | (((unsigned int)dy * 0x10000 / (unsigned int)height * 0xffff) >> 24);
+
+	__asm__ volatile (
+	"movl %1, %%edi; "
+	"movb %7, %%cl; "
+	"movl %9, %%esi; "
+	"cld; "
+	"char1: "
+	"movl %2, %%ebp; "
+	"movb %%cl, %%ch; "
+	"xorl %%edx, %%edx; "
+	"char2: "
+	"movl %%edx, (%%ebp); "
+	"addl $4, %%ebp; "
+	"decb %%ch; "
+	"jnz char2; "
+	"char3: "
+	"movl %2, %%ebp; "
+	"lodsl; "
+	"movb $32, %%ch; "
+	"movl %5, %%ebx; "
+	"char4: "
+	"shrl $1, %%eax; "
+	"adcl $0x10000, %%edx; "
+	"addb %%bl, %%bh; "
+	"jc char5; "
+	"decb %%ch; "
+	"jnz char4; "
+	"lodsl; "
+	"movb $32, %%ch; "
+	"jmp char4; "
+	"char5: "
+	"addl %%edx, (%%ebp); "
+	"addl $4, %%ebp; "
+	"xorl %%edx, %%edx; "
+	"decb %%cl; "
+	"jz char6; "
+	"decb %%ch; "
+	"jnz char4; "
+	"lodsl; "
+	"movb $32, %%ch; "
+	"jmp char4; "
+	"char6: "
+	"movb %7, %%cl; "
+	"addl %3, %%esi; "
+	"movl %6, %%eax; "
+	"addb %%al, %%ah; "
+	"movl %%eax, %0; "
+	"jnc char3; "
+	"movl %10, %%eax; "
+	"movl %2, %%ebp; "
+	"movb %%cl, %%ch; "
+	"char7: "
+	"movl (%%ebp), %%ebx; "
+	"addl $4, %%ebp; "
+	"leal (, %%ebx, 2), %%edx; "
+	"shrl $16, %%ebx; "
+	"cmpw %%bx, %%dx; "
+	"jc char8; "
+	"stosb; "
+	"decb %%ch; "
+	"jnz char7; "
+	"movl %5, %%ebx; "
+	"addl %4, %%edi; "
+	"decb %8; "
+	"jnz char1; "
+	"jmp char9; "
+	"char8: "
+	"incl %%edi; "
+	"decb %%ch; "
+	"jnz char7; "
+	"movl %5, %%ebx; "
+	"addl %4, %%edi; "
+	"decb %8; "
+	"jnz char1; "
+	"char9: "
+	: "=m" (y)
+	: "m" (data), "m" (line), "m" (sl), "m" (dl), "m" (x), "m" (y), "m" (dx), "m" (dy), "m" (bmp), "m" (color)
+	: "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "memory");
+
+	return EOK;
 }
