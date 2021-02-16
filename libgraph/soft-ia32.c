@@ -1252,97 +1252,244 @@ int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color
 }
 
 
-int soft_char(graph_t *graph, unsigned int x, unsigned int y, unsigned char dx, unsigned char dy, unsigned char *bmp, unsigned char width, unsigned char height, unsigned char span, unsigned int color)
+int soft_char(graph_t *graph, unsigned int x, unsigned int y, unsigned char dx, unsigned char dy, const unsigned char *bmp, unsigned char width, unsigned char height, unsigned char span, unsigned int color)
 {
-	unsigned int sl, dl, line[0x100];
+	unsigned int line[0x100];
+	int sl, dl;
 	void *data;
 
-	if ((x + dx > graph->width) || (y + dy > graph->height) || (dx > width) || (dy > height))
+	if (!dx || !dy || (x + dx > graph->width) || (y + dy > graph->height) || (dx > width) || (dy > height))
 		return -EINVAL;
 
 	data = soft_data(graph, x, y);
-	sl = span - ((((unsigned int)width + 31) >> 3) & 0xfc);
+	x = ((unsigned int)dx * 0x10000 / (unsigned int)width * 0xffff) >> 24;
+	y = ((unsigned int)dy * 0x10000 / (unsigned int)height * 0xffff) >> 24;
+	sl = (int)span - ((((int)width + 31) >> 3) & 0xfc);
 	dl = graph->depth * (graph->width - dx);
-	x = ((unsigned int)width << 8) | (((unsigned int)dx * 0x10000 / (unsigned int)width * 0xffff) >> 24);
-	y = ((unsigned int)height << 8) | (((unsigned int)dy * 0x10000 / (unsigned int)height * 0xffff) >> 24);
 
-	__asm__ volatile (
-	"movl %1, %%edi; "
-	"movb %7, %%cl; "
-	"movl %9, %%esi; "
-	"cld; "
-	"char1: "
-	"movl %2, %%ebp; "
-	"movb %%cl, %%ch; "
-	"xorl %%edx, %%edx; "
-	"char2: "
-	"movl %%edx, (%%ebp); "
-	"addl $4, %%ebp; "
-	"decb %%ch; "
-	"jnz char2; "
-	"char3: "
-	"movl %2, %%ebp; "
-	"lodsl; "
-	"movb $32, %%ch; "
-	"movl %5, %%ebx; "
-	"char4: "
-	"shrl $1, %%eax; "
-	"adcl $0x10000, %%edx; "
-	"addb %%bl, %%bh; "
-	"jc char5; "
-	"decb %%ch; "
-	"jnz char4; "
-	"lodsl; "
-	"movb $32, %%ch; "
-	"jmp char4; "
-	"char5: "
-	"addl %%edx, (%%ebp); "
-	"addl $4, %%ebp; "
-	"xorl %%edx, %%edx; "
-	"decb %%cl; "
-	"jz char6; "
-	"decb %%ch; "
-	"jnz char4; "
-	"lodsl; "
-	"movb $32, %%ch; "
-	"jmp char4; "
-	"char6: "
-	"movb %7, %%cl; "
-	"addl %3, %%esi; "
-	"movl %6, %%eax; "
-	"addb %%al, %%ah; "
-	"movl %%eax, %0; "
-	"jnc char3; "
-	"movl %10, %%eax; "
-	"movl %2, %%ebp; "
-	"movb %%cl, %%ch; "
-	"char7: "
-	"movl (%%ebp), %%ebx; "
-	"addl $4, %%ebp; "
-	"leal (, %%ebx, 2), %%edx; "
-	"shrl $16, %%ebx; "
-	"cmpw %%bx, %%dx; "
-	"jc char8; "
-	"stosb; "
-	"decb %%ch; "
-	"jnz char7; "
-	"movl %5, %%ebx; "
-	"addl %4, %%edi; "
-	"decb %8; "
-	"jnz char1; "
-	"jmp char9; "
-	"char8: "
-	"incl %%edi; "
-	"decb %%ch; "
-	"jnz char7; "
-	"movl %5, %%ebx; "
-	"addl %4, %%edi; "
-	"decb %8; "
-	"jnz char1; "
-	"char9: "
-	: "=m" (y)
-	: "m" (data), "m" (line), "m" (sl), "m" (dl), "m" (x), "m" (y), "m" (dx), "m" (dy), "m" (bmp), "m" (color)
-	: "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "memory");
+	switch (graph->depth) {
+	case 1:
+		__asm__ volatile (
+		"movl %9, %%esi; "  /* bmp */
+		"movl %1, %%edi; "  /* data */
+		"movb %7, %%cl; "   /* dx */
+		"cld; "
+		"char1: "
+		"leal %2, %%ebp; "  /* line */
+		"movb %%cl, %%ch; "
+		"xorl %%edx, %%edx; "
+		"char2: "
+		"movl %%edx, (%%ebp); "
+		"addl $4, %%ebp; "
+		"decb %%ch; "
+		"jnz char2; "
+		"char3: "
+		"leal %2, %%ebp; "  /* line */
+		"lodsl; "
+		"movb $32, %%ch; "
+		"movb %5, %%bl; "   /* x */
+		"movb %10, %%bh; "  /* width */
+		"char4: "
+		"shrl $1, %%eax; "
+		"adcl $0x10000, %%edx; "
+		"addb %%bl, %%bh; "
+		"jc char5; "
+		"decb %%ch; "
+		"jnz char4; "
+		"lodsl; "
+		"movb $32, %%ch; "
+		"jmp char4; "
+		"char5: "
+		"addl %%edx, (%%ebp); "
+		"addl $4, %%ebp; "
+		"xorl %%edx, %%edx; "
+		"decb %%cl; "
+		"jz char6; "
+		"decb %%ch; "
+		"jnz char4; "
+		"lodsl; "
+		"movb $32, %%ch; "
+		"jmp char4; "
+		"char6: "
+		"movb %7, %%cl; "   /* dx */
+		"addl %3, %%esi; "  /* bmp += sl */
+		"movb %6, %%al; "   /* y */
+		"addb %%al, %0; "
+		"jnc char3; "
+		"movl %12, %%eax; " /* color */
+		"movb %%cl, %%ch; " /* dx */
+		"char7: "
+		"subl $4, %%ebp; "
+		"movl (%%ebp), %%ebx; "
+		"leal (, %%ebx, 2), %%edx; "
+		"shrl $16, %%ebx; "
+		"cmpw %%bx, %%dx; "
+		"jc char8; "
+		"stosb; "
+		"jmp char9; "
+		"char8: "
+		"incl %%edi; "
+		"char9: "
+		"decb %%ch; "
+		"jnz char7; "
+		"movb %5, %%bl; "   /* x */
+		"movb %10, %%bh; "  /* width */
+		"addl %4, %%edi; "  /* data += dl */
+		"decb %8; "         /* dy-- */
+		"jnz char1; "
+		: "=m" (height)
+		: "m" (data), "m" (line), "m" (sl), "m" (dl), "m" (x), "m" (y), "m" (dx), "m" (dy), "m" (bmp), "m" (width), "m" (height), "m" (color)
+		: "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "memory");
+		break;
+
+	case 2:
+		__asm__ volatile (
+		"movl %9, %%esi; "  /* bmp */
+		"movl %1, %%edi; "  /* data */
+		"movb %7, %%cl; "   /* dx */
+		"cld; "
+		"char10: "
+		"leal %2, %%ebp; "  /* line */
+		"movb %%cl, %%ch; "
+		"xorl %%edx, %%edx; "
+		"char11: "
+		"movl %%edx, (%%ebp); "
+		"addl $4, %%ebp; "
+		"decb %%ch; "
+		"jnz char11; "
+		"char12: "
+		"leal %2, %%ebp; "  /* line */
+		"lodsl; "
+		"movb $32, %%ch; "
+		"movb %5, %%bl; "   /* x */
+		"movb %10, %%bh; "  /* width */
+		"char13: "
+		"shrl $1, %%eax; "
+		"adcl $0x10000, %%edx; "
+		"addb %%bl, %%bh; "
+		"jc char14; "
+		"decb %%ch; "
+		"jnz char13; "
+		"lodsl; "
+		"movb $32, %%ch; "
+		"jmp char13; "
+		"char14: "
+		"addl %%edx, (%%ebp); "
+		"addl $4, %%ebp; "
+		"xorl %%edx, %%edx; "
+		"decb %%cl; "
+		"jz char15; "
+		"decb %%ch; "
+		"jnz char13; "
+		"lodsl; "
+		"movb $32, %%ch; "
+		"jmp char13; "
+		"char15: "
+		"movb %7, %%cl; "   /* dx */
+		"addl %3, %%esi; "  /* bmp += sl */
+		"movb %6, %%al; "   /* y */
+		"addb %%al, %0; "
+		"jnc char12; "
+		"movl %12, %%eax; " /* color */
+		"movb %%cl, %%ch; " /* dx */
+		"char16: "
+		"subl $4, %%ebp; "
+		"movl (%%ebp), %%ebx; "
+		"leal (, %%ebx, 2), %%edx; "
+		"shrl $16, %%ebx; "
+		"cmpw %%bx, %%dx; "
+		"jc char17; "
+		"stosw; "
+		"jmp char18; "
+		"char17: "
+		"addl $2, %%edi; "
+		"char18: "
+		"decb %%ch; "
+		"jnz char16; "
+		"movb %5, %%bl; "   /* x */
+		"movb %10, %%bh; "  /* width */
+		"addl %4, %%edi; "  /* data += dl */
+		"decb %8; "         /* dy-- */
+		"jnz char10; "
+		: "=m" (height)
+		: "m" (data), "m" (line), "m" (sl), "m" (dl), "m" (x), "m" (y), "m" (dx), "m" (dy), "m" (bmp), "m" (width), "m" (height), "m" (color)
+		: "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "memory");
+		break;
+
+	case 4:
+		__asm__ volatile (
+		"movl %9, %%esi; "  /* bmp */
+		"movl %1, %%edi; "  /* data */
+		"movb %7, %%cl; "   /* dx */
+		"cld; "
+		"char19: "
+		"leal %2, %%ebp; "  /* line */
+		"movb %%cl, %%ch; "
+		"xorl %%edx, %%edx; "
+		"char20: "
+		"movl %%edx, (%%ebp); "
+		"addl $4, %%ebp; "
+		"decb %%ch; "
+		"jnz char20; "
+		"char21: "
+		"leal %2, %%ebp; "  /* line */
+		"lodsl; "
+		"movb $32, %%ch; "
+		"movb %5, %%bl; "   /* x */
+		"movb %10, %%bh; "  /* width */
+		"char22: "
+		"shrl $1, %%eax; "
+		"adcl $0x10000, %%edx; "
+		"addb %%bl, %%bh; "
+		"jc char23; "
+		"decb %%ch; "
+		"jnz char22; "
+		"lodsl; "
+		"movb $32, %%ch; "
+		"jmp char22; "
+		"char23: "
+		"addl %%edx, (%%ebp); "
+		"addl $4, %%ebp; "
+		"xorl %%edx, %%edx; "
+		"decb %%cl; "
+		"jz char24; "
+		"decb %%ch; "
+		"jnz char22; "
+		"lodsl; "
+		"movb $32, %%ch; "
+		"jmp char22; "
+		"char24: "
+		"movb %7, %%cl; "   /* dx */
+		"addl %3, %%esi; "  /* bmp += sl */
+		"movb %6, %%al; "   /* y */
+		"addb %%al, %0; "
+		"jnc char21; "
+		"movl %12, %%eax; " /* color */
+		"movb %%cl, %%ch; " /* dx */
+		"char25: "
+		"subl $4, %%ebp; "
+		"movl (%%ebp), %%ebx; "
+		"leal (, %%ebx, 2), %%edx; "
+		"shrl $16, %%ebx; "
+		"cmpw %%bx, %%dx; "
+		"jc char26; "
+		"stosl; "
+		"jmp char27; "
+		"char26: "
+		"addl $4, %%edi; "
+		"char27: "
+		"decb %%ch; "
+		"jnz char25; "
+		"movb %5, %%bl; "   /* x */
+		"movb %10, %%bh; "  /* width */
+		"addl %4, %%edi; "  /* data += dl */
+		"decb %8; "         /* dy-- */
+		"jnz char19; "
+		: "=m" (height)
+		: "m" (data), "m" (line), "m" (sl), "m" (dl), "m" (x), "m" (y), "m" (dx), "m" (dy), "m" (bmp), "m" (width), "m" (height), "m" (color)
+		: "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "memory");
+		break;
+	}
 
 	return EOK;
 }

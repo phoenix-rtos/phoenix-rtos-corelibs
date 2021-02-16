@@ -15,6 +15,7 @@
 #include <errno.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "soft.h"
 
@@ -422,6 +423,134 @@ int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color
 	}
 
 	free(stack);
+	return EOK;
+}
+
+
+int soft_char(graph_t *graph, unsigned int x, unsigned int y, unsigned char dx, unsigned char dy, const unsigned char *bmp, unsigned char width, unsigned char height, unsigned char span, unsigned int color)
+{
+	uint32_t n, val, line[0x100];
+	uint8_t sx, sy, ax, ay, tmp;
+	int sl, dl;
+	uintptr_t data;
+
+	if (!dx || !dy || (x + dx > graph->width) || (y + dy > graph->height) || (dx > width) || (dy > height))
+		return -EINVAL;
+
+	data = soft_data(graph, x, y);
+	sx = ((unsigned int)dx * 0x10000 / (unsigned int)width * 0xffff) >> 24;
+	sy = ((unsigned int)dy * 0x10000 / (unsigned int)height * 0xffff) >> 24;
+	sl = (int)span - ((((int)width + 31) >> 3) & 0xfc);
+	dl = graph->depth * (graph->width - dx);
+	ay = height;
+
+	switch (graph->depth) {
+	case 1:
+		for (y = 0; y < dy; y++) {
+			memset(line, 0, dx * sizeof(line[0]));
+
+			do {
+				ax = width;
+				n = val = 0;
+
+				for (x = 0; x < dx; x++) {
+					do {
+						if (!(n++ % 32)) {
+							val = *(uint32_t *)bmp;
+							bmp += 4;
+						}
+						line[x] += 0x10000 + (val & 0x1);
+						val >>= 1;
+						tmp = ax;
+						ax += sx;
+					} while (ax > tmp);
+				}
+
+				bmp += sl;
+				tmp = ay;
+				ay += sy;
+			} while (ay > tmp);
+
+			for (; x--; data++) {
+				if ((line[x] << 1 & 0xffff) >= (line[x] >> 16))
+					*(uint8_t *)data = color;
+			}
+			data += dl;
+		}
+		break;
+
+	case 2:
+		for (y = 0; y < dy; y++) {
+			memset(line, 0, dx * sizeof(line[0]));
+
+			do {
+				ax = width;
+				n = val = 0;
+
+				for (x = 0; x < dx; x++) {
+					do {
+						if (!(n++ % 32)) {
+							val = *(uint32_t *)bmp;
+							bmp += 4;
+						}
+						line[x] += 0x10000 + (val & 0x1);
+						val >>= 1;
+						tmp = ax;
+						ax += sx;
+					} while (ax > tmp);
+				}
+
+				bmp += sl;
+				tmp = ay;
+				ay += sy;
+			} while (ay > tmp);
+
+			for (; x--; data += 2) {
+				if ((line[x] << 1 & 0xffff) >= (line[x] >> 16))
+					*(uint16_t *)data = color;
+			}
+			data += dl;
+		}
+		break;
+
+	case 4:
+		for (y = 0; y < dy; y++) {
+			memset(line, 0, dx * sizeof(line[0]));
+
+			do {
+				ax = width;
+				n = val = 0;
+
+				for (x = 0; x < dx; x++) {
+					do {
+						if (!(n++ % 32)) {
+							val = *(uint32_t *)bmp;
+							bmp += 4;
+						}
+						line[x] += 0x10000 + (val & 0x1);
+						val >>= 1;
+						tmp = ax;
+						ax += sx;
+					} while (ax > tmp);
+				}
+
+				bmp += sl;
+				tmp = ay;
+				ay += sy;
+			} while (ay > tmp);
+
+			for (; x--; data += 4) {
+				if ((line[x] << 1 & 0xffff) >= (line[x] >> 16))
+					*(uint32_t *)data = color;
+			}
+			data += dl;
+		}
+		break;
+
+	default:
+		return -EINVAL;
+	}
+
 	return EOK;
 }
 
@@ -878,180 +1007,3 @@ copyout4:
   }
   return GRAPH_SUCCESS;
 }
-
-
-int soft_char(graph_t *graph, char *arg)
-{
-  static int width = graph->width;
-  static int depth = graph->depth;
-  static u16 fbsel = graph->fbsel;
-
-  static char line[4096];
-
-  asm {
-    push es
-    mov ax, word ptr [fbsel]           // video segment
-    mov es, ax
-    mov ebx, [arg]                     // function arguments
-    mov esi, [ebx]                     // source address
-    mov edi, [ebx + 4]                 // destination address
-    mov edx, [ebx + 20]                // destination dy
-    push edx                           // lines
-    push dword ptr [ebx + 28]          // color
-    mov eax, [ebx + 8]                 // source dx
-    add eax, 31
-    shr eax, 3                         // div by 8 bits
-    and eax, 0fffffffch
-    neg eax
-    add eax, [ebx + 24]                // span
-    push eax                           // corrected source span
-    dec edx
-    mov eax, 0ffffffffh
-    mov ecx, [ebx + 12]                // source dy
-    div ecx
-    shr eax, 24
-    mov ah, cl
-    push eax                           // vertical subpixel
-    mov eax, dword ptr [width]         // picture witdh
-    mov ecx, [ebx + 16]                // destination dx
-    sub eax, ecx
-    mul dword ptr [depth]              // color size
-    push eax                           // corrected destination span
-    mov edx, ecx
-    dec edx
-    mov eax, 0ffffffffh
-    mov ebx, [ebx + 8]
-    div ebx                            // source dx
-    shr eax, 24
-    mov ah, bl
-    cld
-    push eax                           // horizontal subpixel
-    push ecx                           // destination dx
-  }
-char1:
-  asm {
-    lea ebp, dword ptr [line]          // line buffer
-    mov ch, cl                         // destination width
-    xor edx, edx
-  }
-char2:
-  asm {
-    mov [ebp], edx                     // clear line buffer
-    add ebp, 4
-    dec ch
-    jnz char2
-  }
-char3:
-  asm {
-    lea ebp, dword ptr [line]          // line buffer
-    lodsd                              // first double word
-    mov ch, 32
-    mov ebx, [esp + 4]                 // horizontal subpixel
-  }
-char4:
-  asm {
-    shr eax, 1                         // shift bit
-    adc edx, 10000h                    // count bits and sets
-    add bh, bl                         // subpixel
-    jc char5
-    dec ch
-    jnz char4                          // next bit
-    lodsd                              // next double word
-    mov ch, 32
-    jmp char4
-  }
-char5:
-  asm {
-    add [ebp], edx                     // add bits and sets
-    add ebp, 4
-    xor edx, edx                       // clear bits and sets
-    dec cl
-    jz char6                           // next source line
-    dec ch
-    jnz char4                          // next bit
-    lodsd                              // next double word
-    mov ch, 32
-    jmp char4
-  }
-char6:
-  asm {
-    mov ecx, [esp]                     // destination dx
-    add esi, [esp + 16]                // source span
-    mov eax, [esp + 12]                // vertical subpixel
-    add ah, al
-    mov [esp + 12], eax
-    jnc char3                          // next source line
-    mov eax, [esp + 20]                // color
-    lea ebp, dword ptr [line]          // line buffer
-    mov ch, cl
-    cmp dword ptr [depth], 2
-    jz char9                           // 16bit color
-  }
-char7:
-  asm {
-    mov ebx, [ebp]                     // line buffer
-    add ebp, 4
-    lea edx, [ebx * 2]
-    shr ebx, 16
-    cmp dx, bx
-    jc char8                           // transparent
-    stosb
-    dec ch
-    jnz char7
-    add edi, [esp + 8]                 // destination span
-    dec dword ptr [esp + 24]           // lines
-    jnz char1
-    add esp, 28
-    pop es
-  }
-  return GRAPH_SUCCESS;
-
-char8:
-  asm {
-    inc edi
-    dec ch
-    jnz char7
-    mov ebx, [esp + 4]                 // horizontal subpixel
-    add edi, [esp + 8]                 // destination span
-    dec dword ptr [esp + 24]           // lines
-    jnz char1
-    add esp, 28
-    pop es
-  }
-  return GRAPH_SUCCESS;
-
-char9:
-  asm {
-    mov ebx, [ebp]                     // line buffer
-    add ebp, 4
-    lea edx, [ebx * 2]
-    shr ebx, 16
-    cmp dx, bx
-    jc char10                          // transparent
-    stosb
-    dec ch
-    jnz char9
-    mov ebx, [esp + 4]                 // horizontal subpixel
-    add edi, [esp + 8]                 // destination span
-    dec dword ptr [esp + 24]           // lines
-    jnz char1
-    add esp, 28
-    pop es
-  }
-  return GRAPH_SUCCESS;
-
-char10:
-  asm {
-    inc edi
-    dec ch
-    jnz char9
-    mov ebx, [esp + 4]                 // horizontal subpixel
-    add edi, [esp + 8]                 // destination span
-    dec dword ptr [esp + 24]           // lines
-    jnz char1
-    add esp, 28
-    pop es
-  }
-  return GRAPH_SUCCESS;
-}
-#endif
