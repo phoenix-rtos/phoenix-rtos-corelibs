@@ -30,7 +30,8 @@ extern int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned in
 extern int soft_char(graph_t *graph, unsigned int x, unsigned int y, unsigned char dx, unsigned char dy, const unsigned char *bmp, unsigned char width, unsigned char height, unsigned char span, unsigned int color);
 
 
-extern int soft_move(graph_t *graph, char *arg);
+extern int soft_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, int mx, int my);
+
 
 extern int soft_copyin(graph_t *graph, char *arg);
 

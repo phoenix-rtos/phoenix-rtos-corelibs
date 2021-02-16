@@ -1493,3 +1493,137 @@ int soft_char(graph_t *graph, unsigned int x, unsigned int y, unsigned char dx, 
 
 	return EOK;
 }
+
+
+int soft_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, int mx, int my)
+{
+	void *src, *dst;
+
+	src = soft_data(graph, x, y);
+	dst = soft_data(graph, x + mx, y + my);
+	x = graph->depth * dx;
+	y = graph->depth * graph->width - x;
+
+	if (dst < src) {
+		if (x > 8) {
+			__asm__ volatile (
+			"movl %0, %%esi; "
+			"movl %1, %%edi; "
+			"movl %2, %%ebp; "
+			"movl %3, %%eax; "
+			"movl %4, %%edx; "
+			"cld; "
+			"move1: "
+			"movl %%esi, %%ecx; "
+			"negl %%ecx; "
+			"andl $3, %%ecx; "
+			"movl %%ecx, %%ebx; "
+			"jz move2; "
+			"rep movsb; "
+			"move2: "
+			"movl %%ebp, %%ecx; "
+			"subl %%ebx, %%ecx; "
+			"movl %%ecx, %%ebx; "
+			"shrl $2, %%ecx; "
+			"rep movsl; "
+			"movl %%ebx, %%ecx; "
+			"andl $3, %%ecx; "
+			"jz move3; "
+			"rep movsb; "
+			"move3: "
+			"addl %%eax, %%esi; "
+			"addl %%eax, %%edi; "
+			"decl %%edx; "
+			"jnz move1; "
+			:
+			: "m" (src), "m" (dst), "m" (x), "m" (y), "m" (dy)
+			: "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "memory");
+		}
+		else {
+			__asm__ volatile (
+			"movl %0, %%esi; "
+			"movl %1, %%edi; "
+			"movl %2, %%ebx; "
+			"movl %3, %%eax; "
+			"movl %4, %%edx; "
+			"cld; "
+			"move4: "
+			"movl %%ebx, %%ecx; "
+			"rep movsb; "
+			"addl %%eax, %%esi; "
+			"addl %%eax, %%edi; "
+			"decl %%edx; "
+			"jnz move4; "
+			:
+			: "m" (src), "m" (dst), "m" (x), "m" (y), "m" (dy)
+			: "eax", "ebx", "ecx", "edx", "esi", "edi", "memory");
+		}
+	}
+	else {
+		dx = graph->depth * ((dy - 1) * graph->width + dx) - 1;
+		src += dx;
+		dst += dx;
+
+		if (x > 8) {
+			__asm__ volatile (
+			"movl %0, %%esi; "
+			"movl %1, %%edi; "
+			"movl %2, %%ebp; "
+			"movl %3, %%eax; "
+			"movl %4, %%edx; "
+			"std; "
+			"move5: "
+			"movl %%esi, %%ecx; "
+			"incl %%ecx; "
+			"andl $3, %%ecx; "
+			"movl %%ecx, %%ebx; "
+			"jz move6; "
+			"rep movsb; "
+			"move6: "
+			"movl %%ebp, %%ecx; "
+			"subl %%ebx, %%ecx; "
+			"movl %%ecx, %%ebx; "
+			"shrl $2, %%ecx; "
+			"subl $3, %%esi; "
+			"subl $3, %%edi; "
+			"rep movsl; "
+			"addl $3, %%esi; "
+			"addl $3, %%edi; "
+			"movl %%ebx, %%ecx; "
+			"andl $3, %%ecx; "
+			"jz move7; "
+			"rep movsb; "
+			"move7: "
+			"subl %%eax, %%esi; "
+			"subl %%eax, %%edi; "
+			"decl %%edx; "
+			"jnz move5; "
+			"cld; "
+			:
+			: "m" (src), "m" (dst), "m" (x), "m" (y), "m" (dy)
+			: "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "memory");
+		}
+		else {
+			__asm__ volatile (
+			"movl %0, %%esi; "
+			"movl %1, %%edi; "
+			"movl %2, %%ebx; "
+			"movl %3, %%eax; "
+			"movl %4, %%edx; "
+			"std; "
+			"move8: "
+			"movl %%ebx, %%ecx; "
+			"rep movsb; "
+			"subl %%eax, %%esi; "
+			"subl %%eax, %%edi; "
+			"decl %%edx; "
+			"jnz move8; "
+			"cld; "
+			:
+			: "m" (src), "m" (dst), "m" (x), "m" (y), "m" (dy)
+			: "eax", "ebx", "ecx", "edx", "esi", "edi", "memory");
+		}
+	}
+
+	return EOK;
+}
