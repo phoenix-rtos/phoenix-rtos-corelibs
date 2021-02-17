@@ -1499,6 +1499,12 @@ int soft_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, u
 {
 	void *src, *dst;
 
+	if ((x + dx >= graph->width) || (y + dy >= graph->height)||
+		((int)x + mx < 0) || ((int)y + my < 0) ||
+		((int)x + mx > graph->width) || ((int)y + my > graph->height) ||
+		(x + dx + mx >= graph->width) || (y + dy + mx >= graph->height))
+		return -EINVAL;
+
 	src = soft_data(graph, x, y);
 	dst = soft_data(graph, x + mx, y + my);
 	x = graph->depth * dx;
@@ -1507,11 +1513,11 @@ int soft_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, u
 	if (dst < src) {
 		if (x > 8) {
 			__asm__ volatile (
-			"movl %0, %%esi; "
-			"movl %1, %%edi; "
-			"movl %2, %%ebp; "
-			"movl %3, %%eax; "
-			"movl %4, %%edx; "
+			"movl %0, %%esi; " /* src */
+			"movl %1, %%edi; " /* dst */
+			"movl %2, %%ebp; " /* x */
+			"movl %3, %%eax; " /* y */
+			"movl %4, %%edx; " /* dy */
 			"cld; "
 			"move1: "
 			"movl %%esi, %%ecx; "
@@ -1541,11 +1547,11 @@ int soft_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, u
 		}
 		else {
 			__asm__ volatile (
-			"movl %0, %%esi; "
-			"movl %1, %%edi; "
-			"movl %2, %%ebx; "
-			"movl %3, %%eax; "
-			"movl %4, %%edx; "
+			"movl %0, %%esi; " /* src */
+			"movl %1, %%edi; " /* dst */
+			"movl %2, %%ebx; " /* x */
+			"movl %3, %%eax; " /* y */
+			"movl %4, %%edx; " /* dy */
 			"cld; "
 			"move4: "
 			"movl %%ebx, %%ecx; "
@@ -1566,11 +1572,11 @@ int soft_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, u
 
 		if (x > 8) {
 			__asm__ volatile (
-			"movl %0, %%esi; "
-			"movl %1, %%edi; "
-			"movl %2, %%ebp; "
-			"movl %3, %%eax; "
-			"movl %4, %%edx; "
+			"movl %0, %%esi; " /* src */
+			"movl %1, %%edi; " /* dst */
+			"movl %2, %%ebp; " /* x */
+			"movl %3, %%eax; " /* y */
+			"movl %4, %%edx; " /* dy */
 			"std; "
 			"move5: "
 			"movl %%esi, %%ecx; "
@@ -1605,11 +1611,11 @@ int soft_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, u
 		}
 		else {
 			__asm__ volatile (
-			"movl %0, %%esi; "
-			"movl %1, %%edi; "
-			"movl %2, %%ebx; "
-			"movl %3, %%eax; "
-			"movl %4, %%edx; "
+			"movl %0, %%esi; " /* src */
+			"movl %1, %%edi; " /* dst */
+			"movl %2, %%ebx; " /* x */
+			"movl %3, %%eax; " /* y */
+			"movl %4, %%edx; " /* dy */
 			"std; "
 			"move8: "
 			"movl %%ebx, %%ecx; "
