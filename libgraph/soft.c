@@ -555,174 +555,25 @@ int soft_char(graph_t *graph, unsigned int x, unsigned int y, unsigned char dx, 
 }
 
 
-int soft_move(graph_t *graph, char *arg)
+int soft_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, int mx, int my)
 {
-  static int width = graph->width;
-  static int depth = graph->depth;
-  static u16 fbsel = graph->fbsel;
+	uintptr_t src, dst;
 
-  asm {
-    push ds
-    push es
-    push fs
-    mov ax, ds
-    mov fs, ax
-    mov ax, word ptr [fbsel]           // video segment
-    mov ds, ax
-    mov es, ax
-    mov ebx, fs:[arg]                  // function arguments
-    mov eax, fs:[ebx + 4]              // src y
-    mul dword ptr fs:[width]           // picture width
-    add eax, fs:[ebx]                  // src x
-    mov ecx, dword ptr fs:[depth]      // color size
-    mul ecx
-    mov esi, eax                       // src address
+	if ((x + dx >= graph->width) || (y + dy >= graph->height)||
+		((int)x + mx < 0) || ((int)y + my < 0) ||
+		((int)x + mx > graph->width) || ((int)y + my > graph->height) ||
+		(x + dx + mx >= graph->width) || (y + dy + mx >= graph->height))
+		return -EINVAL;
 
-    mov eax, fs:[ebx + 20]             // move y
-    mul dword ptr fs:[width]           // picture width
-    add eax, fs:[ebx + 16]             // move x
-    mul ecx                            // color size
-    mov edi, eax                       // move address
-    add edi, esi                       // dst address
+	src = soft_data(graph, x, y);
+	dst = soft_data(graph, x + mx, y + my);
+	x = graph->depth * graph->width;
+	dx = graph->depth * dx;
 
-    mov eax, fs:[ebx + 8]              // src width
-    mul ecx                            // color size
-    mov ebp, eax
-    mov eax, dword ptr fs:[width]      // picture width
-    mul ecx                            // color size
-    sub eax, ebp
-    cmp esi, edi
-    jc move5                           // copy backward
+	for (y = 0; y < dy; y++, src += x, dst += x)
+		memmove((void *)dst, (void *)src, dx);
 
-    mov edx, fs:[ebx + 12]             // src height
-    cld
-    cmp ebp, 8                         // small object
-    jnc move2
-  }
-move1:
-  asm {
-    mov ecx, ebp
-    rep
-    movsb                              // copy line
-    add esi, eax
-    add edi, eax
-    dec edx
-    jnz move1
-    pop fs
-    pop es
-    pop ds
-  }
-  return GRAPH_SUCCESS;
-
-move2:
-  asm {
-    mov ecx, esi
-    neg ecx
-    and ecx, 3
-    mov ebx, ecx
-    jz move3
-    rep
-    movsb                              // align source address
-  }
-move3:
-  asm {
-    mov ecx, ebp
-    sub ecx, ebx
-    mov ebx, ecx
-    shr ecx, 2
-    rep
-    movsd                              // copy line
-    mov ecx, ebx
-    and ecx, 3
-    jz move4
-    rep
-    movsb                              // finish line
-  }
-move4:
-  asm {
-    add esi, eax
-    add edi, eax
-    dec edx
-    jnz move2
-    pop fs
-    pop es
-    pop ds
-  }
-  return GRAPH_SUCCESS;
-
-move5:
-  asm {
-    push eax
-    mov eax, fs:[ebx + 12]             // src height
-    dec eax
-    mul dword ptr fs:[width]           // picture width
-    add eax, fs:[ebx + 8]              // src width
-    mul ecx                            // color size
-    dec eax
-    add esi, eax                       // src last
-    add edi, eax                       // dst last
-    pop eax
-    mov edx, fs:[ebx + 12]             // src height
-    std
-    cmp ebp, 8                         // small object
-    jnc move7
-  }
-move6:
-  asm {
-    mov ecx, ebp
-    rep
-    movsb                              // copy line
-    sub esi, eax
-    sub edi, eax
-    dec edx
-    jnz move6
-    pop fs
-    pop es
-    pop ds
-    cld
-  }
-  return GRAPH_SUCCESS;
-
-move7:
-  asm {
-    mov ecx, esi
-    inc ecx
-    and ecx, 3
-    mov ebx, ecx
-    jz move8
-    rep
-    movsb                              // align source address
-  }
-move8:
-  asm {
-    mov ecx, ebp
-    sub ecx, ebx
-    mov ebx, ecx
-    shr ecx, 2
-    sub esi, 3
-    sub edi, 3
-    rep
-    movsd                              // copy line
-    add esi, 3
-    add edi, 3
-    mov ecx, ebx
-    and ecx, 3
-    jz move9
-    rep
-    movsb                              // finish line
-  }
-move9:
-  asm {
-    sub esi, eax
-    sub edi, eax
-    dec edx
-    jnz move7
-    pop fs
-    pop es
-    pop ds
-    cld
-  }
-  return GRAPH_SUCCESS;
+	return EOK;
 }
 
 
