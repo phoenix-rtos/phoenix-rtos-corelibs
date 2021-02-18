@@ -33,14 +33,7 @@ extern int soft_char(graph_t *graph, unsigned int x, unsigned int y, unsigned ch
 extern int soft_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, int mx, int my);
 
 
-extern int soft_copyin(graph_t *graph, char *arg);
-
-extern int soft_copyto(graph_t *graph, char *arg);
-
-extern int soft_copyfrom(graph_t *graph, char *arg);
-
-extern int soft_copyout(graph_t *graph, char *arg);
+extern int soft_copy(graph_t *graph, void *src, void *dst, unsigned int dx, unsigned int dy, unsigned int srcspan, unsigned int dstspan);
 
 
 #endif
-

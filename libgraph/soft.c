@@ -82,7 +82,7 @@ int soft_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, un
 		return -EINVAL;
 
 	if (!dx && !dy)
-		return graph_rect(x, y, stroke, stroke, color, 0);
+		return graph_rect(x, y, stroke, stroke, color, GRAPH_QUEUE_HIGH);
 
 	data = soft_data(graph, x, y + stroke - 1);
 	sy = graph->width * graph->depth;
@@ -434,7 +434,7 @@ int soft_char(graph_t *graph, unsigned int x, unsigned int y, unsigned char dx, 
 	int sl, dl;
 	uintptr_t data;
 
-	if (!dx || !dy || (x + dx > graph->width) || (y + dy > graph->height) || (dx > width) || (dy > height))
+	if (!dx || !dy || (x + dx > graph->width) || (y + dy > graph->height) || (dx > width) || (dy > height) || ((span << 3) < width))
 		return -EINVAL;
 
 	data = soft_data(graph, x, y);
@@ -565,10 +565,13 @@ int soft_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, u
 		(x + dx + mx >= graph->width) || (y + dy + mx >= graph->height))
 		return -EINVAL;
 
+	if (!dx || !dy || !mx || !my)
+		return EOK;
+
 	src = soft_data(graph, x, y);
 	dst = soft_data(graph, x + mx, y + my);
 	x = graph->depth * graph->width;
-	dx = graph->depth * dx;
+	dx *= graph->depth;
 
 	for (y = 0; y < dy; y++, src += x, dst += x)
 		memmove((void *)dst, (void *)src, dx);
@@ -577,284 +580,20 @@ int soft_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, u
 }
 
 
-int soft_copyin(graph_t *graph, char *arg)
+int soft_copy(graph_t *graph, void *src, void *dst, unsigned int dx, unsigned int dy, unsigned int srcspan, unsigned int dstspan)
 {
-  static int depth = graph->depth;
-  static u16 fbsel = graph->fbsel;
+	unsigned int y;
 
-  asm {
-    push ds
-    push es
-    push fs
-    mov ax, ds
-    mov fs, ax
-    mov ax, word ptr [fbsel]           // video segment
-    mov ds, ax
-    mov es, ax
-    mov ebx, fs:[arg]                  // function arguments
-    mov esi, fs:[ebx]                  // copy area source address
-    mov edi, fs:[ebx + 4]              // copy area destination address
-    mov eax, fs:[ebx + 8]              // copy area width
-    mul dword ptr fs:[depth]           // color size
-    mov edx, fs:[ebx + 12]             // copy area height
-    sub fs:[ebx + 16], eax             // copy area source span
-    sub fs:[ebx + 20], eax             // copy area destination span
-    cld
-    cmp eax, 8                         // small object
-    jnc copyin2
-  }
-copyin1:
-  asm {
-    mov ecx, eax
-    rep
-    movsb                              // copy line
-    add esi, fs:[ebx + 16]
-    add edi, fs:[ebx + 20]
-    dec edx
-    jnz copyin1
-    pop fs
-    pop es
-    pop ds
-  }
-  return GRAPH_SUCCESS;
+	if ((srcspan < graph->depth * dx) || (dstspan < graph->depth * dx))
+		return -EINVAL;
 
-copyin2:
-  asm {
-    mov ecx, esi
-    neg ecx
-    and ecx, 3
-    mov ebp, ecx
-    jz copyin3
-    rep
-    movsb                              // align source address
-  }
-copyin3:
-  asm {
-    mov ecx, eax
-    sub ecx, ebp
-    mov ebp, ecx
-    shr ecx, 2
-    rep
-    movsd                              // copy line
-    mov ecx, ebp
-    and ecx, 3
-    jz copyin4
-    rep
-    movsb                              // finish line
-  }
-copyin4:
-  asm {
-    add esi, fs:[ebx + 16]             // copy area source span
-    add edi, fs:[ebx + 20]             // copy area destination span
-    dec edx
-    jnz copyin2
-    pop fs
-    pop es
-    pop ds
-  }
-  return GRAPH_SUCCESS;
-}
+	if (!dx || !dy)
+		return EOK;
 
+	dx *= graph->depth;
 
-int soft_copyto(graph_t *graph, char *arg)
-{
-  static int depth = graph->depth;
-  static u16 fbsel = graph->fbsel;
+	for (y = 0; y < dy; y++, src += srcspan, dst += dstspan)
+		memcpy(dst, src, dx);
 
-  asm {
-    push es
-    mov ax, word ptr [fbsel]           // video segment
-    mov es, ax
-    mov ebx, [arg]                     // function arguments
-    mov esi, [ebx]                     // copy area source address
-    mov edi, [ebx + 4]                 // copy area destination address
-    mov eax, [ebx + 8]                 // copy area width
-    mul dword ptr [depth]              // color size
-    mov edx, [ebx + 12]                // copy area height
-    sub [ebx + 16], eax                // copy area source span
-    sub [ebx + 20], eax                // copy area destination span
-    cld
-    cmp eax, 8                         // small object
-    jnc copyto2
-  }
-copyto1:
-  asm {
-    mov ecx, eax
-    rep
-    movsb                              // copy line
-    add esi, [ebx + 16]                // copy area source span
-    add edi, [ebx + 20]                // copy area destination span
-    dec edx
-    jnz copyto1
-    pop es
-  }
-  return GRAPH_SUCCESS;
-
-copyto2:
-  asm {
-    mov ecx, edi
-    neg ecx
-    and ecx, 3
-    mov ebp, ecx
-    jz copyto3
-    rep
-    movsb                              // align destination address
-  }
-copyto3:
-  asm {
-    mov ecx, eax
-    sub ecx, ebp
-    mov ebp, ecx
-    shr ecx, 2
-    rep
-    movsd                              // copy line
-    mov ecx, ebp
-    and ecx, 3
-    jz copyto4
-    rep
-    movsb                              // finish line
-  }
-copyto4:
-  asm {
-    add esi, [ebx + 16]                // copy area source span
-    add edi, [ebx + 20]                // copy area destination span
-    dec edx
-    jnz copyto2
-    pop es
-  }
-  return GRAPH_SUCCESS;
-}
-
-
-int soft_copyfrom(graph_t *graph, char *arg)
-{
-  static int depth = graph->depth;
-  static u16 fbsel = graph->fbsel;
-
-  asm {
-    push ds
-    mov ax, word ptr [fbsel]           // video segment
-    mov ds, ax
-    mov ebx, [arg]                     // function arguments
-    mov esi, es:[ebx]                  // copy area source address
-    mov edi, es:[ebx + 4]              // copy area destination address
-    mov eax, es:[ebx + 8]              // copy area width
-    mul dword ptr es:[depth]           // color size
-    mov edx, es:[ebx + 12]             // copy area height
-    sub es:[ebx + 16], eax             // copy area source span
-    sub es:[ebx + 20], eax             // copy area destination span
-    cld
-    cmp eax, 8                         // small object
-    jnc copyfrom2
-  }
-copyfrom1:
-  asm {
-    mov ecx, eax
-    rep
-    movsb                              // copy line
-    add esi, es:[ebx + 16]             // copy area source span
-    add edi, es:[ebx + 20]             // copy area destination span
-    dec edx
-    jnz copyfrom1
-    pop ds
-  }
-  return GRAPH_SUCCESS;
-
-copyfrom2:
-  asm {
-    mov ecx, esi
-    neg ecx
-    and ecx, 3
-    mov ebp, ecx
-    jz copyfrom3
-    rep
-    movsb                              // align source address
-  }
-copyfrom3:
-  asm {
-    mov ecx, eax
-    sub ecx, ebp
-    mov ebp, ecx
-    shr ecx, 2
-    rep
-    movsd                              // copy line
-    mov ecx, ebp
-    and ecx, 3
-    jz copyfrom4
-    rep
-    movsb                              // finish line
-  }
-copyfrom4:
-  asm {
-    add esi, es:[ebx + 16]             // copy area source span
-    add edi, es:[ebx + 20]             // copy area destination span
-    dec edx
-    jnz copyfrom2
-    pop ds
-  }
-  return GRAPH_SUCCESS;
-}
-
-
-int soft_copyout(graph_t *graph, char *arg)
-{
-  static int depth = graph->depth;
-
-  asm {
-    mov ebx, [arg]                     // function arguments
-    mov esi, [ebx]                     // copy area source address
-    mov edi, [ebx + 4]                 // copy area destination address
-    mov eax, [ebx + 8]                 // copy area width
-    mul dword ptr [depth]              // color size
-    mov edx, [ebx + 12]                // copy area height
-    sub [ebx + 16], eax                // copy area source span
-    sub [ebx + 20], eax                // copy area destination span
-    cld
-    cmp eax, 8                         // small object
-    jnc copyout2
-  }
-copyout1:
-  asm {
-    mov ecx, eax
-    rep
-    movsb                              // copy line
-    add esi, [ebx + 16]
-    add edi, [ebx + 20]
-    dec edx
-    jnz copyout1
-  }
-  return GRAPH_SUCCESS;
-
-copyout2:
-  asm {
-    mov ecx, edi
-    neg ecx
-    and ecx, 3
-    mov ebp, ecx
-    jz copyout3
-    rep
-    movsb                              // align destination address
-  }
-copyout3:
-  asm {
-    mov ecx, eax
-    sub ecx, ebp
-    mov ebp, ecx
-    shr ecx, 2
-    rep
-    movsd                              // copy line
-    mov ecx, ebp
-    and ecx, 3
-    jz copyout4
-    rep
-    movsb                              // finish line
-  }
-copyout4:
-  asm {
-    add esi, [ebx + 16]                // copy area source span
-    add edi, [ebx + 20]                // copy area destination span
-    dec edx
-    jnz copyout2
-  }
-  return GRAPH_SUCCESS;
+	return EOK;
 }

@@ -36,7 +36,7 @@ int soft_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, un
 		return -EINVAL;
 
 	if (!dx && !dy)
-		return graph_rect(x, y, stroke, stroke, color, 0);
+		return graph_rect(x, y, stroke, stroke, color, GRAPH_QUEUE_HIGH);
 
 	data = soft_data(graph, x, y + stroke - 1);
 	sy = graph->width * graph->depth;
@@ -1258,7 +1258,7 @@ int soft_char(graph_t *graph, unsigned int x, unsigned int y, unsigned char dx, 
 	int sl, dl;
 	void *data;
 
-	if (!dx || !dy || (x + dx > graph->width) || (y + dy > graph->height) || (dx > width) || (dy > height))
+	if (!dx || !dy || (x + dx > graph->width) || (y + dy > graph->height) || (dx > width) || (dy > height) || ((span << 3) < width))
 		return -EINVAL;
 
 	data = soft_data(graph, x, y);
@@ -1505,6 +1505,9 @@ int soft_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, u
 		(x + dx + mx >= graph->width) || (y + dy + mx >= graph->height))
 		return -EINVAL;
 
+	if (!dx || !dy || !mx || !my)
+		return EOK;
+
 	src = soft_data(graph, x, y);
 	dst = soft_data(graph, x + mx, y + my);
 	x = graph->depth * dx;
@@ -1629,6 +1632,75 @@ int soft_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, u
 			: "m" (src), "m" (dst), "m" (x), "m" (y), "m" (dy)
 			: "eax", "ebx", "ecx", "edx", "esi", "edi", "memory");
 		}
+	}
+
+	return EOK;
+}
+
+
+int soft_copy(graph_t *graph, void *src, void *dst, unsigned int dx, unsigned int dy, unsigned int srcspan, unsigned int dstspan)
+{
+	if ((srcspan < graph->depth * dx) || (dstspan < graph->depth * dx))
+		return -EINVAL;
+
+	if (!dx || !dy)
+		return EOK;
+
+	dx *= graph->depth;
+	srcspan -= dx;
+	dstspan -= dx;
+
+	if (dx > 8) {
+		__asm__ volatile (
+		"movl %0, %%esi; " /* src */
+		"movl %1, %%edi; " /* dst */
+		"movl %2, %%eax; " /* dx */
+		"movl %3, %%edx; " /* dy */
+		"cld; "
+		"copy1: "
+		"movl %%esi, %%ecx; "
+		"negl %%ecx; "
+		"andl $3, %%ecx; "
+		"movl %%ecx, %%ebx; "
+		"jz copy2; "
+		"rep movsb; "
+		"copy2: "
+		"movl %%eax, %%ecx; "
+		"subl %%ebx, %%ecx; "
+		"shrl $2, %%ecx; "
+		"rep movsl; "
+		"movl %%ebx, %%ecx; "
+		"andl $3, %%ecx; "
+		"jz copy3: "
+		"rep movsb; "
+		"copy3: "
+		"addl %4, %%esi; " /* src += srcspan */
+		"addl %5, %%edi; " /* dst += dstspan */
+		"decl %%edx; "
+		"jnz copy1; "
+		:
+		: "m" (src), "m" (dst), "m" (dx), "m" (dy), "m" (srcspan), "m" (dstspan)
+		: "eax", "ebx", "ecx", "edx", "esi", "edi", "memory");
+	}
+	else {
+		__asm__ volatile (
+		"movl %0, %%esi; " /* src */
+		"movl %1, %%edi; " /* dst */
+		"movl %2, %%eax; " /* dx */
+		"movl %3, %%edx; " /* dy */
+		"movl %4, %%ebx; " /* srcspan */
+		"movl %5, %%ebp; " /* dstspan */
+		"cld; "
+		"copy4: "
+		"movl %%eax, %%ecx; "
+		"rep movsb; "
+		"addl %%ebx, %%esi; "
+		"addl %%ebp, %%edi; "
+		"decl %%edx; "
+		"jnz copy4; "
+		:
+		: "m" (src), "m" (dst), "m" (dx), "m" (dy), "m" (srcspan), "m" (dstspan)
+		: "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "memory");
 	}
 
 	return EOK;
