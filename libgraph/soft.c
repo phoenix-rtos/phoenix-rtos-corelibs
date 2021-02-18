@@ -558,6 +558,7 @@ int soft_char(graph_t *graph, unsigned int x, unsigned int y, unsigned char dx, 
 int soft_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, int mx, int my)
 {
 	uintptr_t src, dst;
+	int span;
 
 	if ((x + dx >= graph->width) || (y + dy >= graph->height)||
 		((int)x + mx < 0) || ((int)y + my < 0) ||
@@ -570,10 +571,16 @@ int soft_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, u
 
 	src = soft_data(graph, x, y);
 	dst = soft_data(graph, x + mx, y + my);
-	x = graph->depth * graph->width;
+	span = graph->depth * graph->width;
 	dx *= graph->depth;
 
-	for (y = 0; y < dy; y++, src += x, dst += x)
+	if (dst > src) {
+		src += (dy - 1) * span;
+		dst += (dy - 1) * span;
+		span = -span;
+	}
+
+	for (y = 0; y < dy; y++, src += span, dst += span)
 		memmove((void *)dst, (void *)src, dx);
 
 	return EOK;
