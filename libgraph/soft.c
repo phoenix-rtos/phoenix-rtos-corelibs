@@ -76,10 +76,12 @@ int soft_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, un
 	uint32_t a, acc, tmp;
 	int n, sx, sy;
 
+#ifdef GRAPH_VERIFY_ARGS
 	if (!stroke || ((int)x + dx < 0) || ((int)y + dy < 0) ||
 		(x + stroke > graph->width) || (x + dx + stroke > graph->width) ||
 		(y + stroke > graph->height) || (y + dy + stroke > graph->height))
 		return -EINVAL;
+#endif
 
 	if (!dx && !dy)
 		return graph_rect(x, y, stroke, stroke, color, GRAPH_QUEUE_HIGH);
@@ -228,8 +230,10 @@ int soft_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, u
 	uintptr_t data;
 	unsigned int n;
 
+#ifdef GRAPH_VERIFY_ARGS
 	if ((x + dx > graph->width) || (y + dy > graph->height))
 		return -EINVAL;
+#endif
 
 	if (!dx || !dy)
 		return EOK;
@@ -282,8 +286,10 @@ int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color
 	rx = *--sp; \
 	lx = *--sp;
 
+#ifdef GRAPH_VERIFY_ARGS
 	if ((x > graph->width) || (y > graph->height))
 		return -EINVAL;
+#endif
 
 	data = soft_data(graph, x, y);
 	switch (type) {
@@ -434,8 +440,10 @@ int soft_char(graph_t *graph, unsigned int x, unsigned int y, unsigned char dx, 
 	int sl, dl;
 	uintptr_t data;
 
+#ifdef GRAPH_VERIFY_ARGS
 	if (!dx || !dy || (x + dx > graph->width) || (y + dy > graph->height) || (dx > width) || (dy > height) || ((span << 3) < width))
 		return -EINVAL;
+#endif
 
 	data = soft_data(graph, x, y);
 	sx = ((unsigned int)dx * 0x10000 / (unsigned int)width * 0xffff) >> 24;
@@ -560,11 +568,13 @@ int soft_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, u
 	uintptr_t src, dst;
 	int span;
 
+#ifdef GRAPH_VERIFY_ARGS
 	if ((x + dx >= graph->width) || (y + dy >= graph->height)||
 		((int)x + mx < 0) || ((int)y + my < 0) ||
 		((int)x + mx > graph->width) || ((int)y + my > graph->height) ||
 		(x + dx + mx >= graph->width) || (y + dy + mx >= graph->height))
 		return -EINVAL;
+#endif
 
 	if (!dx || !dy || !mx || !my)
 		return EOK;
@@ -591,8 +601,10 @@ int soft_copy(graph_t *graph, void *src, void *dst, unsigned int dx, unsigned in
 {
 	unsigned int y;
 
+#ifdef GRAPH_VERIFY_ARGS
 	if ((srcspan < graph->depth * dx) || (dstspan < graph->depth * dx))
 		return -EINVAL;
+#endif
 
 	if (!dx || !dy)
 		return EOK;
