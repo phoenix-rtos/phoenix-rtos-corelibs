@@ -1,205 +1,254 @@
 /*
- * Graph library for DPMI32
+ * Phoenix-RTOS
  *
+ * Graph library
+ *
+ * Copyright 2009, 2021 Phoenix Systems
  * Copyright 2002-2007 IMMOS
+ * Author: Lukasz Kosinski
+ *
+ * This file is part of Phoenix-RTOS.
+ *
+ * %LICENSE%
  */
 
-#ifndef _LIBGRAPH_GRAPH_H_
-#define _LIBGRAPH_GRAPH_H_
+#ifndef _GRAPH_H_
+#define _GRAPH_H_
 
 
-#define GRAPH_VERSION   "3.0"
+/* Graphics adapters */
+// #define GRAPH_CT69000   (1 << 0)
+// #define GRAPH_SAVAGE4   (1 << 1)
+// #define GRAPH_GEODELX   (1 << 2)
+#define GRAPH_VIRTIOGPU (1 << 3)
+#define GRAPH_ANY       -1
 
 
-/* Supported modes */
-#define GRAPH_640x480x8      1
-#define GRAPH_800x600x8      2
-#define GRAPH_1024x768x8     3
-#define GRAPH_1280x1024x8    4
-#define GRAPH_640x480x16     11
-#define GRAPH_800x600x16     12
-#define GRAPH_1024x768x16    13
+/* Check graphics functions arguments */
+// #define GRAPH_VERIFY_ARGS
 
 
-/* Supported frequencies */
-#define GRAPH_87Hzi 1
-#define GRAPH_56Hz  2
-#define GRAPH_60Hz  4
-#define GRAPH_70Hz  8
-#define GRAPH_72Hz  16
-#define GRAPH_75Hz  32
-#define GRAPH_80Hz  64
+/* Graphics modes */
+enum {
+	GRAPH_640x480x8    = 0,
+	GRAPH_800x600x8    = 1,
+	GRAPH_1024x768x8   = 2,
+	GRAPH_1280x1024x8  = 3,
+	GRAPH_640x480x16   = 100,
+	GRAPH_800x600x16   = 101,
+	GRAPH_1024x768x16  = 102,
+	GRAPH_640x480x32   = 200,
+	GRAPH_800x600x32   = 201,
+	GRAPH_832x624x32   = 202,
+	GRAPH_896x672x32   = 203,
+	GRAPH_928x696x32   = 204,
+	GRAPH_960x540x32   = 205,
+	GRAPH_960x600x32   = 206,
+	GRAPH_960x720x32   = 207,
+	GRAPH_1024x576x32  = 208,
+	GRAPH_1024x768x32  = 209,
+	GRAPH_1152x864x32  = 210,
+	GRAPH_1280x720x32  = 211,
+	GRAPH_1280x800x32  = 212,
+	GRAPH_1280x960x32  = 213,
+	GRAPH_1280x1024x32 = 214,
+	GRAPH_1360x768x32  = 215,
+	GRAPH_1368x768x32  = 216,
+	GRAPH_1400x900x32  = 217,
+	GRAPH_1400x1050x32 = 218,
+	GRAPH_1440x810x32  = 219,
+	GRAPH_1440x900x32  = 220,
+	GRAPH_1600x900x32  = 221,
+	GRAPH_1600x1024x32 = 222,
+	GRAPH_1680x1050x32 = 223,
+	GRAPH_1920x1080x32 = 224
+};
 
 
-/* Error codes */
-#define GRAPH_ABSENT        1
-#define GRAPH_SUCCESS       0
-#define GRAPH_ERR          -1
-#define GRAPH_ERR_DEVICE   -2
-#define GRAPH_ERR_PCI      -3
-#define GRAPH_ERR_DPMI     -4
-#define GRAPH_ERR_MEM      -5
-#define GRAPH_ERR_STOP     -6
-#define GRAPH_ERR_QUEUE    -7
-#define GRAPH_ERR_ARG      -8
-#define GRAPH_ERR_BUSY     -9
-#define GRAPH_ERR_NESTED  -10
+/* Screen refresh rates */
+enum {
+	GRAPH_87Hzi = (1 << 0),
+	GRAPH_56Hz  = (1 << 1),
+	GRAPH_60Hz  = (1 << 2),
+	GRAPH_70Hz  = (1 << 3),
+	GRAPH_72Hz  = (1 << 4),
+	GRAPH_75Hz  = (1 << 5),
+	GRAPH_80Hz  = (1 << 6)
+};
 
 
-/* Queue parameters */
-#define GRAPH_QUEUE_HIGH      0
-#define GRAPH_QUEUE_LOW       1
-#define GRAPH_QUEUE_BOTH     -1
-#define GRAPH_QUEUE_DEFAULT  GRAPH_QUEUE_LOW
+/* Graphics task queues */
+enum {
+	GRAPH_QUEUE_HI,
+	GRAPH_QUEUE_LO,
+	GRAPH_QUEUE_BOTH,
+	GRAPH_QUEUE_DEFAULT = GRAPH_QUEUE_LO
+};
 
 
-/* Task buffer size */
-#define GRAPH_MIN_MEM       128
+/* Polygon fill type */
+enum {
+	FILL_FLOOD,
+	FILL_BOUND
+};
 
 
-/* Arguments validation */
-// #define GRAPH_VERIFY_ARG
+typedef struct {
+	unsigned char width;  /* Glyph width in pixels */
+	unsigned char height; /* Glyph height in pixels */
+	unsigned char span;   /* Glyph row span in bytes */
+	unsigned char offs;   /* First character (ASCII offset) */
+	unsigned char *data;  /* Font data */
+} graph_font_t;
 
 
-/* Task queue descriptor */
-typedef struct _graph_queue_t {
-	unsigned int stop;                  // stop counter
-	unsigned int tasks;                 // tasks to process
-	char *fifo;                         // task buffer address
-	char *free;                         // task buffer free position pointer
-	char *used;                         // task buffer used position pointer
-	char *end;                          // end of task buffer
+typedef struct {
+	unsigned int tasks;  /* Number of tasks to process */
+	unsigned int stop;   /* Stop counter */
+	unsigned char *fifo; /* Task buffer start address */
+	unsigned char *free; /* Free position */
+	unsigned char *used; /* Used position */
+	unsigned char *end;  /* Task buffer end address */
 } graph_queue_t;
 
 
-typedef struct _graph_t {
-	char busy;
-	graph_queue_t low;
-	graph_queue_t high;
-
-	void *data;
-
-	unsigned int width;
-	unsigned int height;
-	unsigned char depth;
-	unsigned int memsz;
-	unsigned int cursorsz;
-	unsigned int vsync;
-	
-	int (*open)(struct _graph_t *graph, uint8_t irq);
-	int (*close)(struct _graph_t *graph);
-	int (*mode)(struct _graph_t *graph, int mode, char freq);
-	int (*isbusy)(struct _graph_t *graph);
-	int (*trigger)(struct _graph_t *graph);
-
-	int (*line)(struct _graph_t *graph, int,  int,  int,  int,  unsigned int,  unsigned int);
-	int (*rect)(struct _graph_t *graph, char *arg);
-	int (*fill)(struct _graph_t *graph, char *arg);
-
-	int (*move)(struct _graph_t *graph, char *arg);
-	int (*copyin)(struct _graph_t *graph, char *arg);
-	int (*copyto)(struct _graph_t *graph, char *arg);
-	int (*copyfrom)(struct _graph_t *graph, char *arg);
-	int (*copyout)(struct _graph_t *graph, char *arg);
-	int (*character)(struct _graph_t *graph, char *arg);
-
-	int (*colorset)(struct _graph_t *graph, char *colors, unsigned char first, unsigned char last);
-	int (*colorget)(struct _graph_t *graph, char *colors, unsigned char first, unsigned char last);
-
-	int (*cursorset)(struct _graph_t *graph, char *and, char *xor, unsigned char bg, unsigned char fg);
-	int (*cursorpos)(struct _graph_t *graph, unsigned int x, unsigned int y);
-	int (*cursorshow)(struct _graph_t *graph);
-	int (*cursorhide)(struct _graph_t *graph);
-} graph_t;
+typedef struct _graph_t graph_t;
 
 
-/* Function initializes graph library and associated drivers */
+struct _graph_t {
+	/* Graph info */
+	unsigned char busy;  /* Is graph busy? */
+	void *adapter;       /* Graphics adapter */
+
+	/* Screen info */
+	void *data;          /* Screen buffer */
+	unsigned int width;  /* Screen width */
+	unsigned int height; /* Screen height */
+	unsigned int vsync;  /* Screen vertical synchronizations */
+	unsigned char depth; /* Screen color depth */
+
+	/* Task queues */
+	graph_queue_t hi;    /* High priority tasks queue */
+	graph_queue_t lo;    /* Low priority tasks queue */
+
+	/* Control functions */
+	int (*close)(graph_t *graph);
+	int (*mode)(graph_t *graph, int mode, char freq);
+	int (*isbusy)(graph_t *graph);
+	int (*trigger)(graph_t *graph);
+
+	/* Draw functions */
+	int (*line)(graph_t *graph, unsigned int, unsigned int, int, int, unsigned int, unsigned int);
+	int (*rect)(graph_t *graph, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int);
+	int (*fill)(graph_t *graph, unsigned int, unsigned int, unsigned int, unsigned char);
+	int (*print)(graph_t *graph, unsigned int, unsigned int, unsigned char, unsigned char, unsigned char *, unsigned char, unsigned char, unsigned char, unsigned int);
+
+	/* Copy functions */
+	int (*move)(graph_t *graph, unsigned int, unsigned int, unsigned int, unsigned int, int, int);
+	int (*copy)(graph_t *graph, void *, void *, unsigned int, unsigned int, unsigned int, unsigned int);
+
+	/* Color palette functions */
+	int (*colorset)(graph_t *graph, char *colors, unsigned char first, unsigned char last);
+	int (*colorget)(graph_t *graph, char *colors, unsigned char first, unsigned char last);
+
+	/* Cursor functions */
+	int (*cursorset)(graph_t *graph, char *and, char *xor, unsigned char bg, unsigned char fg);
+	int (*cursorpos)(graph_t *graph, unsigned int x, unsigned int y);
+	int (*cursorshow)(graph_t *graph);
+	int (*cursorhide)(graph_t *graph);
+};
+
+
+/* Draws line */
+extern int graph_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, unsigned int stroke, unsigned int color, unsigned char queue);
+
+
+/* Draws rectangle */
+extern int graph_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color, unsigned char queue);
+
+
+/* Fills polygon */
+extern int graph_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color, unsigned char type, unsigned char queue);
+
+
+/* Prints text */
+extern int graph_print(graph_t *graph, graph_font_t *font, const char *text, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color, unsigned char queue);
+
+
+/* Moves data */
+extern int graph_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, int mx, int my, unsigned char queue);
+
+
+/* Copies data */
+extern int graph_copy(graph_t *graph, void *src, void *dst, unsigned int dx, unsigned int dy, unsigned int srcspan, unsigned int dstspan, unsigned char queue);
+
+
+/* Sets color palette */
+extern int graph_colorset(graph_t *graph, char *colors, unsigned char first, unsigned char last);
+
+
+/* Retrieves color palette */
+extern int graph_colorget(graph_t *graph, char *colors, unsigned char first, unsigned char last);
+
+
+/* Sets cursor icon */
+extern int graph_cursorset(graph_t *graph, char *and, char *xor, unsigned char bg, unsigned char fg);
+
+
+/* Updates cursor position */
+extern int graph_cursorpos(graph_t *graph, unsigned int x, unsigned int y);
+
+
+/* Enables cursor */
+extern int graph_cursorshow(graph_t *graph);
+
+
+/* Disables cursor */
+extern int graph_cursorhide(graph_t *graph);
+
+
+/* Triggers next task execution */
+extern int graph_trigger(graph_t *graph);
+
+
+/* Stops graphics task queue processing */
+extern int graph_stop(graph_t *graph, unsigned int queue);
+
+
+/* Starts graphics task queue processing */
+extern int graph_start(graph_t *graph, unsigned int queue);
+
+
+/* Returns number of tasks in queue */
+extern int graph_tasks(graph_t *graph, unsigned int queue);
+
+
+/* Resets task queue */
+extern int graph_reset(graph_t *graph, unsigned int queue);
+
+
+/* Returns number of vertical synchronizations since last call */
+extern int graph_vsync(graph_t *graph);
+
+
+/* Sets graphics mode */
+extern int graph_mode(graph_t *graph, unsigned int mode, unsigned int freq);
+
+
+/* Closes graphics adapter context */
+extern void graph_close(graph_t *graph);
+
+
+/* Opens graphics adapter context */
+extern int graph_open(graph_t *graph, unsigned int mem, unsigned int adapter);
+
+
+/* Destroys graph library */
+extern void graph_done(void);
+
+
+/* Initializes graph library */
 extern int graph_init(void);
-
-
-/* Function prepares library for use */
-extern int graph_open(unsigned int mem, uint8_t irq);
-
-
-/* Function closes library */
-extern int graph_close(void);
-
-
-/* Function sets graphics modes */
-extern int graph_mode(unsigned int mode, char freq);
-
-
-/* Function returns number of vertical synchronizations since last call */
-extern int graph_vsync(void);
-
-
-/* Function stops graphics task queue processing */
-extern int graph_stop(int queue);
-
-
-/* Function starts graphics task queue processing */
-extern int graph_start(int queue);
-
-
-/* Function returns number of tasks in queue */
-extern int graph_tasks(int queue);
-
-
-/* Function resets task queue */
-extern int graph_reset(int queue);
-
-
-/* Function triggers next task execution */
-extern int graph_trigger(void);
-
-
-extern int graph_line(unsigned int x, unsigned int y, int dx, int dy, unsigned int width, unsigned int color, int queue);
-
-extern int graph_fill(unsigned int x, unsigned int y, unsigned int color, int queue);
-
-extern int graph_rect(unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color, int queue);
-
-extern int graph_move(unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, int mx, int my, int queue);
-
-extern int graph_copyin(unsigned int src, unsigned int dst, unsigned int dx, unsigned int dy, int srcspan, int dstspan, int queue);
-
-extern int graph_copyto(char *src, unsigned int dst, unsigned int dx, unsigned int dy, int srcspan, int dstspan, int queue);
-
-extern int graph_copyfrom(unsigned int src, char *dst, unsigned int dx, unsigned int dy, int srcspan, int dstspan, int queue);
-
-extern int graph_copyout(char *src, char *dst, unsigned int dx, unsigned int dy, int srcspan, int dstspan, int queue);
-
-extern int graph_print(char *text, unsigned int x, unsigned int y, char *fonts, unsigned int dx, unsigned int dy, unsigned int color, int queue);
-
-
-extern int graph_colorset(char *colors, unsigned char first, unsigned char last);
-
-extern int graph_colorget(char *colors, unsigned char first, unsigned char last);
-
-
-extern int graph_cursorset(char *and, char *xor, unsigned char bg, unsigned char fg);
-
-extern int graph_cursorpos(unsigned int x, unsigned int y);
-
-extern int graph_cursorshow(void);
-
-extern int graph_cursorhide(void);
-
-
-extern char *graph_version(void);
-
-extern int graph_addr(unsigned int x, unsigned int y);
-
-extern int graph_span(void);
-
-/* Function returns free frame buffer memory offset */
-extern int graph_offset(void);
-
-/* Function returns size of free frame buffer memory */
-extern int graph_size(void);
-
-/* Function calculates text width in pixels */
-extern int graph_width(char *text, char *fonts, unsigned int dx);
 
 
 #endif

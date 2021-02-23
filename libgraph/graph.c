@@ -1,526 +1,569 @@
 /*
- * Graph library for DPMI32
+ * Phoenix-RTOS
  *
+ * Graph library
+ *
+ * Copyright 2009, 2021 Phoenix Systems
  * Copyright 2002-2007 IMMOS
+ * Author: Lukasz Kosinski
+ *
+ * This file is part of Phoenix-RTOS.
+ *
+ * %LICENSE%
  */
 
-#include <string.h>
+#include <errno.h>
 #include <stdlib.h>
-#include <stdio.h>
+#include <string.h>
 
 #include "graph.h"
-#include "chk.h"
 #include "soft.h"
 
-extern int ct69000_init(graph_t *graph);
-extern int savage4_init(graph_t *graph);
-extern int geode_init(graph_t *graph);
+
+/* Graphics tasks */
+enum {
+	TASK_LINE,
+	TASK_RECT,
+	TASK_FILL,
+	TASK_PRINT,
+	TASK_MOVE,
+	TASK_COPY
+};
 
 
-/* Common graph structure */
-static graph_t graph;
+typedef struct {
+	unsigned int size; /* Task size */
+	unsigned int type; /* Task type */
+
+	union {
+		struct {
+			unsigned int x;
+			unsigned int y;
+			int dx;
+			int dy;
+			unsigned int stroke;
+			unsigned int color;
+		} line;
+
+		struct {
+			unsigned int x;
+			unsigned int y;
+			unsigned int dx;
+			unsigned int dy;
+			unsigned int color;
+		} rect;
+
+		struct {
+			unsigned int x;
+			unsigned int y;
+			unsigned int color;
+			unsigned char type;
+		} fill;
+
+		struct {
+			unsigned int x;
+			unsigned int y;
+			unsigned char dx;
+			unsigned char dy;
+			unsigned char *bmp;
+			unsigned char width;
+			unsigned char height;
+			unsigned char span;
+			unsigned int color;
+		} print;
+
+		struct {
+			unsigned int x;
+			unsigned int y;
+			unsigned int dx;
+			unsigned int dy;
+			int mx;
+			int my;
+		} move;
+
+		struct {
+			void *src;
+			void *dst;
+			unsigned int dx;
+			unsigned int dy;
+			unsigned int srcspan;
+			unsigned int dstspan;
+		} copy;
+	};
+} __attribute__((packed)) graph_task_t;
 
 
-int graph_init()
+#ifdef GRAPH_CT69000
+extern int ct69000_open(graph_t *);
+extern void ct69000_done(void);
+extern int ct69000_init(void);
+#endif
+
+
+#ifdef GRAPH_SAVAGE4
+extern int savage4_open(graph_t *);
+extern void savage4_done(void);
+extern int savage4_init(void);
+#endif
+
+
+#ifdef GRAPH_GEODELX
+extern int geode_open(graph_t *);
+extern void geode_done(void);
+extern int geode_init(void);
+#endif
+
+
+#ifdef GRAPH_VIRTIOGPU
+extern int virtiogpu_open(graph_t *);
+extern void virtiogpu_done(void);
+extern int virtiogpu_init(void);
+#endif
+
+
+/* Executes task */
+static int graph_exec(graph_t *graph, graph_task_t *task)
 {
-	graph.line = soft_line;
-	graph.rect = soft_rect;
-	graph.fill = soft_fill;
-	graph.move = soft_move;
-	graph.copyin = soft_copyin;
-	graph.copyto = soft_copyto;
-	graph.copyfrom = soft_copyfrom;
-	graph.copyout = soft_copyout;
-	graph.character = soft_char;
+	switch (task->type) {
+	case TASK_LINE:
+		return graph->line(graph, task->line.x, task->line.y, task->line.dx, task->line.dy, task->line.stroke, task->line.color);
 
-	if (ct69000_init(&graph) == GRAPH_SUCCESS)
-		return GRAPH_SUCCESS;
+	case TASK_RECT:
+		return graph->rect(graph, task->rect.x, task->rect.y, task->rect.dx, task->rect.dy, task->rect.color);
 
-	if (savage4_init(&graph) == GRAPH_SUCCESS)
-		return GRAPH_SUCCESS;
+	case TASK_FILL:
+		return graph->fill(graph, task->fill.x, task->fill.y, task->fill.color, task->fill.type);
 
-	if (geode_init(&graph) == GRAPH_SUCCESS)
-		return GRAPH_SUCCESS;
+	case TASK_PRINT:
+		return graph->print(graph, task->print.x, task->print.y, task->print.dx, task->print.dy, task->print.bmp, task->print.width, task->print.height, task->print.span, task->print.color);
 
-	return GRAPH_ERR;
+	case TASK_MOVE:
+		return graph->move(graph, task->move.x, task->move.y, task->move.dx, task->move.dy, task->move.mx, task->move.my);
+
+	case TASK_COPY:
+		return graph->copy(graph, task->copy.src, task->copy.dst, task->copy.dx, task->copy.dy, task->copy.srcspan, task->copy.dstspan);
+
+	default:
+		return -EINVAL;
+	}
 }
 
 
-int graph_open(unsigned int mem, uint8_t irq)
+int graph_schedule(graph_t *graph)
 {
-	int ret;
-	unsigned int mem_low, mem_high;
-
-	mem_low = mem / 2;
-	mem_high = mem / 2;
-
-	if ((mem_low < GRAPH_MIN_MEM) || (mem_high < GRAPH_MIN_MEM))
-		return GRAPH_ERR_MEM;
-
-	graph.low.fifo = NULL;
-	graph.high.fifo = NULL;
-
-	/* Allocate memory for task FIFO */
-	if ((graph.low.fifo = (char *)malloc(mem_low + mem_high)) == NULL)
-		return GRAPH_ERR_MEM;
-
-	/* Initialize low piority task FIFO */
-	graph.low.tasks = 0;
-	graph.low.stop = 0;
-	graph.low.free = graph.low.fifo;
-	graph.low.used = graph.low.fifo;
-	graph.low.end = graph.low.fifo + mem_low;
-
-	// init HIGH FIFO task buffer
-	graph.high.tasks = 0;
-	graph.high.stop = 0;
-	graph.high.fifo = graph.low.end;
-	graph.high.free = graph.high.fifo;
-	graph.high.used = graph.high.fifo;
-	graph.high.end = graph.high.fifo + mem_high;
-
-	if ((ret = graph.open(&graph, irq)) != GRAPH_SUCCESS)
-		graph.close(&graph);
-
-	return ret;
-}
-
-
-/* Function closes library */
-int graph_close()
-{
-	int ret;
-
-	ret = graph.close(&graph);
-	if (graph.low.fifo != NULL)
-		free(graph.low.fifo);
-
-	graph.low.fifo = NULL;
-
-	return ret;
-}
-
-
-int graph_mode(unsigned int mode, char freq)
-{
-	int ret;
-
-	if (graph.busy || graph.isbusy(&graph) || graph.low.tasks || graph.high.tasks)
-		return GRAPH_ERR_BUSY;
-
-	ret = graph.mode(&graph, mode, freq);
-	return ret;
-}
-
-
-int graph_vsync(void)
-{
-	int ret;
-
-	ret = graph.vsync;
-	graph.vsync = 0;
-
-	return ret;
-}
-
-
-int graph_schedule(void)
-{
+	graph_task_t *task;
 	graph_queue_t *q;
 
-	if (graph.busy)
-		return GRAPH_ERR_NESTED;
-	graph.busy = 1;
+	if (graph->busy)
+		return -EBUSY;
 
-	while (!graph.isbusy(&graph)) {
+	graph->busy = 1;
+	while (!graph->isbusy(graph)) {
+		q = &graph->hi;
 
-		q = &graph.high;
+		if (!q->tasks) {
+			q = &graph->lo;
 
-		if (q->tasks == 0) {
-
-			q = &graph.low;
-			if (q->tasks == 0) {
-				graph.busy = 0;
-				return GRAPH_SUCCESS;
+			if (!q->tasks) {
+				graph->busy = 0;
+				return EOK;
 			}
- 		}
-
-		if (*(int *)(q->used) == 0)
-			q->used = q->fifo;               // wrap buffer
-
-
-//		f = *(void **)(q->used + sizeof(int));
-#if 0
-    _ECX = (unsigned int)(q->used + sizeof(int) + sizeof(void *));
-    _EDI = (unsigned int)&graph;
-		f(&graph, arg);
-    asm {
-      popf
-      push ecx                         // arguments
-      push edi                         // &graph
-      call edx                         // call function
-    }
-#endif
-		q->used += *(int *)(q->used);      // next task
-		--(q->tasks);
-	}
-	graph.busy = 0;
-
-	return GRAPH_ERR_BUSY;
-}
-
-
-int graph_stop(int queue)
-{
-	if (queue != GRAPH_QUEUE_HIGH)
-		++graph.low.stop;
-
-	if (queue != GRAPH_QUEUE_LOW)
-		++graph.high.stop;
-
-	return GRAPH_SUCCESS;
-}
-
-
-int graph_start(int queue)
-{
-	int ret = GRAPH_ERR_STOP;
-
-	if (queue != GRAPH_QUEUE_HIGH)
-		if (graph.low.stop) {
-			--graph.low.stop;
-			ret = GRAPH_SUCCESS;
 		}
 
-	if (queue != GRAPH_QUEUE_LOW)
-		if (graph.high.stop) {
-			--graph.high.stop;
-		ret = GRAPH_SUCCESS;
-	}
+		if (!(((graph_task_t *)q->used)->size))
+			q->used = q->fifo;
 
-	return ret;
+		task = (graph_task_t *)q->used;
+		graph_exec(graph, task);
+		q->used += task->size;
+		q->tasks--;
+	}
+	graph->busy = 0;
+
+	return -EBUSY;
 }
 
 
-int graph_tasks(int queue)
-{
-	int ret = 0;
-
-	if (queue != GRAPH_QUEUE_HIGH)
-		ret += graph.low.tasks;
-
-	if (queue != GRAPH_QUEUE_LOW)
-		ret += graph.high.tasks;
-
-	return ret;
-}
-
-
-int graph_reset(int queue)
-{
-	if (graph.busy)
-		return GRAPH_ERR_NESTED;
-
-	if (queue != GRAPH_QUEUE_HIGH) {
-		graph.low.stop = 0;
-		graph.low.tasks = 0;
-		graph.low.free = graph.low.fifo;
-		graph.low.used = graph.low.fifo;
-	}
-	if (queue != GRAPH_QUEUE_LOW) {
-		graph.high.stop = 0;
-		graph.high.tasks = 0;
-		graph.high.free = graph.high.fifo;
-		graph.high.used = graph.high.fifo;
-	}
-	return GRAPH_SUCCESS;
-}
-
-
-/* Execute taks or put it into the queue */
-static int graph_exec(int (*func)(graph_t *, char *), int (*chk)(graph_t *, char *), char *arg, unsigned int bytes, int queue)
+/* Queues up task for execution */
+static int graph_queue(graph_t *graph, graph_task_t *task, unsigned char queue)
 {
 	graph_queue_t *q;
 
 	switch (queue) {
-	case GRAPH_QUEUE_LOW:
-		q = &graph.low;
+	case GRAPH_QUEUE_LO:
+		q = &graph->lo;
 		break;
-	case GRAPH_QUEUE_HIGH:
-		q = &graph.high;
+
+	case GRAPH_QUEUE_HI:
+		q = &graph->hi;
 		break;
+
 	default:
-		return GRAPH_ERR_ARG;
+		return -EINVAL;
 	}
 
-	if (q->stop != 0)
-		return GRAPH_ERR_STOP;
+	if (q->stop)
+		return -EFAULT;
 
-#ifdef GRAPH_VERIFY_ARG
-	if ((chk != NULL) && (chk(&graph, arg) != GRAPH_SUCCESS)) {
-		return GRAPH_ERR_ARG;
-	}
-#endif
+	if (graph->isbusy(graph) || graph->busy || graph->hi.tasks || q->tasks) {
+		if (q->free < q->used) {
+			if (q->free + task->size > q->used)
+				return -ENOSPC;
+		}
+		else if (q->free + task->size + sizeof(task->size) > q->end) {
+			if (q->fifo + task->size > q->used)
+				return -ENOSPC;
 
-	if (graph.isbusy(&graph) || graph.busy || graph.high.tasks || q->tasks) {
-
-		/* Free space is between free and used */
-		if (q->free < q->used) {  
-			if ((q->free + sizeof(int) + sizeof(void *) + bytes) >= q->used) {
-				return GRAPH_ERR_QUEUE;
-			}
- 		}
-
-		/* No free space at the end */
-		else if ((q->free + sizeof(int) + sizeof(void *) + bytes + sizeof(int)) > q->end) {
-
-			if ((q->fifo + sizeof(int) + sizeof(void *) + bytes) >= q->used) {
-				return GRAPH_ERR_QUEUE;
-			}
-			*(int *)(q->free) = 0;
+			((graph_task_t *)q->free)->size = 0;
 			q->free = q->fifo;
 		}
 
-		*(int *)(q->free) = sizeof(int) + sizeof(void *) + bytes;
-		*(void **)(q->free + sizeof(int)) = (void *)func;
+		memcpy(q->free, task, task->size);
+		q->free += task->size;
+		q->tasks++;
 
-		memcpy(q->free + sizeof(int) + sizeof(void *), arg, bytes);
-		q->free += sizeof(int) + sizeof(void *) + bytes;
+		/* Try to reschedule */
+		graph_schedule(graph);
 
-		++(q->tasks);
-		graph_schedule();                  // try to reschedule
-		return GRAPH_SUCCESS;
-	}
-	graph.busy = 1;
-
-	func(&graph, arg);                   // execute function
-
-	graph.busy = 0;
-	graph_schedule();                    // try to reschedule
-
-	return GRAPH_SUCCESS;
-}
-
-
-int graph_trigger()
-{
-	int ret;
-
-	ret = graph.trigger(&graph);
-
-	return ret;
-}
-
-
-/*
- * Graphics functions
- */
-
-
-int graph_line(unsigned int x, unsigned int y, int dx, int dy, unsigned int width, unsigned int color, int queue)
-{
-	if ((dx == 0) && (dy == 0))
-		return graph_rect(x, y, width, width, color, queue);
-
-	return graph_exec(graph.line, chk_line, (char *)&x, 6 * sizeof(int), queue);
-}
-
-
-int graph_fill(unsigned int x, unsigned int y, unsigned int color, int queue)
-{
-	return graph_exec(graph.fill, chk_fill, (char *)&x, 4 * sizeof(int), queue);
-}
-
-
-int graph_rect(unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color, int queue)
-{
-	return graph_exec(graph.rect, chk_rect, (char *)&x, 5 * sizeof(int), queue);
-}
-
-
-int graph_move(unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, int mx, int my, int queue)
-{
-	return graph_exec(graph.move, chk_move, (char *)&x, 6 * sizeof(int), queue);
-}
-
-
-int graph_copyin(unsigned int src, unsigned int dst, unsigned int dx, unsigned int dy, int srcspan, int dstspan, int queue)
-{
-	return graph_exec(graph.copyin, chk_copyin, (char *)&src, 6 * sizeof(int), queue);
-}
-
-
-int graph_copyto(char *src, unsigned int dst, unsigned int dx, unsigned int dy, int srcspan, int dstspan, int queue)
-{
-	return graph_exec(graph.copyto, chk_copyto, (char *)&src, 6 * sizeof(int), queue);
-}
-
-
-int graph_copyfrom(unsigned int src, char *dst, unsigned int dx, unsigned int dy, int srcspan, int dstspan, int queue)
-{
-	return graph_exec(graph.copyfrom, chk_copyfrom, (char *)&src, 6 * sizeof(int), queue);
-}
-
-
-int graph_copyout(char *src, char *dst, unsigned int dx, unsigned int dy, int srcspan, int dstspan, int queue)
-{
-	return graph_exec(graph.copyout, chk_copyout, (char *)&src, 6 * sizeof(int), queue);
-}
-
-
-int graph_colorset(char *colors, unsigned char first, unsigned char last)
-{
-	int ret;
-
-	ret = graph.colorset(&graph, colors, first, last);
-
-	return ret;
-}
-
-
-int graph_colorget(char *colors, unsigned char first, unsigned char last)
-{
-	int ret;
-
-	ret = graph.colorget(&graph, colors, first, last);
-
-	return ret;
-}
-
-
-int graph_cursorset(char *and, char *xor, unsigned char bg, unsigned char fg)
-{
-	int ret;
-
-	ret = graph.cursorset(&graph, and, xor, bg, fg);
-	return ret;
-}
-
-
-int graph_cursorpos(unsigned int x, unsigned int y)
-{
-	int ret;
-
-	ret = graph.cursorpos(&graph, x, y);
-	return ret;
-}
-
-
-int graph_cursorshow()
-{
-	int ret;
-
-	ret = graph.cursorshow(&graph);
-	return ret;
-}
-
-
-int graph_cursorhide()
-{
-	int ret;
-
-	ret = graph.cursorhide(&graph);
-
-	return ret;
-}
-
-
-int graph_print(char *text, unsigned int x, unsigned int y, char *fonts, unsigned int dx, unsigned int dy, unsigned int color, int queue)
-{
-	int ret;
-	unsigned int arg[8];
-	unsigned int *l;
-
-	arg[5] = dy;
-	arg[7] = color;
-
-	while (*text) {
-		l = (unsigned int *)(fonts + 16 * (*(unsigned char*)(text++)));
-
-	arg[0] = l[0];                     // character address
-	arg[1] = graph_addr(x, y);         // print address
-	arg[2] = l[1];                     // character width
-	arg[3] = l[2];                     // character height
-	arg[4] = l[1] * dx / l[2];         // print width
-	arg[6] = l[3];                     // character span
-	x += arg[4];
-
-	ret = graph_exec(graph.character, chk_character, (char *)arg, 8 * sizeof(int), queue);
-
-	if (ret != GRAPH_SUCCESS)
-		return ret;
+		return EOK;
 	}
 
-	return GRAPH_SUCCESS;
+	/* Execute task */
+	graph->busy = 1;
+	graph_exec(graph, task);
+	graph->busy = 0;
+
+	/* Try to reschedule */
+	graph_schedule(graph);
+
+	return EOK;
 }
 
 
-/*
- * Helper functions
- */
-
-
-char *graph_version()
+int graph_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, unsigned int stroke, unsigned int color, unsigned char queue)
 {
-	return GRAPH_VERSION;
+	graph_task_t task = {
+		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.line),
+		.type = TASK_LINE,
+		.line = { x, y, dx, dy, stroke, color }
+	};
+
+	return graph_queue(graph, &task, queue);
 }
 
 
-int graph_addr(unsigned int x, unsigned int y)
+int graph_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color, unsigned char queue)
+{
+	graph_task_t task = {
+		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.rect),
+		.type = TASK_RECT,
+		.rect = { x, y, dx, dy, color }
+	};
+
+	return graph_queue(graph, &task, queue);
+}
+
+
+int graph_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color, unsigned char type, unsigned char queue)
+{
+	graph_task_t task = {
+		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.fill),
+		.type = TASK_FILL,
+		.fill = { x, y, color, type }
+	};
+
+	return graph_queue(graph, &task, queue);
+}
+
+
+int graph_print(graph_t *graph, graph_font_t *font, const char *text, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color, unsigned char queue)
+{
+	graph_task_t task = {
+		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.print),
+		.type = TASK_PRINT,
+		.print = { x, y, dx / font->width, dy, NULL, font->width, font->height, font->span, color }
+	};
+	int err;
+
+	for (; *text; text++, task.print.x += task.print.dx) {
+		task.print.bmp = font->data + font->height * font->span * (*(unsigned char *)text - font->offs);
+		if ((err = graph_queue(graph, &task, queue)) < 0)
+			return err;
+	}
+
+	return EOK;
+}
+
+
+int graph_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, int mx, int my, unsigned char queue)
+{
+	graph_task_t task = {
+		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.move),
+		.type = TASK_MOVE,
+		.move = { x, y, dx, dy, mx, my }
+	};
+
+	return graph_queue(graph, &task, queue);
+}
+
+
+int graph_copy(graph_t *graph, void *src, void *dst, unsigned int dx, unsigned int dy, unsigned int srcspan, unsigned int dstspan, unsigned char queue)
+{
+	graph_task_t task = {
+		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.copy),
+		.type = TASK_COPY,
+		.copy = { src, dst, dx, dy, srcspan, dstspan }
+	};
+
+	return graph_queue(graph, &task, queue);
+}
+
+
+int graph_colorset(graph_t *graph, char *colors, unsigned char first, unsigned char last)
+{
+	return graph->colorset(graph, colors, first, last);
+}
+
+
+int graph_colorget(graph_t *graph, char *colors, unsigned char first, unsigned char last)
+{
+	return graph->colorget(graph, colors, first, last);
+}
+
+
+int graph_cursorset(graph_t *graph, char *and, char *xor, unsigned char bg, unsigned char fg)
+{
+	return graph->cursorset(graph, and, xor, bg, fg);
+}
+
+
+int graph_cursorpos(graph_t *graph, unsigned int x, unsigned int y)
+{
+	return graph->cursorpos(graph, x, y);
+}
+
+
+int graph_cursorshow(graph_t *graph)
+{
+	return graph->cursorshow(graph);
+}
+
+
+int graph_cursorhide(graph_t *graph)
+{
+	return graph->cursorhide(graph);
+}
+
+
+int graph_trigger(graph_t *graph)
+{
+	return graph->trigger(graph);
+}
+
+
+int graph_stop(graph_t *graph, unsigned int queue)
+{
+	if (queue != GRAPH_QUEUE_LO)
+		graph->hi.stop++;
+
+	if (queue != GRAPH_QUEUE_HI)
+		graph->lo.stop++;
+
+	return EOK;
+}
+
+
+int graph_start(graph_t *graph, unsigned int queue)
+{
+	if (queue != GRAPH_QUEUE_LO) {
+		if (graph->hi.stop)
+			graph->hi.stop--;
+	}
+
+	if (queue != GRAPH_QUEUE_HI) {
+		if (graph->lo.stop)
+			graph->lo.stop--;
+	}
+
+	return EOK;
+}
+
+
+int graph_tasks(graph_t *graph, unsigned int queue)
+{
+	int ret = 0;
+
+	if (queue != GRAPH_QUEUE_LO)
+		ret += graph->hi.tasks;
+
+	if (queue != GRAPH_QUEUE_HI)
+		ret += graph->lo.tasks;
+
+	return ret;
+}
+
+
+int graph_reset(graph_t *graph, unsigned int queue)
+{
+	if (graph->busy)
+		return -EBUSY;
+
+	if (queue != GRAPH_QUEUE_LO) {
+		graph->hi.stop = 0;
+		graph->hi.tasks = 0;
+		graph->hi.free = graph->hi.fifo;
+		graph->hi.used = graph->hi.fifo;
+	}
+
+	if (queue != GRAPH_QUEUE_HI) {
+		graph->lo.stop = 0;
+		graph->lo.tasks = 0;
+		graph->lo.free = graph->lo.fifo;
+		graph->lo.used = graph->lo.fifo;
+	}
+
+	return EOK;
+}
+
+
+int graph_vsync(graph_t *graph)
 {
 	int ret;
 
-#ifdef GRAPH_VERIFY_ARG
-	if ((x >= graph.width) || (y >= graph.height)) {
-		return GRAPH_ERR_ARG;
-	}
+	ret = graph->vsync;
+	graph->vsync = 0;
+
+	return ret;
+}
+
+
+int graph_mode(graph_t *graph, unsigned int mode, unsigned int freq)
+{
+	if (graph->busy || graph->isbusy(graph) || graph->hi.tasks || graph->lo.tasks)
+		return -EBUSY;
+
+	return graph->mode(graph, mode, freq);
+}
+
+
+void graph_close(graph_t *graph)
+{
+	graph->close(graph);
+	free(graph->hi.fifo);
+}
+
+
+int graph_open(graph_t *graph, unsigned int mem, unsigned int adapter)
+{
+	unsigned int himem, lomem;
+	int err;
+
+	/* Check min queue size */
+	if ((himem = lomem = mem >> 1) < 2 * sizeof(graph_task_t) + sizeof(unsigned int))
+		return -EINVAL;
+
+	graph->lo.fifo = NULL;
+	graph->hi.fifo = NULL;
+
+	if ((graph->hi.fifo = malloc(himem + lomem)) == NULL)
+		return -ENOMEM;
+
+	/* Initialize high piority task FIFO */
+	graph->hi.tasks = 0;
+	graph->hi.stop = 0;
+	graph->hi.free = graph->hi.fifo;
+	graph->hi.used = graph->hi.fifo;
+	graph->hi.end = graph->hi.fifo + himem;
+
+	/* Initialize low priority task FIFO */
+	graph->lo.tasks = 0;
+	graph->lo.stop = 0;
+	graph->lo.fifo = graph->hi.end;
+	graph->lo.free = graph->lo.fifo;
+	graph->lo.used = graph->lo.fifo;
+	graph->lo.end = graph->lo.fifo + lomem;
+
+	/* Set default graphics tasks functions */
+	graph->line = soft_line;
+	graph->rect = soft_rect;
+	graph->fill = soft_fill;
+	graph->print = soft_print;
+	graph->move = soft_move;
+	graph->copy = soft_copy;
+
+	/* Initialize graphics adapter context */
+	do {
+#ifdef GRAPH_CT69000
+		if ((adapter & GRAPH_CT69000) && ((err = ct69000_open(graph)) != -ENODEV))
+			break;
 #endif
 
-	ret = (graph.width * y + x) * graph.depth;
-	return ret;
+#ifdef GRAPH_SAVAGE4
+		if ((adapter & GRAPH_SAVAGE4) && ((err = savage4_open(graph)) != -ENODEV))
+			break;
+#endif
+
+#ifdef GRAPH_GEODELX
+		if ((adapter & GRAPH_GEODELX) && ((err = geode_open(graph)) != -ENODEV))
+			break;
+#endif
+
+#ifdef GRAPH_VIRTIOGPU
+		if ((adapter & GRAPH_VIRTIOGPU) && ((err = virtiogpu_open(graph)) != -ENODEV))
+			break;
+#endif
+	} while (0);
+
+	if (err < 0)
+		free(graph->hi.fifo);
+
+	return err;
 }
 
 
-int graph_span()
+void graph_done(void)
 {
-	int ret;
+#ifdef GRAPH_CT69000
+	ct69000_done();
+#endif
 
-	ret = graph.width * graph.depth;
-	return ret;
+#ifdef GRAPH_SAVAGE4
+	savage4_done();
+#endif
+
+#ifdef GRAPH_GEODELX
+	geode_done();
+#endif
+
+#ifdef GRAPH_VIRTIOGPU
+	virtiogpu_done();
+#endif
 }
 
 
-int graph_offset()
+int graph_init(void)
 {
-	int ret;
+	int err;
 
-	ret = graph.width * graph.height * graph.depth;
-	return ret;
-}
+#ifdef GRAPH_CT69000
+	if ((err = ct69000_init()) < 0)
+		return err;
+#endif
 
+#ifdef GRAPH_SAVAGE4
+	if ((err = savage4_init()) < 0)
+		return err;
+#endif
 
-int graph_size()
-{
-	int ret;
+#ifdef GRAPH_GEODELX
+	if ((err = geode_init()) < 0)
+		return err;
+#endif
 
-	ret = graph.memsz - graph.cursorsz - graph.width * graph.height * graph.depth;
-	return ret;
-}
+#ifdef GRAPH_VIRTIOGPU
+	if ((err = virtiogpu_init()) < 0)
+		return err;
+#endif
 
-
-int graph_width(char *text, char *fonts, unsigned int dx)
-{
-	unsigned int *l;
-	unsigned int width;
-	unsigned int ret = 0;
-
-	while (*text) {
-		l = (unsigned int *)(fonts + 16 * (*(unsigned char*)(text++)));
-		width = l[1] * dx / l[2];          // character width
-
-		if (width > l[1])
-			return GRAPH_ERR_ARG;            // improper stretch
-		ret += width;
-	}
-	return ret;
+	return EOK;
 }

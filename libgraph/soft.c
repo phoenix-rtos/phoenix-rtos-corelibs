@@ -84,7 +84,7 @@ int soft_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, un
 #endif
 
 	if (!dx && !dy)
-		return graph_rect(x, y, stroke, stroke, color, GRAPH_QUEUE_HIGH);
+		return soft_rect(graph, x, y, stroke, stroke, color);
 
 	data = soft_data(graph, x, y + stroke - 1);
 	sy = graph->width * graph->depth;
@@ -265,7 +265,7 @@ static int cmp_bound(unsigned int data, unsigned int color)
 }
 
 
-int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color, fill_t type)
+int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color, unsigned char type)
 {
 	int (*cmp)(unsigned int, unsigned int);
 	int *stack, *sp, lx, rx, dy;
@@ -433,7 +433,7 @@ int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color
 }
 
 
-int soft_char(graph_t *graph, unsigned int x, unsigned int y, unsigned char dx, unsigned char dy, const unsigned char *bmp, unsigned char width, unsigned char height, unsigned char span, unsigned int color)
+int soft_print(graph_t *graph, unsigned int x, unsigned int y, unsigned char dx, unsigned char dy, unsigned char *bmp, unsigned char width, unsigned char height, unsigned char span, unsigned int color)
 {
 	uint32_t n, val, line[0x100];
 	uint8_t sx, sy, ax, ay, tmp;
