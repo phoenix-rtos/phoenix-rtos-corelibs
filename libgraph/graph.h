@@ -15,6 +15,12 @@
 #ifndef _GRAPH_H_
 #define _GRAPH_H_
 
+#include <sys/types.h>
+
+
+/* Check graphics functions arguments */
+// #define GRAPH_VERIFY_ARGS
+
 
 /* Graphics adapters */
 // #define GRAPH_CT69000   (1 << 0)
@@ -22,10 +28,6 @@
 // #define GRAPH_GEODELX   (1 << 2)
 #define GRAPH_VIRTIOGPU (1 << 3)
 #define GRAPH_ANY       -1
-
-
-/* Check graphics functions arguments */
-// #define GRAPH_VERIFY_ARGS
 
 
 /* Graphics modes */
@@ -67,13 +69,20 @@ enum {
 
 /* Screen refresh rates */
 enum {
-	GRAPH_87Hzi = (1 << 0),
-	GRAPH_56Hz  = (1 << 1),
-	GRAPH_60Hz  = (1 << 2),
-	GRAPH_70Hz  = (1 << 3),
-	GRAPH_72Hz  = (1 << 4),
-	GRAPH_75Hz  = (1 << 5),
-	GRAPH_80Hz  = (1 << 6)
+	GRAPH_56Hz  = (1 << 0),
+	GRAPH_60Hz  = (1 << 1),
+	GRAPH_70Hz  = (1 << 2),
+	GRAPH_72Hz  = (1 << 3),
+	GRAPH_75Hz  = (1 << 4),
+	GRAPH_80Hz  = (1 << 5),
+	GRAPH_87Hz  = (1 << 6),
+	GRAPH_90Hz  = (1 << 7),
+	GRAPH_120Hz = (1 << 8),
+	GRAPH_144HZ = (1 << 9),
+	GRAPH_165Hz = (1 << 10),
+	GRAPH_240Hz = (1 << 11),
+	GRAPH_300Hz = (1 << 12),
+	GRAPH_360Hz = (1 << 13)
 };
 
 
@@ -94,21 +103,21 @@ enum {
 
 
 typedef struct {
-	unsigned char width;  /* Glyph width in pixels */
-	unsigned char height; /* Glyph height in pixels */
-	unsigned char span;   /* Glyph row span in bytes */
-	unsigned char offs;   /* First character (ASCII offset) */
-	unsigned char *data;  /* Font data */
+	unsigned char width;          /* Glyph width in pixels */
+	unsigned char height;         /* Glyph height in pixels */
+	unsigned char span;           /* Glyph row span in bytes */
+	unsigned char offs;           /* First character (ASCII offset) */
+	unsigned char *data;          /* Font data */
 } graph_font_t;
 
 
 typedef struct {
-	unsigned int tasks;  /* Number of tasks to process */
-	unsigned int stop;   /* Stop counter */
-	unsigned char *fifo; /* Task buffer start address */
-	unsigned char *free; /* Free position */
-	unsigned char *used; /* Used position */
-	unsigned char *end;  /* Task buffer end address */
+	unsigned char *fifo;          /* Task buffer start address */
+	unsigned char *end;           /* Task buffer end address */
+	unsigned char *free;          /* Free position */
+	volatile unsigned char *used; /* Used position */
+	volatile unsigned int tasks;  /* Number of tasks to process */
+	unsigned int stop;            /* Stop counter */
 } graph_queue_t;
 
 
@@ -117,70 +126,72 @@ typedef struct _graph_t graph_t;
 
 struct _graph_t {
 	/* Graph info */
-	unsigned char busy;  /* Is graph busy? */
-	void *adapter;       /* Graphics adapter */
+	void *adapter;                /* Graphics adapter */
 
 	/* Screen info */
-	void *data;          /* Screen buffer */
-	unsigned int width;  /* Screen width */
-	unsigned int height; /* Screen height */
-	unsigned int vsync;  /* Screen vertical synchronizations */
-	unsigned char depth; /* Screen color depth */
+	void *data;                   /* Screen buffer */
+	unsigned int width;           /* Screen width */
+	unsigned int height;          /* Screen height */
+	unsigned char depth;          /* Screen color depth */
+	volatile unsigned int vsync;  /* Vertical synchronizations */
 
 	/* Task queues */
-	graph_queue_t hi;    /* High priority tasks queue */
-	graph_queue_t lo;    /* Low priority tasks queue */
+	graph_queue_t hi;             /* High priority tasks */
+	graph_queue_t lo;             /* Low priority tasks */
+
+	/* Synchronization */
+	handle_t lock;                /* Graph mutex */
 
 	/* Control functions */
-	int (*close)(graph_t *graph);
-	int (*mode)(graph_t *graph, int mode, char freq);
-	int (*isbusy)(graph_t *graph);
-	int (*trigger)(graph_t *graph);
+	void (*close)(graph_t *);
+	int (*mode)(graph_t *, unsigned int, unsigned int);
+	int (*isbusy)(graph_t *);
+	int (*trigger)(graph_t *);
 
 	/* Draw functions */
-	int (*line)(graph_t *graph, unsigned int, unsigned int, int, int, unsigned int, unsigned int);
-	int (*rect)(graph_t *graph, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int);
-	int (*fill)(graph_t *graph, unsigned int, unsigned int, unsigned int, unsigned char);
-	int (*print)(graph_t *graph, unsigned int, unsigned int, unsigned char, unsigned char, unsigned char *, unsigned char, unsigned char, unsigned char, unsigned int);
+	int (*line)(graph_t *, unsigned int, unsigned int, int, int, unsigned int, unsigned int);
+	int (*rect)(graph_t *, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int);
+	int (*fill)(graph_t *, unsigned int, unsigned int, unsigned int, unsigned char);
+	int (*print)(graph_t *, unsigned int, unsigned int, unsigned char, unsigned char, unsigned char *, unsigned char, unsigned char, unsigned char, unsigned int);
 
 	/* Copy functions */
-	int (*move)(graph_t *graph, unsigned int, unsigned int, unsigned int, unsigned int, int, int);
-	int (*copy)(graph_t *graph, void *, void *, unsigned int, unsigned int, unsigned int, unsigned int);
+	int (*move)(graph_t *, unsigned int, unsigned int, unsigned int, unsigned int, int, int);
+	int (*copy)(graph_t *, void *, void *, unsigned int, unsigned int, unsigned int, unsigned int);
 
 	/* Color palette functions */
-	int (*colorset)(graph_t *graph, char *colors, unsigned char first, unsigned char last);
-	int (*colorget)(graph_t *graph, char *colors, unsigned char first, unsigned char last);
+	int (*colorset)(graph_t *, char *, unsigned char, unsigned char);
+	int (*colorget)(graph_t *, char *, unsigned char, unsigned char);
 
 	/* Cursor functions */
-	int (*cursorset)(graph_t *graph, char *and, char *xor, unsigned char bg, unsigned char fg);
-	int (*cursorpos)(graph_t *graph, unsigned int x, unsigned int y);
-	int (*cursorshow)(graph_t *graph);
-	int (*cursorhide)(graph_t *graph);
+	int (*cursorset)(graph_t *, char *, char *, unsigned char, unsigned char);
+	int (*cursorpos)(graph_t *, unsigned int, unsigned int);
+	int (*cursorshow)(graph_t *);
+	int (*cursorhide)(graph_t *);
 };
 
 
 /* Draws line */
-extern int graph_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, unsigned int stroke, unsigned int color, unsigned char queue);
+extern int graph_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, unsigned int stroke, unsigned int color, unsigned int queue);
 
 
 /* Draws rectangle */
-extern int graph_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color, unsigned char queue);
+extern int graph_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color, unsigned int queue);
 
 
 /* Fills polygon */
-extern int graph_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color, unsigned char type, unsigned char queue);
+extern int graph_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color, unsigned int type, unsigned int queue);
 
 
 /* Prints text */
-extern int graph_print(graph_t *graph, graph_font_t *font, const char *text, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color, unsigned char queue);
+extern int graph_print(graph_t *graph, graph_font_t *font, const char *text, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color, unsigned int queue);
 
 
 /* Moves data */
-extern int graph_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, int mx, int my, unsigned char queue);
+extern int graph_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, int mx, int my, unsigned int queue);
 
 
 /* Copies data */
-extern int graph_copy(graph_t *graph, void *src, void *dst, unsigned int dx, unsigned int dy, unsigned int srcspan, unsigned int dstspan, unsigned char queue);
+extern int graph_copy(graph_t *graph, void *src, void *dst, unsigned int dx, unsigned int dy, unsigned int srcspan, unsigned int dstspan, unsigned int queue);
 
 
 /* Sets color palette */

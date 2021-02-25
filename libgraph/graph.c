@@ -16,6 +16,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <sys/threads.h>
+
 #include "graph.h"
 #include "soft.h"
 
@@ -32,8 +34,8 @@ enum {
 
 
 typedef struct {
-	unsigned int size; /* Task size */
-	unsigned int type; /* Task type */
+	unsigned int size;
+	unsigned int type;
 
 	union {
 		struct {
@@ -57,7 +59,7 @@ typedef struct {
 			unsigned int x;
 			unsigned int y;
 			unsigned int color;
-			unsigned char type;
+			unsigned int type;
 		} fill;
 
 		struct {
@@ -122,7 +124,7 @@ extern int virtiogpu_init(void);
 
 
 /* Executes task */
-static int graph_exec(graph_t *graph, graph_task_t *task)
+static int _graph_exec(graph_t *graph, graph_task_t *task)
 {
 	switch (task->type) {
 	case TASK_LINE:
@@ -154,10 +156,9 @@ int graph_schedule(graph_t *graph)
 	graph_task_t *task;
 	graph_queue_t *q;
 
-	if (graph->busy)
-		return -EBUSY;
+	if (mutexTry(graph->lock) < 0)
+		return -EAGAIN;
 
-	graph->busy = 1;
 	while (!graph->isbusy(graph)) {
 		q = &graph->hi;
 
@@ -165,7 +166,7 @@ int graph_schedule(graph_t *graph)
 			q = &graph->lo;
 
 			if (!q->tasks) {
-				graph->busy = 0;
+				mutexUnlock(graph->lock);
 				return EOK;
 			}
 		}
@@ -174,18 +175,19 @@ int graph_schedule(graph_t *graph)
 			q->used = q->fifo;
 
 		task = (graph_task_t *)q->used;
-		graph_exec(graph, task);
+		_graph_exec(graph, task);
 		q->used += task->size;
 		q->tasks--;
 	}
-	graph->busy = 0;
+
+	mutexUnlock(graph->lock);
 
 	return -EBUSY;
 }
 
 
 /* Queues up task for execution */
-static int graph_queue(graph_t *graph, graph_task_t *task, unsigned char queue)
+static int graph_queue(graph_t *graph, graph_task_t *task, unsigned int queue)
 {
 	graph_queue_t *q;
 
@@ -203,9 +205,12 @@ static int graph_queue(graph_t *graph, graph_task_t *task, unsigned char queue)
 	}
 
 	if (q->stop)
-		return -EFAULT;
+		return -EACCES;
 
-	if (graph->isbusy(graph) || graph->busy || graph->hi.tasks || q->tasks) {
+	mutexLock(graph->lock);
+
+	/* Queue up task */
+	if (graph->isbusy(graph) || graph->hi.tasks || q->tasks) {
 		if (q->free < q->used) {
 			if (q->free + task->size > q->used)
 				return -ENOSPC;
@@ -221,17 +226,13 @@ static int graph_queue(graph_t *graph, graph_task_t *task, unsigned char queue)
 		memcpy(q->free, task, task->size);
 		q->free += task->size;
 		q->tasks++;
-
-		/* Try to reschedule */
-		graph_schedule(graph);
-
-		return EOK;
+	}
+	/* Execute task */
+	else {
+		_graph_exec(graph, task);
 	}
 
-	/* Execute task */
-	graph->busy = 1;
-	graph_exec(graph, task);
-	graph->busy = 0;
+	mutexUnlock(graph->lock);
 
 	/* Try to reschedule */
 	graph_schedule(graph);
@@ -240,48 +241,48 @@ static int graph_queue(graph_t *graph, graph_task_t *task, unsigned char queue)
 }
 
 
-int graph_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, unsigned int stroke, unsigned int color, unsigned char queue)
+int graph_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, unsigned int stroke, unsigned int color, unsigned int queue)
 {
 	graph_task_t task = {
-		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.line),
 		.type = TASK_LINE,
-		.line = { x, y, dx, dy, stroke, color }
+		.line = { x, y, dx, dy, stroke, color },
+		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.line)
 	};
 
 	return graph_queue(graph, &task, queue);
 }
 
 
-int graph_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color, unsigned char queue)
+int graph_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color, unsigned int queue)
 {
 	graph_task_t task = {
-		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.rect),
 		.type = TASK_RECT,
-		.rect = { x, y, dx, dy, color }
+		.rect = { x, y, dx, dy, color },
+		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.rect)
 	};
 
 	return graph_queue(graph, &task, queue);
 }
 
 
-int graph_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color, unsigned char type, unsigned char queue)
+int graph_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color, unsigned int type, unsigned int queue)
 {
 	graph_task_t task = {
-		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.fill),
 		.type = TASK_FILL,
-		.fill = { x, y, color, type }
+		.fill = { x, y, color, type },
+		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.fill)
 	};
 
 	return graph_queue(graph, &task, queue);
 }
 
 
-int graph_print(graph_t *graph, graph_font_t *font, const char *text, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color, unsigned char queue)
+int graph_print(graph_t *graph, graph_font_t *font, const char *text, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color, unsigned int queue)
 {
 	graph_task_t task = {
-		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.print),
 		.type = TASK_PRINT,
-		.print = { x, y, dx / font->width, dy, NULL, font->width, font->height, font->span, color }
+		.print = { x, y, dx * font->width / font->height, dy, NULL, font->width, font->height, font->span, color },
+		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.print)
 	};
 	int err;
 
@@ -295,24 +296,24 @@ int graph_print(graph_t *graph, graph_font_t *font, const char *text, unsigned i
 }
 
 
-int graph_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, int mx, int my, unsigned char queue)
+int graph_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, int mx, int my, unsigned int queue)
 {
 	graph_task_t task = {
-		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.move),
 		.type = TASK_MOVE,
-		.move = { x, y, dx, dy, mx, my }
+		.move = { x, y, dx, dy, mx, my },
+		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.move)
 	};
 
 	return graph_queue(graph, &task, queue);
 }
 
 
-int graph_copy(graph_t *graph, void *src, void *dst, unsigned int dx, unsigned int dy, unsigned int srcspan, unsigned int dstspan, unsigned char queue)
+int graph_copy(graph_t *graph, void *src, void *dst, unsigned int dx, unsigned int dy, unsigned int srcspan, unsigned int dstspan, unsigned int queue)
 {
 	graph_task_t task = {
-		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.copy),
 		.type = TASK_COPY,
-		.copy = { src, dst, dx, dy, srcspan, dstspan }
+		.copy = { src, dst, dx, dy, srcspan, dstspan },
+		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.copy)
 	};
 
 	return graph_queue(graph, &task, queue);
@@ -405,22 +406,24 @@ int graph_tasks(graph_t *graph, unsigned int queue)
 
 int graph_reset(graph_t *graph, unsigned int queue)
 {
-	if (graph->busy)
-		return -EBUSY;
+	if (mutexTry(graph->lock) < 0)
+		return -EAGAIN;
 
 	if (queue != GRAPH_QUEUE_LO) {
-		graph->hi.stop = 0;
-		graph->hi.tasks = 0;
 		graph->hi.free = graph->hi.fifo;
 		graph->hi.used = graph->hi.fifo;
+		graph->hi.tasks = 0;
+		graph->hi.stop = 0;
 	}
 
 	if (queue != GRAPH_QUEUE_HI) {
-		graph->lo.stop = 0;
-		graph->lo.tasks = 0;
 		graph->lo.free = graph->lo.fifo;
 		graph->lo.used = graph->lo.fifo;
+		graph->lo.tasks = 0;
+		graph->lo.stop = 0;
 	}
+
+	mutexUnlock(graph->lock);
 
 	return EOK;
 }
@@ -439,16 +442,23 @@ int graph_vsync(graph_t *graph)
 
 int graph_mode(graph_t *graph, unsigned int mode, unsigned int freq)
 {
-	if (graph->busy || graph->isbusy(graph) || graph->hi.tasks || graph->lo.tasks)
-		return -EBUSY;
+	int ret;
 
-	return graph->mode(graph, mode, freq);
+	if (mutexTry(graph->lock) < 0)
+		return -EAGAIN;
+
+	ret = (graph->isbusy(graph) || graph->hi.tasks || graph->lo.tasks) ? -EBUSY : graph->mode(graph, mode, freq);
+
+	mutexUnlock(graph->lock);
+
+	return ret;
 }
 
 
 void graph_close(graph_t *graph)
 {
 	graph->close(graph);
+	resourceDestroy(graph->lock);
 	free(graph->hi.fifo);
 }
 
@@ -459,31 +469,33 @@ int graph_open(graph_t *graph, unsigned int mem, unsigned int adapter)
 	int err;
 
 	/* Check min queue size */
-	if ((himem = lomem = mem >> 1) < 2 * sizeof(graph_task_t) + sizeof(unsigned int))
+	if ((himem = lomem = mem >> 1) < (sizeof(graph_task_t) << 1) + sizeof(unsigned int))
 		return -EINVAL;
-
-	graph->lo.fifo = NULL;
-	graph->hi.fifo = NULL;
 
 	if ((graph->hi.fifo = malloc(himem + lomem)) == NULL)
 		return -ENOMEM;
 
+	if ((err = mutexCreate(&graph->lock)) < 0) {
+		free(graph->hi.fifo);
+		return err;
+	}
+
 	/* Initialize high piority task FIFO */
-	graph->hi.tasks = 0;
-	graph->hi.stop = 0;
+	graph->hi.end = graph->hi.fifo + himem;
 	graph->hi.free = graph->hi.fifo;
 	graph->hi.used = graph->hi.fifo;
-	graph->hi.end = graph->hi.fifo + himem;
+	graph->hi.tasks = 0;
+	graph->hi.stop = 0;
 
 	/* Initialize low priority task FIFO */
-	graph->lo.tasks = 0;
-	graph->lo.stop = 0;
 	graph->lo.fifo = graph->hi.end;
+	graph->lo.end = graph->lo.fifo + lomem;
 	graph->lo.free = graph->lo.fifo;
 	graph->lo.used = graph->lo.fifo;
-	graph->lo.end = graph->lo.fifo + lomem;
+	graph->lo.tasks = 0;
+	graph->lo.stop = 0;
 
-	/* Set default graphics tasks functions */
+	/* Set default graphics functions */
 	graph->line = soft_line;
 	graph->rect = soft_rect;
 	graph->fill = soft_fill;
@@ -512,10 +524,13 @@ int graph_open(graph_t *graph, unsigned int mem, unsigned int adapter)
 		if ((adapter & GRAPH_VIRTIOGPU) && ((err = virtiogpu_open(graph)) != -ENODEV))
 			break;
 #endif
+		err = -ENODEV;
 	} while (0);
 
-	if (err < 0)
+	if (err < 0) {
+		resourceDestroy(graph->lock);
 		free(graph->hi.fifo);
+	}
 
 	return err;
 }
