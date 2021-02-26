@@ -27,62 +27,63 @@
 // #define GRAPH_SAVAGE4   (1 << 1)
 // #define GRAPH_GEODELX   (1 << 2)
 #define GRAPH_VIRTIOGPU (1 << 3)
+#define GRAPH_NONE       0
 #define GRAPH_ANY       -1
 
 
 /* Graphics modes */
 enum {
-	GRAPH_640x480x8    = 0,
-	GRAPH_800x600x8    = 1,
-	GRAPH_1024x768x8   = 2,
-	GRAPH_1280x1024x8  = 3,
-	GRAPH_640x480x16   = 100,
-	GRAPH_800x600x16   = 101,
-	GRAPH_1024x768x16  = 102,
-	GRAPH_640x480x32   = 200,
-	GRAPH_800x600x32   = 201,
-	GRAPH_832x624x32   = 202,
-	GRAPH_896x672x32   = 203,
-	GRAPH_928x696x32   = 204,
-	GRAPH_960x540x32   = 205,
-	GRAPH_960x600x32   = 206,
-	GRAPH_960x720x32   = 207,
-	GRAPH_1024x576x32  = 208,
-	GRAPH_1024x768x32  = 209,
-	GRAPH_1152x864x32  = 210,
-	GRAPH_1280x720x32  = 211,
-	GRAPH_1280x800x32  = 212,
-	GRAPH_1280x960x32  = 213,
-	GRAPH_1280x1024x32 = 214,
-	GRAPH_1360x768x32  = 215,
-	GRAPH_1368x768x32  = 216,
-	GRAPH_1400x900x32  = 217,
-	GRAPH_1400x1050x32 = 218,
-	GRAPH_1440x810x32  = 219,
-	GRAPH_1440x900x32  = 220,
-	GRAPH_1600x900x32  = 221,
-	GRAPH_1600x1024x32 = 222,
-	GRAPH_1680x1050x32 = 223,
-	GRAPH_1920x1080x32 = 224
+	GRAPH_640x480x8,
+	GRAPH_800x600x8,
+	GRAPH_1024x768x8,
+	GRAPH_1280x1024x8,
+	GRAPH_640x480x16,
+	GRAPH_800x600x16,
+	GRAPH_1024x768x16,
+	GRAPH_640x480x32,
+	GRAPH_800x600x32,
+	GRAPH_832x624x32,
+	GRAPH_896x672x32,
+	GRAPH_928x696x32,
+	GRAPH_960x540x32,
+	GRAPH_960x600x32,
+	GRAPH_960x720x32,
+	GRAPH_1024x576x32,
+	GRAPH_1024x768x32,
+	GRAPH_1152x864x32,
+	GRAPH_1280x720x32,
+	GRAPH_1280x800x32,
+	GRAPH_1280x960x32,
+	GRAPH_1280x1024x32,
+	GRAPH_1360x768x32,
+	GRAPH_1368x768x32,
+	GRAPH_1400x900x32,
+	GRAPH_1400x1050x32,
+	GRAPH_1440x810x32,
+	GRAPH_1440x900x32,
+	GRAPH_1600x900x32,
+	GRAPH_1600x1024x32,
+	GRAPH_1680x1050x32,
+	GRAPH_1920x1080x32
 };
 
 
 /* Screen refresh rates */
 enum {
-	GRAPH_56Hz  = (1 << 0),
-	GRAPH_60Hz  = (1 << 1),
-	GRAPH_70Hz  = (1 << 2),
-	GRAPH_72Hz  = (1 << 3),
-	GRAPH_75Hz  = (1 << 4),
-	GRAPH_80Hz  = (1 << 5),
-	GRAPH_87Hz  = (1 << 6),
-	GRAPH_90Hz  = (1 << 7),
-	GRAPH_120Hz = (1 << 8),
-	GRAPH_144HZ = (1 << 9),
-	GRAPH_165Hz = (1 << 10),
-	GRAPH_240Hz = (1 << 11),
-	GRAPH_300Hz = (1 << 12),
-	GRAPH_360Hz = (1 << 13)
+	GRAPH_56Hz,
+	GRAPH_60Hz,
+	GRAPH_70Hz,
+	GRAPH_72Hz,
+	GRAPH_75Hz,
+	GRAPH_80Hz,
+	GRAPH_87Hz,
+	GRAPH_90Hz,
+	GRAPH_120Hz,
+	GRAPH_144HZ,
+	GRAPH_165Hz,
+	GRAPH_240Hz,
+	GRAPH_300Hz,
+	GRAPH_360Hz
 };
 
 
@@ -103,21 +104,21 @@ enum {
 
 
 typedef struct {
-	unsigned char width;          /* Glyph width in pixels */
-	unsigned char height;         /* Glyph height in pixels */
-	unsigned char span;           /* Glyph row span in bytes */
-	unsigned char offs;           /* First character (ASCII offset) */
-	unsigned char *data;          /* Font data */
+	unsigned char width;  /* Glyph width in pixels */
+	unsigned char height; /* Glyph height in pixels */
+	unsigned char span;   /* Glyph row span in bytes */
+	unsigned char offs;   /* First character (ASCII offset) */
+	unsigned char *data;  /* Font data */
 } graph_font_t;
 
 
 typedef struct {
-	unsigned char *fifo;          /* Task buffer start address */
-	unsigned char *end;           /* Task buffer end address */
-	unsigned char *free;          /* Free position */
-	volatile unsigned char *used; /* Used position */
-	volatile unsigned int tasks;  /* Number of tasks to process */
-	unsigned int stop;            /* Stop counter */
+	unsigned int stop;    /* Stop counter */
+	unsigned int tasks;   /* Number of tasks to process */
+	unsigned char *fifo;  /* Task buffer start address */
+	unsigned char *end;   /* Task buffer end address */
+	unsigned char *free;  /* Free position */
+	unsigned char *used;  /* Used position */
 } graph_queue_t;
 
 
@@ -126,21 +127,22 @@ typedef struct _graph_t graph_t;
 
 struct _graph_t {
 	/* Graph info */
-	void *adapter;                /* Graphics adapter */
+	void *adapter;        /* Graphics adapter */
 
 	/* Screen info */
-	void *data;                   /* Screen buffer */
-	unsigned int width;           /* Screen width */
-	unsigned int height;          /* Screen height */
-	unsigned char depth;          /* Screen color depth */
-	volatile unsigned int vsync;  /* Vertical synchronizations */
+	void *data;           /* Screen buffer */
+	unsigned int width;   /* Screen width */
+	unsigned int height;  /* Screen height */
+	unsigned char depth;  /* Screen color depth */
+	unsigned int vsync;   /* Vertical synchronizations */
 
 	/* Task queues */
-	graph_queue_t hi;             /* High priority tasks */
-	graph_queue_t lo;             /* Low priority tasks */
+	graph_queue_t hi;     /* High priority tasks */
+	graph_queue_t lo;     /* Low priority tasks */
 
 	/* Synchronization */
-	handle_t lock;                /* Graph mutex */
+	handle_t lock;        /* Tasks synchronization mutex */
+	handle_t vlock;       /* Vertical synchronization mutex */
 
 	/* Control functions */
 	void (*close)(graph_t *);

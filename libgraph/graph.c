@@ -151,26 +151,21 @@ static int _graph_exec(graph_t *graph, graph_task_t *task)
 }
 
 
-int graph_schedule(graph_t *graph)
+/* Schedules and executes tasks */
+static int _graph_schedule(graph_t *graph)
 {
 	graph_task_t *task;
 	graph_queue_t *q;
 
-	if (mutexTry(graph->lock) < 0)
-		return -EAGAIN;
-
 	while (!graph->isbusy(graph)) {
 		q = &graph->hi;
-
 		if (!q->tasks) {
 			q = &graph->lo;
-
-			if (!q->tasks) {
-				mutexUnlock(graph->lock);
+			if (!q->tasks)
 				return EOK;
-			}
 		}
 
+		/* Wrap buffer */
 		if (!(((graph_task_t *)q->used)->size))
 			q->used = q->fifo;
 
@@ -180,9 +175,22 @@ int graph_schedule(graph_t *graph)
 		q->tasks--;
 	}
 
+	return -EBUSY;
+}
+
+
+int graph_schedule(graph_t *graph)
+{
+	int ret;
+
+	if (mutexTry(graph->lock) < 0)
+		return -EAGAIN;
+
+	ret = _graph_schedule(graph);
+
 	mutexUnlock(graph->lock);
 
-	return -EBUSY;
+	return ret;
 }
 
 
@@ -226,6 +234,9 @@ static int graph_queue(graph_t *graph, graph_task_t *task, unsigned int queue)
 		memcpy(q->free, task, task->size);
 		q->free += task->size;
 		q->tasks++;
+
+		/* Try to reschedule */
+		_graph_schedule(graph);
 	}
 	/* Execute task */
 	else {
@@ -233,9 +244,6 @@ static int graph_queue(graph_t *graph, graph_task_t *task, unsigned int queue)
 	}
 
 	mutexUnlock(graph->lock);
-
-	/* Try to reschedule */
-	graph_schedule(graph);
 
 	return EOK;
 }
@@ -406,8 +414,7 @@ int graph_tasks(graph_t *graph, unsigned int queue)
 
 int graph_reset(graph_t *graph, unsigned int queue)
 {
-	if (mutexTry(graph->lock) < 0)
-		return -EAGAIN;
+	mutexLock(graph->lock);
 
 	if (queue != GRAPH_QUEUE_LO) {
 		graph->hi.free = graph->hi.fifo;
@@ -433,8 +440,12 @@ int graph_vsync(graph_t *graph)
 {
 	int ret;
 
+	mutexLock(graph->vlock);
+
 	ret = graph->vsync;
 	graph->vsync = 0;
+
+	mutexUnlock(graph->vlock);
 
 	return ret;
 }
@@ -442,22 +453,17 @@ int graph_vsync(graph_t *graph)
 
 int graph_mode(graph_t *graph, unsigned int mode, unsigned int freq)
 {
-	int ret;
+	graph_reset(graph, GRAPH_QUEUE_BOTH);
+	while (graph->isbusy(graph));
 
-	if (mutexTry(graph->lock) < 0)
-		return -EAGAIN;
-
-	ret = (graph->isbusy(graph) || graph->hi.tasks || graph->lo.tasks) ? -EBUSY : graph->mode(graph, mode, freq);
-
-	mutexUnlock(graph->lock);
-
-	return ret;
+	return graph->mode(graph, mode, freq);
 }
 
 
 void graph_close(graph_t *graph)
 {
 	graph->close(graph);
+	resourceDestroy(graph->vlock);
 	resourceDestroy(graph->lock);
 	free(graph->hi.fifo);
 }
@@ -476,6 +482,12 @@ int graph_open(graph_t *graph, unsigned int mem, unsigned int adapter)
 		return -ENOMEM;
 
 	if ((err = mutexCreate(&graph->lock)) < 0) {
+		free(graph->hi.fifo);
+		return err;
+	}
+
+	if ((err = mutexCreate(&graph->vlock)) < 0) {
+		resourceDestroy(graph->lock);
 		free(graph->hi.fifo);
 		return err;
 	}
@@ -528,6 +540,7 @@ int graph_open(graph_t *graph, unsigned int mem, unsigned int adapter)
 	} while (0);
 
 	if (err < 0) {
+		resourceDestroy(graph->vlock);
 		resourceDestroy(graph->lock);
 		free(graph->hi.fifo);
 	}
