@@ -27,8 +27,8 @@
 // #define GRAPH_SAVAGE4   (1 << 1)
 // #define GRAPH_GEODELX   (1 << 2)
 #define GRAPH_VIRTIOGPU (1 << 3)
-#define GRAPH_NONE       0
 #define GRAPH_ANY       -1
+#define GRAPH_NONE       0
 
 
 /* Graphics modes */
@@ -41,6 +41,8 @@ enum {
 	GRAPH_800x600x16,
 	GRAPH_1024x768x16,
 	GRAPH_640x480x32,
+	GRAPH_720x480x32,
+	GRAPH_720x576x32,
 	GRAPH_800x600x32,
 	GRAPH_832x624x32,
 	GRAPH_896x672x32,
@@ -59,11 +61,17 @@ enum {
 	GRAPH_1368x768x32,
 	GRAPH_1400x900x32,
 	GRAPH_1400x1050x32,
+	GRPAH_1440x240x32,
+	GRAPH_1440x288x32,
+	GRAPH_1440x576x32,
 	GRAPH_1440x810x32,
 	GRAPH_1440x900x32,
 	GRAPH_1600x900x32,
 	GRAPH_1600x1024x32,
+	GRAPH_1650x750x32,
+	GRAPH_1680x720x32,
 	GRAPH_1680x1050x32,
+	GRAPH_1920x540x32,
 	GRAPH_1920x1080x32
 };
 
@@ -134,6 +142,7 @@ struct _graph_t {
 	unsigned int width;   /* Screen width */
 	unsigned int height;  /* Screen height */
 	unsigned char depth;  /* Screen color depth */
+	unsigned int freq;    /* Screen refresh rate (in us) */
 	unsigned int vsync;   /* Vertical synchronizations */
 
 	/* Task queues */
