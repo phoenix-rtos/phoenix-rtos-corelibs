@@ -1,6 +1,6 @@
 # phoenix-rtos-corelibs
 
-This repository contains the source for libraries enabling development of Phoenix-RTOS applications. To get informatioon about each of library please read
+This repository contains the source for libraries enabling development of Phoenix-RTOS applications. To get information about each of library please read
 README.md file located in library directory.
 
 ## Building libraries
