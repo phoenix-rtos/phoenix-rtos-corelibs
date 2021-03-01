@@ -142,7 +142,6 @@ struct _graph_t {
 	unsigned int width;   /* Screen width */
 	unsigned int height;  /* Screen height */
 	unsigned char depth;  /* Screen color depth */
-	unsigned int freq;    /* Screen refresh rate (in us) */
 	unsigned int vsync;   /* Vertical synchronizations */
 
 	/* Task queues */
@@ -150,8 +149,8 @@ struct _graph_t {
 	graph_queue_t lo;     /* Low priority tasks */
 
 	/* Synchronization */
-	handle_t lock;        /* Tasks synchronization mutex */
 	handle_t vlock;       /* Vertical synchronization mutex */
+	handle_t lock;        /* Tasks synchronization mutex */
 
 	/* Control functions */
 	void (*close)(graph_t *);
@@ -170,11 +169,11 @@ struct _graph_t {
 	int (*copy)(graph_t *, void *, void *, unsigned int, unsigned int, unsigned int, unsigned int);
 
 	/* Color palette functions */
-	int (*colorset)(graph_t *, char *, unsigned char, unsigned char);
-	int (*colorget)(graph_t *, char *, unsigned char, unsigned char);
+	int (*colorset)(graph_t *, unsigned char *, unsigned int, unsigned int);
+	int (*colorget)(graph_t *, unsigned char *, unsigned int, unsigned int);
 
 	/* Cursor functions */
-	int (*cursorset)(graph_t *, char *, char *, unsigned char, unsigned char);
+	int (*cursorset)(graph_t *, unsigned char *, unsigned char *, unsigned int, unsigned int);
 	int (*cursorpos)(graph_t *, unsigned int, unsigned int);
 	int (*cursorshow)(graph_t *);
 	int (*cursorhide)(graph_t *);
@@ -206,15 +205,15 @@ extern int graph_copy(graph_t *graph, void *src, void *dst, unsigned int dx, uns
 
 
 /* Sets color palette */
-extern int graph_colorset(graph_t *graph, char *colors, unsigned char first, unsigned char last);
+extern int graph_colorset(graph_t *graph, unsigned char *colors, unsigned int first, unsigned int last);
 
 
 /* Retrieves color palette */
-extern int graph_colorget(graph_t *graph, char *colors, unsigned char first, unsigned char last);
+extern int graph_colorget(graph_t *graph, unsigned char *colors, unsigned int first, unsigned int last);
 
 
 /* Sets cursor icon */
-extern int graph_cursorset(graph_t *graph, char *and, char *xor, unsigned char bg, unsigned char fg);
+extern int graph_cursorset(graph_t *graph, unsigned char *and, unsigned char *xor, unsigned int bg, unsigned int fg);
 
 
 /* Updates cursor position */

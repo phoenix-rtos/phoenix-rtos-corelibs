@@ -328,19 +328,19 @@ int graph_copy(graph_t *graph, void *src, void *dst, unsigned int dx, unsigned i
 }
 
 
-int graph_colorset(graph_t *graph, char *colors, unsigned char first, unsigned char last)
+int graph_colorset(graph_t *graph, unsigned char *colors, unsigned int first, unsigned int last)
 {
 	return graph->colorset(graph, colors, first, last);
 }
 
 
-int graph_colorget(graph_t *graph, char *colors, unsigned char first, unsigned char last)
+int graph_colorget(graph_t *graph, unsigned char *colors, unsigned int first, unsigned int last)
 {
 	return graph->colorget(graph, colors, first, last);
 }
 
 
-int graph_cursorset(graph_t *graph, char *and, char *xor, unsigned char bg, unsigned char fg)
+int graph_cursorset(graph_t *graph, unsigned char *and, unsigned char *xor, unsigned int bg, unsigned int fg)
 {
 	return graph->cursorset(graph, and, xor, bg, fg);
 }
