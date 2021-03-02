@@ -33,7 +33,7 @@
 
 /* Graphics modes */
 enum {
-	GRAPH_640x480x8,
+	GRAPH_640x480x8 = 1,
 	GRAPH_800x600x8,
 	GRAPH_1024x768x8,
 	GRAPH_1280x1024x8,
@@ -61,7 +61,7 @@ enum {
 	GRAPH_1368x768x32,
 	GRAPH_1400x900x32,
 	GRAPH_1400x1050x32,
-	GRPAH_1440x240x32,
+	GRAPH_1440x240x32,
 	GRAPH_1440x288x32,
 	GRAPH_1440x576x32,
 	GRAPH_1440x810x32,
@@ -78,7 +78,7 @@ enum {
 
 /* Screen refresh rates */
 enum {
-	GRAPH_56Hz,
+	GRAPH_56Hz = 1,
 	GRAPH_60Hz,
 	GRAPH_70Hz,
 	GRAPH_72Hz,

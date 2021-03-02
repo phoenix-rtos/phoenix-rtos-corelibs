@@ -1,15 +1,29 @@
 #
-# Makefile for Phoenix-RTOS libtty
+# Makefile for graph library
 #
-# Copyright 2018, 2019 Phoenix Systems
+# Copyright 2021 Phoenix Systems
+# Author: Lukasz Kosinski
+#
+# This file is part of Phoenix-RTOS.
+#
+# %LICENSE%
 #
 
-$(PREFIX_A)libgraph.a: $(addprefix $(PREFIX_O)libgraph/, graph.o soft.o)
+OBJS = graph.o virtio-gpu.o
+
+ifeq ($(TARGET_FAMILY), ia32)
+	OBJS += soft-ia32.o
+else
+	OBJS += soft.o
+endif
+
+$(PREFIX_A)libgraph.a: $(addprefix $(PREFIX_O)libgraph/, $(OBJS)) $(PREFIX_A)libvirtio.a
 	$(ARCH)
-	
-#$(PREFIX_H)libtty.h: tty/libtty/libtty.h
-#	$(HEADER)
-	
-all: $(PREFIX_A)libgraph.a
 
-#$(PREFIX_H)libtty.h
+$(PREFIX_H)libgraph.h: libgraph/graph.h
+	$(HEADER)
+
+$(PREFIX_PROG)test: $(addprefix $(PREFIX_O)libgraph/, test.o) $(PREFIX_A)libgraph.a $(PREFIX_A)libvirtio.a
+	$(LINK)
+
+all: $(PREFIX_A)libgraph.a $(PREFIX_H)libgraph.h $(PREFIX_PROG_STRIPPED)test

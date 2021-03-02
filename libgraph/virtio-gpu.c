@@ -183,8 +183,8 @@ typedef struct {
 	/* Interrupt/polling thread */
 	volatile unsigned char done;    /* End running threads? */
 	volatile unsigned int isr;      /* Interrupt status */
-	handle_t ilock;                 /* Interrupt mutex */
-	handle_t icond;                 /* Interrupt condition variable */
+	handle_t lock;                  /* Interrupt mutex */
+	handle_t cond;                  /* Interrupt condition variable */
 	handle_t inth;                  /* Interrupt handle */
 	char istack[2048] __attribute__((aligned(8)));
 } virtiogpu_dev_t;
@@ -342,7 +342,7 @@ static int _virtiogpu_send(virtiogpu_dev_t *vgpu, virtqueue_t *vq, virtiogpu_req
 	while (!req->done)
 		condWait(req->cond, req->lock, 0);
 
-	if (virtio_vtog32(*(volatile uint32_t *)(&req->hdr.type)) != resp)
+	if (virtio_vtog32(vdev, *(volatile uint32_t *)(&req->hdr.type)) != resp)
 		return -EFAULT;
 
 	return EOK;
@@ -412,8 +412,8 @@ static int virtiogpu_info(virtiogpu_dev_t *vgpu, virtiogpu_req_t *req, virtiogpu
 		for (i = 0; i < sizeof(info->pmodes) / sizeof(info->pmodes[0]); i++) {
 			info->pmodes[i].r.x = virtio_vtog32(vdev, req->info.pmodes[i].r.x);
 			info->pmodes[i].r.y = virtio_vtog32(vdev, req->info.pmodes[i].r.y);
-			info->pmodes[i].r.width = virtio_vtog32(vdev, req->info.pmodes[i].r.width);
-			info->pmodes[i].r.height = virtio_vtog32(vdev, req->info.pmodes[i].r.height);
+			info->pmodes[i].r.w = virtio_vtog32(vdev, req->info.pmodes[i].r.w);
+			info->pmodes[i].r.h = virtio_vtog32(vdev, req->info.pmodes[i].r.h);
 			info->pmodes[i].enabled = virtio_vtog32(vdev, req->info.pmodes[i].enabled);
 			info->pmodes[i].flags = virtio_vtog32(vdev, req->info.pmodes[i].flags);
 		}
@@ -429,6 +429,7 @@ static int virtiogpu_info(virtiogpu_dev_t *vgpu, virtiogpu_req_t *req, virtiogpu
 static int virtiogpu_edid(virtiogpu_dev_t *vgpu, virtiogpu_req_t *req, unsigned int sid, unsigned char *edid, unsigned int *len)
 {
 	virtio_dev_t *vdev = &vgpu->vdev;
+	unsigned int l;
 	int i, ret;
 
 	if (!(virtio_readFeatures(vdev) & (1ULL << 1)))
@@ -449,8 +450,11 @@ static int virtiogpu_edid(virtiogpu_dev_t *vgpu, virtiogpu_req_t *req, unsigned 
 		if ((ret = _virtiogpu_send(vgpu, &vgpu->ctlq, req, 0x1104)) < 0)
 			break;
 
-		*len = virtio_vtog32(vdev, req->edid.sid);
-		for (i = 0; i < *len; i++)
+		l = virtio_vtog32(vdev, req->edid.sid);
+		if (len != NULL)
+			*len = l;
+
+		for (i = 0; i < l; i++)
 			edid[i] = req->edid.data[i];
 	} while (0);
 
@@ -484,7 +488,7 @@ static int virtiogpu_create(virtiogpu_dev_t *vgpu, virtiogpu_req_t *req, unsigne
 		if ((ret = _virtiogpu_send(vgpu, &vgpu->ctlq, req, 0x1100)) < 0)
 			break;
 
-		ret = virtio_vtog32(req->create.rid);
+		ret = virtio_vtog32(vdev, req->create.rid);
 		vgpu->rbmp &= ~ret;
 	} while(0);
 
@@ -544,7 +548,7 @@ static int virtiogpu_attach(virtiogpu_dev_t *vgpu, virtiogpu_req_t *req, unsigne
 	req->attach.addr = virtio_gtov64(vdev, va2pa(buff));
 	req->attach.len = virtio_gtov32(vdev, len);
 
-	ret = _virtiogpu_send(vgpu, &vgpu->ctlq, req, 0x1100));
+	ret = _virtiogpu_send(vgpu, &vgpu->ctlq, req, 0x1100);
 
 	mutexUnlock(req->lock);
 
@@ -569,7 +573,7 @@ static int virtiogpu_detach(virtiogpu_dev_t *vgpu, virtiogpu_req_t *req, unsigne
 	req->hdr.flags = virtio_gtov32(vdev, 1 << 0);
 	req->detach.rid = virtio_gtov32(vdev, rid);
 
-	ret = _virtiogpu_send(vgpu, &vgpu->ctlq, req, 0x1100));
+	ret = _virtiogpu_send(vgpu, &vgpu->ctlq, req, 0x1100);
 
 	mutexUnlock(req->lock);
 
@@ -599,7 +603,7 @@ static int virtiogpu_set(virtiogpu_dev_t *vgpu, virtiogpu_req_t *req, unsigned i
 	req->set.sid = virtio_gtov32(vdev, sid);
 	req->set.rid = virtio_gtov32(vdev, rid);
 
-	ret = _virtiogpu_send(vgpu, &vgpu->ctlq, req, 0x1100));
+	ret = _virtiogpu_send(vgpu, &vgpu->ctlq, req, 0x1100);
 
 	mutexUnlock(req->lock);
 
@@ -629,7 +633,7 @@ static int virtiogpu_transfer(virtiogpu_dev_t *vgpu, virtiogpu_req_t *req, unsig
 	req->transfer.offs = virtio_gtov64(vdev, offs);
 	req->transfer.rid = virtio_gtov32(vdev, rid);
 
-	ret = _virtiogpu_send(vgpu, &vgpu->ctlq, req, 0x1100));
+	ret = _virtiogpu_send(vgpu, &vgpu->ctlq, req, 0x1100);
 
 	mutexUnlock(req->lock);
 
@@ -658,7 +662,7 @@ static int virtiogpu_flush(virtiogpu_dev_t *vgpu, virtiogpu_req_t *req, unsigned
 	req->flush.r.h = virtio_gtov32(vdev, h);
 	req->flush.rid = virtio_gtov32(vdev, rid);
 
-	ret = _virtiogpu_send(vgpu, &vgpu->ctlq, req, 0x1100));
+	ret = _virtiogpu_send(vgpu, &vgpu->ctlq, req, 0x1100);
 
 	mutexUnlock(req->lock);
 
@@ -753,7 +757,7 @@ static void virtiogpu_intthr(void *arg)
 /* Vsync thread */
 static void virtiogpu_vsyncthr(void *arg)
 {
-	grapt_t *graph = (graph_t *)arg;
+	graph_t *graph = (graph_t *)arg;
 	virtiogpu_dev_t *vgpu = (virtiogpu_dev_t *)graph->adapter;
 	unsigned long long diff, time = virtiogpu_timestamp();
 	virtiogpu_req_t *req;
@@ -781,6 +785,100 @@ static void virtiogpu_vsyncthr(void *arg)
 
 	virtiogpu_put(req);
 	endthread();
+}
+
+
+int virtiogpu_cursorpos(graph_t *graph, unsigned int x, unsigned int y)
+{
+	virtiogpu_dev_t *vgpu = (virtiogpu_dev_t *)graph->adapter;
+	virtio_dev_t *vdev = &vgpu->vdev;
+	virtiogpu_req_t *req = vgpu->req;
+	int ret;
+
+	vgpu->curx = x;
+	vgpu->cury = y;
+
+	if (!vgpu->curst)
+		return EOK;
+
+	mutexLock(req->lock);
+
+	req->rseg.buff = &req->hdr;
+	req->rseg.len = sizeof(req->hdr) + sizeof(req->cursor);
+	req->wseg.buff = &req->hdr;
+	req->wseg.len = sizeof(req->hdr);
+
+	req->hdr.type = virtio_gtov32(vdev, 0x301);
+	req->hdr.flags = virtio_gtov32(vdev, 1 << 0);
+	req->cursor.pos.sid = virtio_gtov32(vdev, 0);
+	req->cursor.pos.x = virtio_gtov32(vdev, x);
+	req->cursor.pos.y = virtio_gtov32(vdev, y);
+
+	ret = _virtiogpu_send(vgpu, &vgpu->curq, req, 0x1100);
+
+	mutexUnlock(req->lock);
+
+	return ret;
+}
+
+
+int virtiogpu_cursorset(graph_t *graph, unsigned char *and, unsigned char *xor, unsigned int bg, unsigned int fg)
+{
+	virtiogpu_dev_t *vgpu = (virtiogpu_dev_t *)graph->adapter;
+	virtio_dev_t *vdev = &vgpu->vdev;
+	virtiogpu_req_t *req = vgpu->req;
+	uint32_t *cur = vgpu->cur;
+	uint64_t amsk, xmsk;
+	unsigned int i, j;
+	int ret;
+
+	bg = htobe32(bg);
+	fg = htobe32(fg);
+
+	for (i = 0; i < 64; i++) {
+		amsk = *(uint64_t *)(and + 8 * i);
+		xmsk = *(uint64_t *)(xor + 8 * i);
+
+		for (j = 0; j < 64; j++, amsk >>= 1, xmsk >>= 1) {
+			switch ((amsk & 0x1) << 1 | (xmsk & 0x1)) {
+			case 0:
+				*cur++ = bg;
+				break;
+
+			case 1:
+				*cur++ = fg;
+				break;
+
+			default:
+				*cur++ = 0;
+			}
+		}
+	}
+
+	if ((ret = virtiogpu_transfer(vgpu, req, 0, 0, 64, 64, 0, vgpu->curid)) < 0)
+		return ret;
+
+	mutexLock(req->lock);
+
+	req->rseg.buff = &req->hdr;
+	req->rseg.len = sizeof(req->hdr) + sizeof(req->cursor);
+	req->wseg.buff = &req->hdr;
+	req->wseg.len = sizeof(req->hdr);
+
+	req->hdr.type = virtio_gtov32(vdev, 0x300);
+	req->hdr.flags = virtio_gtov32(vdev, 1 << 0);
+	req->cursor.pos.sid = virtio_gtov32(vdev, 0);
+	req->cursor.pos.x = virtio_gtov32(vdev, (vgpu->curst) ? vgpu->curx : graph->width);
+	req->cursor.pos.y = virtio_gtov32(vdev, (vgpu->curst) ? vgpu->cury : graph->height);
+	req->cursor.rid = virtio_gtov32(vdev, vgpu->curid);
+	req->cursor.hx = virtio_gtov32(vdev, 0);
+	req->cursor.hy = virtio_gtov32(vdev, 0);
+
+	ret = _virtiogpu_send(vgpu, &vgpu->curq, req, 0x1100);
+
+	mutexUnlock(req->lock);
+
+	return ret;
 }
 
 
@@ -814,100 +912,6 @@ int virtiogpu_cursorshow(graph_t *graph)
 }
 
 
-int virtiogpu_cursorpos(graph_t *graph, unsigned int x, unsigned int y)
-{
-	virtiogpu_dev_t *vgpu = (virtiogpu_dev_t *)graph->adapter;
-	virtio_dev_t *vdev = &vgpu->vdev;
-	virtiogpu_req_t *req = vgpu->req;
-	int ret;
-
-	vgpu->curx = x;
-	vgpu->cury = y;
-
-	if (!vgpu->curst)
-		return EOK;
-
-	mutexLock(req->lock);
-
-	req->rseg.buff = &req->hdr;
-	req->rseg.len = sizeof(req->hdr) + sizeof(req->cursor);
-	req->wseg.buff = &req->hdr;
-	req->wseg.len = sizeof(req->hdr);
-
-	req->hdr.type = virtio_gtov32(vdev, 0x301);
-	req->hdr.flags = virtio_gtov32(vdev, 1 << 0);
-	req->cursor.pos.sid = virtio_gtov32(vdev, 0);
-	req->cursor.pos.x = virtio_gtov32(vdev, x);
-	req->cursor.pos.y = virtio_gtov32(vdev, y);
-
-	ret = _virtiogpu_send(vgpu, &vgpu->curq, req, 0x1100));
-
-	mutexUnlock(req->lock);
-
-	return ret;
-}
-
-
-int virtiogpu_cursorset(graph_t *graph, unsigned char *and, unsigned char *xor, unsigned int bg, unsigned int fg)
-{
-	virtiogpu_dev_t *vgpu = (virtiogpu_dev_t *)graph->adapter;
-	virtio_dev_t *vdev = &vgpu->vdev;
-	virtiogpu_req_t *req = vgpu->req;
-	uint32_t *cur = vgpu->cur;
-	uint64_t amsk, xmsk;
-	unsigned int i, j;
-	int ret;
-
-	bg = htobe32(bg);
-	fg = htobe32(fg);
-
-	for (i = 0; i < 64; i++) {
-		amsk = *(uint64_t *)(and + 8 * i);
-		xmsk = *(uint64_t *)(xor + 8 * i);
-
-		for (j = 0; j < 64; j++, amsk >> 1, xmsk >> 1) {
-			switch ((amsk & 0x1) << 1 | (xmsk & 0x1)) {
-			case 0:
-				*cur++ = bg;
-				break;
-
-			case 1:
-				*cur++ = fg;
-				break;
-
-			default:
-				*cur++ = 0;
-			}
-		}
-	}
-
-	if ((ret = virtiogpu_transfer(vgpu, req, 0, 0, 64, 64, 0, vgpu->curid)) < 0)
-		return ret;
-
-	mutexLock(req->lock);
-
-	req->rseg.buff = &req->hdr;
-	req->rseg.len = sizeof(req->hdr) + sizeof(req->cursor);
-	req->wseg.buff = &req->hdr;
-	req->wseg.len = sizeof(req->hdr);
-
-	req->hdr.type = virtio_gtov32(vdev, 0x300);
-	req->hdr.flags = virtio_gtov32(vdev, 1 << 0);
-	req->cursor.pos.sid = virtio_gtov32(vdev, 0);
-	req->cursor.pos.x = virtio_gtov32(vdev, vgpu->curx);
-	req->cursor.pos.y = virtio_gtov32(vdev, vgpu->cury);
-	req->cursor.rid = virtio_gtov32(vdev, vgpu->curid);
-	req->cursor.hx = virtio_gtov32(vdev, 0);
-	req->cursor.hy = virtio_gtov32(vdev, 0);
-
-	ret = _virtiogpu_send(vgpu, &vgpu->curq, req, 0x1100));
-
-	mutexUnlock(req->lock);
-
-	return ret;
-}
-
-
 int virtiogpu_colorset(graph_t *graph, unsigned char *colors, unsigned int first, unsigned int last)
 {
 	return -ENOTSUP;
@@ -917,15 +921,6 @@ int virtiogpu_colorset(graph_t *graph, unsigned char *colors, unsigned int first
 int virtiogpu_colorget(graph_t *graph, unsigned char *colors, unsigned int first, unsigned int last)
 {
 	return -ENOTSUP;
-}
-
-
-int virtiogpu_trigger(graph_t *graph)
-{
-	if (virtiogpu_isbusy(graph))
-		return -EBUSY;
-
-	return graph_schedule(graph);
 }
 
 
@@ -944,12 +939,21 @@ int virtiogpu_isbusy(graph_t *graph)
 	mutexLock(vgpu->ctlq.lock);
 	mutexLock(vgpu->curq.lock);
 
-	ret = virtqueue_isbusy(vdev, &vgpu->ctlq) || virtqueue_isbusy(vdev, &vgpu->curq);
+	ret = _virtqueue_isbusy(vdev, &vgpu->ctlq) || _virtqueue_isbusy(vdev, &vgpu->curq);
 
 	mutexUnlock(vgpu->curq.lock);
 	mutexUnlock(vgpu->ctlq.lock);
 
 	return ret;
+}
+
+
+int virtiogpu_trigger(graph_t *graph)
+{
+	if (virtiogpu_isbusy(graph))
+		return -EBUSY;
+
+	return graph_schedule(graph);
 }
 
 
@@ -985,7 +989,7 @@ int virtiogpu_mode(graph_t *graph, unsigned int mode, unsigned int freq)
 }
 
 
-void virtiogpu_destroyone(virtiogpu_t *vgpu)
+static void virtiogpu_destroyone(virtiogpu_dev_t *vgpu)
 {
 	virtio_dev_t *vdev = &vgpu->vdev;
 
@@ -997,8 +1001,8 @@ void virtiogpu_destroyone(virtiogpu_t *vgpu)
 	mutexUnlock(vgpu->lock);
 
 	/* Destroy device */
-	resourceDestroy(vgpu->icond);
-	resourceDestroy(vgpu->ilock);
+	resourceDestroy(vgpu->cond);
+	resourceDestroy(vgpu->lock);
 	resourceDestroy(vgpu->inth);
 	virtqueue_destroy(vdev, &vgpu->ctlq);
 	virtqueue_destroy(vdev, &vgpu->curq);
@@ -1006,7 +1010,7 @@ void virtiogpu_destroyone(virtiogpu_t *vgpu)
 }
 
 
-int virtiogpu_initone(virtiogpu_dev_t *vgpu)
+static int virtiogpu_initone(virtiogpu_dev_t *vgpu)
 {
 	virtio_dev_t *vdev = &vgpu->vdev;
 	int err;
@@ -1034,34 +1038,38 @@ int virtiogpu_initone(virtiogpu_dev_t *vgpu)
 			break;
 		}
 
-		if ((err = mutexCreate(&vgpu->ilock)) < 0) {
+		if ((err = mutexCreate(&vgpu->lock)) < 0) {
 			virtqueue_destroy(vdev, &vgpu->curq);
 			virtqueue_destroy(vdev, &vgpu->ctlq);
 			break;
 		}
 
-		if ((err = condCreate(&vgpu->icond)) < 0) {
-			resourceDestroy(vgpu->ilock);
+		if ((err = condCreate(&vgpu->cond)) < 0) {
+			resourceDestroy(vgpu->lock);
 			virtqueue_destroy(vdev, &vgpu->curq);
 			virtqueue_destroy(vdev, &vgpu->ctlq);
 			break;
 		}
 
 		if ((err = beginthread(virtiogpu_intthr, 4, vgpu->istack, sizeof(vgpu->istack), vgpu)) < 0) {
-			resourceDestroy(vgpu->icond);
-			resourceDestroy(vgpu->ilock);
+			resourceDestroy(vgpu->cond);
+			resourceDestroy(vgpu->lock);
 			virtqueue_destroy(vdev, &vgpu->curq);
 			virtqueue_destroy(vdev, &vgpu->ctlq);
 			break;
 		}
 
+		/* TODO: fix race condition below */
+		/* Added 100ms delay for virtiogpu_intthr() to go to sleep on vgpu->cond before first request */
+		usleep(100000);
+
 #ifdef USE_POLLING
 		virtqueue_disableIRQ(vdev, &vgpu->ctlq);
 		virtqueue_disableIRQ(vdev, &vgpu->curq);
 #else
-		if ((err = interrupt(vdev->info.irq, virtiogpu_int, vgpu, vgpu->icond, &vgpu->inth)) < 0) {
-			resourceDestroy(vgpu->icond);
-			resourceDestroy(vgpu->ilock);
+		if ((err = interrupt(vdev->info.irq, virtiogpu_int, vgpu, vgpu->cond, &vgpu->inth)) < 0) {
+			resourceDestroy(vgpu->cond);
+			resourceDestroy(vgpu->lock);
 			virtqueue_destroy(vdev, &vgpu->curq);
 			virtqueue_destroy(vdev, &vgpu->ctlq);
 			break;
@@ -1082,10 +1090,9 @@ int virtiogpu_initone(virtiogpu_dev_t *vgpu)
 void virtiogpu_close(graph_t *graph)
 {
 	virtiogpu_dev_t *vgpu = (virtiogpu_dev_t *)graph->adapter;
-	virtio_dev_t *vdev = &vgpu->vdev;
 	virtiogpu_req_t *req = vgpu->req;
 
-	/* Destroy resources */
+	/* Destroy framebuffer and cursor resources */
 	virtiogpu_detach(vgpu, req, vgpu->fbrid);
 	virtiogpu_detach(vgpu, req, vgpu->curid);
 	virtiogpu_destroy(vgpu, req, vgpu->fbrid);
@@ -1102,8 +1109,9 @@ void virtiogpu_close(graph_t *graph)
 
 int virtiogpu_open(graph_t *graph)
 {
+	unsigned char edid[1024];
+	virtiogpu_info_t vinfo;
 	virtiogpu_dev_t *vgpu;
-	virtiogpu_info_t info;
 	virtio_dev_t vdev;
 	int err;
 
@@ -1113,7 +1121,7 @@ int virtiogpu_open(graph_t *graph)
 				return err;
 
 			if ((vgpu = malloc(sizeof(virtiogpu_dev_t))) == NULL)
-				return = -ENOMEM;
+				return -ENOMEM;
 			vgpu->vdev = vdev;
 
 			/* Initialize device */
@@ -1124,7 +1132,7 @@ int virtiogpu_open(graph_t *graph)
 				continue;
 			}
 
-			/* Initialize resources */
+			/* Initialize framebuffer and cursor resources */
 			do {
 				if ((vgpu->req = virtiogpu_get()) == NULL) {
 					err = -ENOMEM;
@@ -1132,13 +1140,13 @@ int virtiogpu_open(graph_t *graph)
 				}
 
 				/* Get default display info */
-				if ((err = virtiogpu_info(vgpu, vgpu->req, &info)) < 0) {
+				if (((err = virtiogpu_edid(vgpu, vgpu->req, 0, edid, NULL)) < 0) || ((err = virtiogpu_info(vgpu, vgpu->req, &vinfo)) < 0)) {
 					virtiogpu_put(vgpu->req);
 					break;
 				}
 
 				/* Initialize framebuffer */
-				vgpu->fbsz = (4 * info.pmodes[0].r.w * info.pmodes[0].r.h + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1);
+				vgpu->fbsz = (4 * vinfo.pmodes[0].r.w * vinfo.pmodes[0].r.h + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1);
 				if ((vgpu->fb = mmap(NULL, vgpu->fbsz, PROT_READ | PROT_WRITE, MAP_UNCACHED | MAP_ANONYMOUS, OID_CONTIGUOUS, 0)) == MAP_FAILED) {
 					virtiogpu_put(vgpu->req);
 					err = -ENOMEM;
@@ -1146,7 +1154,7 @@ int virtiogpu_open(graph_t *graph)
 				}
 				memset(vgpu->fb, 0, vgpu->fbsz);
 
-				if ((err = virtiogpu_create(vgpu, vgpu->req, virtiogpu_format(), info.pmodes[0].r.w, info.pmodes[0].r.h)) < 0) {
+				if ((err = virtiogpu_create(vgpu, vgpu->req, virtiogpu_format(), vinfo.pmodes[0].r.w, vinfo.pmodes[0].r.h)) < 0) {
 					munmap(vgpu->fb, vgpu->fbsz);
 					virtiogpu_put(vgpu->req);
 					break;
@@ -1190,7 +1198,7 @@ int virtiogpu_open(graph_t *graph)
 				}
 
 				/* Set scanout host resource */
-				if ((err = virtiogpu_set(vgpu, vgpu->req, 0, 0, info.pmodes[0].r.w, info.pmodes[0].r.h, 0, vgpu->fbrid)) < 0) {
+				if ((err = virtiogpu_set(vgpu, vgpu->req, 0, 0, vinfo.pmodes[0].r.w, vinfo.pmodes[0].r.h, 0, vgpu->fbrid)) < 0) {
 					virtiogpu_destroy(vgpu, vgpu->req, vgpu->curid);
 					munmap(vgpu->cur, vgpu->cursz);
 					virtiogpu_destroy(vgpu, vgpu->req, vgpu->fbrid);
@@ -1202,8 +1210,8 @@ int virtiogpu_open(graph_t *graph)
 				/* Initialize graph info */
 				graph->adapter = vgpu;
 				graph->data = vgpu->fb;
-				graph->width = info.pmodes[0].r.w;
-				graph->height = info.pmodes[0].r.h;
+				graph->width = vinfo.pmodes[0].r.w;
+				graph->height = vinfo.pmodes[0].r.h;
 				graph->depth = 4;
 				graph->vsync = 0;
 
