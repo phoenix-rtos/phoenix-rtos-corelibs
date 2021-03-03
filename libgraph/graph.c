@@ -22,14 +22,14 @@
 #include "soft.h"
 
 
-/* Graphics tasks */
+/* Graph tasks */
 enum {
-	TASK_LINE,
-	TASK_RECT,
-	TASK_FILL,
-	TASK_PRINT,
-	TASK_MOVE,
-	TASK_COPY
+	GRAPH_LINE,
+	GRAPH_RECT,
+	GRAPH_FILL,
+	GRAPH_PRINT,
+	GRAPH_MOVE,
+	GRAPH_COPY
 };
 
 
@@ -59,7 +59,7 @@ typedef struct {
 			unsigned int x;
 			unsigned int y;
 			unsigned int color;
-			unsigned int type;
+			graph_fill_t type;
 		} fill;
 
 		struct {
@@ -127,22 +127,22 @@ extern int virtiogpu_init(void);
 static int _graph_exec(graph_t *graph, graph_task_t *task)
 {
 	switch (task->type) {
-	case TASK_LINE:
+	case GRAPH_LINE:
 		return graph->line(graph, task->line.x, task->line.y, task->line.dx, task->line.dy, task->line.stroke, task->line.color);
 
-	case TASK_RECT:
+	case GRAPH_RECT:
 		return graph->rect(graph, task->rect.x, task->rect.y, task->rect.dx, task->rect.dy, task->rect.color);
 
-	case TASK_FILL:
+	case GRAPH_FILL:
 		return graph->fill(graph, task->fill.x, task->fill.y, task->fill.color, task->fill.type);
 
-	case TASK_PRINT:
+	case GRAPH_PRINT:
 		return graph->print(graph, task->print.x, task->print.y, task->print.dx, task->print.dy, task->print.bmp, task->print.width, task->print.height, task->print.span, task->print.color);
 
-	case TASK_MOVE:
+	case GRAPH_MOVE:
 		return graph->move(graph, task->move.x, task->move.y, task->move.dx, task->move.dy, task->move.mx, task->move.my);
 
-	case TASK_COPY:
+	case GRAPH_COPY:
 		return graph->copy(graph, task->copy.src, task->copy.dst, task->copy.dx, task->copy.dy, task->copy.srcspan, task->copy.dstspan);
 
 	default:
@@ -155,7 +155,7 @@ static int _graph_exec(graph_t *graph, graph_task_t *task)
 static int _graph_schedule(graph_t *graph)
 {
 	graph_task_t *task;
-	graph_queue_t *q;
+	graph_taskq_t *q;
 
 	while (!graph->isbusy(graph)) {
 		q = &graph->hi;
@@ -195,16 +195,16 @@ int graph_schedule(graph_t *graph)
 
 
 /* Queues up task for execution */
-static int graph_queue(graph_t *graph, graph_task_t *task, unsigned int queue)
+static int graph_queue(graph_t *graph, graph_task_t *task, graph_queue_t queue)
 {
-	graph_queue_t *q;
+	graph_taskq_t *q;
 
 	switch (queue) {
-	case GRAPH_QUEUE_LO:
+	case GRAPH_QUEUE_LOW:
 		q = &graph->lo;
 		break;
 
-	case GRAPH_QUEUE_HI:
+	case GRAPH_QUEUE_HIGH:
 		q = &graph->hi;
 		break;
 
@@ -234,14 +234,14 @@ static int graph_queue(graph_t *graph, graph_task_t *task, unsigned int queue)
 		memcpy(q->free, task, task->size);
 		q->free += task->size;
 		q->tasks++;
-
-		/* Try to reschedule */
-		_graph_schedule(graph);
 	}
 	/* Execute task */
 	else {
 		_graph_exec(graph, task);
 	}
+
+	/* Try to reschedule */
+	_graph_schedule(graph);
 
 	mutexUnlock(graph->lock);
 
@@ -249,10 +249,10 @@ static int graph_queue(graph_t *graph, graph_task_t *task, unsigned int queue)
 }
 
 
-int graph_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, unsigned int stroke, unsigned int color, unsigned int queue)
+int graph_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, unsigned int stroke, unsigned int color, graph_queue_t queue)
 {
 	graph_task_t task = {
-		.type = TASK_LINE,
+		.type = GRAPH_LINE,
 		.line = { x, y, dx, dy, stroke, color },
 		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.line)
 	};
@@ -261,10 +261,10 @@ int graph_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, u
 }
 
 
-int graph_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color, unsigned int queue)
+int graph_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color, graph_queue_t queue)
 {
 	graph_task_t task = {
-		.type = TASK_RECT,
+		.type = GRAPH_RECT,
 		.rect = { x, y, dx, dy, color },
 		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.rect)
 	};
@@ -273,10 +273,10 @@ int graph_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, 
 }
 
 
-int graph_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color, unsigned int type, unsigned int queue)
+int graph_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color, graph_fill_t type, graph_queue_t queue)
 {
 	graph_task_t task = {
-		.type = TASK_FILL,
+		.type = GRAPH_FILL,
 		.fill = { x, y, color, type },
 		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.fill)
 	};
@@ -285,17 +285,17 @@ int graph_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int colo
 }
 
 
-int graph_print(graph_t *graph, graph_font_t *font, const char *text, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color, unsigned int queue)
+int graph_print(graph_t *graph, graph_font_t *font, const char *text, unsigned int x, unsigned int y, unsigned char dx, unsigned char dy, unsigned int color, graph_queue_t queue)
 {
 	graph_task_t task = {
-		.type = TASK_PRINT,
-		.print = { x, y, dx * font->width / font->height, dy, NULL, font->width, font->height, font->span, color },
+		.type = GRAPH_PRINT,
+		.print = { x, y, (unsigned int)dx * font->width / font->height, dy, NULL, font->width, font->height, font->span, color },
 		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.print)
 	};
 	int err;
 
 	for (; *text; text++, task.print.x += task.print.dx) {
-		task.print.bmp = font->data + font->height * font->span * (*(unsigned char *)text - font->offs);
+		task.print.bmp = font->data + (unsigned int)font->height * font->span * (*(unsigned char *)text - font->offs);
 		if ((err = graph_queue(graph, &task, queue)) < 0)
 			return err;
 	}
@@ -304,10 +304,10 @@ int graph_print(graph_t *graph, graph_font_t *font, const char *text, unsigned i
 }
 
 
-int graph_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, int mx, int my, unsigned int queue)
+int graph_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, int mx, int my, graph_queue_t queue)
 {
 	graph_task_t task = {
-		.type = TASK_MOVE,
+		.type = GRAPH_MOVE,
 		.move = { x, y, dx, dy, mx, my },
 		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.move)
 	};
@@ -316,10 +316,10 @@ int graph_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, 
 }
 
 
-int graph_copy(graph_t *graph, void *src, void *dst, unsigned int dx, unsigned int dy, unsigned int srcspan, unsigned int dstspan, unsigned int queue)
+int graph_copy(graph_t *graph, void *src, void *dst, unsigned int dx, unsigned int dy, unsigned int srcspan, unsigned int dstspan, graph_queue_t queue)
 {
 	graph_task_t task = {
-		.type = TASK_COPY,
+		.type = GRAPH_COPY,
 		.copy = { src, dst, dx, dy, srcspan, dstspan },
 		.size = sizeof(task.size) + sizeof(task.type) + sizeof(task.copy)
 	};
@@ -370,26 +370,26 @@ int graph_trigger(graph_t *graph)
 }
 
 
-int graph_stop(graph_t *graph, unsigned int queue)
+int graph_stop(graph_t *graph, graph_queue_t queue)
 {
-	if (queue != GRAPH_QUEUE_LO)
+	if (queue != GRAPH_QUEUE_LOW)
 		graph->hi.stop++;
 
-	if (queue != GRAPH_QUEUE_HI)
+	if (queue != GRAPH_QUEUE_HIGH)
 		graph->lo.stop++;
 
 	return EOK;
 }
 
 
-int graph_start(graph_t *graph, unsigned int queue)
+int graph_start(graph_t *graph, graph_queue_t queue)
 {
-	if (queue != GRAPH_QUEUE_LO) {
+	if (queue != GRAPH_QUEUE_LOW) {
 		if (graph->hi.stop)
 			graph->hi.stop--;
 	}
 
-	if (queue != GRAPH_QUEUE_HI) {
+	if (queue != GRAPH_QUEUE_HIGH) {
 		if (graph->lo.stop)
 			graph->lo.stop--;
 	}
@@ -398,32 +398,32 @@ int graph_start(graph_t *graph, unsigned int queue)
 }
 
 
-int graph_tasks(graph_t *graph, unsigned int queue)
+int graph_tasks(graph_t *graph, graph_queue_t queue)
 {
 	int ret = 0;
 
-	if (queue != GRAPH_QUEUE_LO)
-		ret += graph->hi.tasks;
+	if (queue != GRAPH_QUEUE_LOW)
+		ret += *(volatile unsigned int *)graph->hi.tasks;
 
-	if (queue != GRAPH_QUEUE_HI)
-		ret += graph->lo.tasks;
+	if (queue != GRAPH_QUEUE_HIGH)
+		ret += *(volatile unsigned int *)graph->lo.tasks;
 
 	return ret;
 }
 
 
-int graph_reset(graph_t *graph, unsigned int queue)
+int graph_reset(graph_t *graph, graph_queue_t queue)
 {
 	mutexLock(graph->lock);
 
-	if (queue != GRAPH_QUEUE_LO) {
+	if (queue != GRAPH_QUEUE_LOW) {
 		graph->hi.free = graph->hi.fifo;
 		graph->hi.used = graph->hi.fifo;
 		graph->hi.tasks = 0;
 		graph->hi.stop = 0;
 	}
 
-	if (queue != GRAPH_QUEUE_HI) {
+	if (queue != GRAPH_QUEUE_HIGH) {
 		graph->lo.free = graph->lo.fifo;
 		graph->lo.used = graph->lo.fifo;
 		graph->lo.tasks = 0;
@@ -451,7 +451,7 @@ int graph_vsync(graph_t *graph)
 }
 
 
-int graph_mode(graph_t *graph, unsigned int mode, unsigned int freq)
+int graph_mode(graph_t *graph, graph_mode_t mode, graph_freq_t freq)
 {
 	graph_reset(graph, GRAPH_QUEUE_BOTH);
 	while (graph->isbusy(graph));
@@ -463,8 +463,8 @@ int graph_mode(graph_t *graph, unsigned int mode, unsigned int freq)
 void graph_close(graph_t *graph)
 {
 	graph->close(graph);
-	resourceDestroy(graph->vlock);
 	resourceDestroy(graph->lock);
+	resourceDestroy(graph->vlock);
 	free(graph->hi.fifo);
 }
 
@@ -474,32 +474,32 @@ int graph_open(graph_t *graph, unsigned int mem, unsigned int adapter)
 	unsigned int himem, lomem;
 	int err;
 
-	/* Check min queue size */
+	/* Check min queue size (space for 2 tasks and queue wrap value) */
 	if ((himem = lomem = mem >> 1) < (sizeof(graph_task_t) << 1) + sizeof(unsigned int))
 		return -EINVAL;
 
 	if ((graph->hi.fifo = malloc(himem + lomem)) == NULL)
 		return -ENOMEM;
 
-	if ((err = mutexCreate(&graph->lock)) < 0) {
-		free(graph->hi.fifo);
-		return err;
-	}
-
 	if ((err = mutexCreate(&graph->vlock)) < 0) {
-		resourceDestroy(graph->lock);
 		free(graph->hi.fifo);
 		return err;
 	}
 
-	/* Initialize high piority task FIFO */
+	if ((err = mutexCreate(&graph->lock)) < 0) {
+		resourceDestroy(graph->vlock);
+		free(graph->hi.fifo);
+		return err;
+	}
+
+	/* Initialize high piority tasks queue */
 	graph->hi.end = graph->hi.fifo + himem;
 	graph->hi.free = graph->hi.fifo;
 	graph->hi.used = graph->hi.fifo;
 	graph->hi.tasks = 0;
 	graph->hi.stop = 0;
 
-	/* Initialize low priority task FIFO */
+	/* Initialize low priority task queue */
 	graph->lo.fifo = graph->hi.end;
 	graph->lo.end = graph->lo.fifo + lomem;
 	graph->lo.free = graph->lo.fifo;
@@ -540,8 +540,8 @@ int graph_open(graph_t *graph, unsigned int mem, unsigned int adapter)
 	} while (0);
 
 	if (err < 0) {
-		resourceDestroy(graph->vlock);
 		resourceDestroy(graph->lock);
+		resourceDestroy(graph->vlock);
 		free(graph->hi.fifo);
 	}
 

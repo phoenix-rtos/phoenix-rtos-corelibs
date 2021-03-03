@@ -359,7 +359,7 @@ int soft_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, u
 }
 
 
-int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color, unsigned char type)
+int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color, graph_fill_t type)
 {
 	int *stack, *sp, rx, y1, y2, ret = EOK;
 	unsigned int gh, gw;
@@ -396,7 +396,7 @@ int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color
 	switch (graph->depth) {
 	case 1:
 		switch (type) {
-		case FILL_FLOOD:
+		case GRAPH_FILL_FLOOD:
 			__asm__ volatile (
 			"movl %17, %%edx; "        /* color */
 			"movl %6, %%esi; "         /* data */
@@ -541,7 +541,7 @@ int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color
 			: "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "memory");
 			break;
 
-		case FILL_BOUND:
+		case GRAPH_FILL_BOUND:
 			__asm__ volatile (
 			"movl %14, %%edx; "        /* color */
 			"fill16: "
@@ -681,7 +681,7 @@ int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color
 
 	case 2:
 		switch (type) {
-		case FILL_FLOOD:
+		case GRAPH_FILL_FLOOD:
 			__asm__ volatile (
 			"movl %17, %%edx; "        /* color */
 			"movl %6, %%esi; "         /* data */
@@ -826,7 +826,7 @@ int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color
 			: "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "memory");
 			break;
 
-		case FILL_BOUND:
+		case GRAPH_FILL_BOUND:
 			__asm__ volatile (
 			"movl %14, %%edx; "        /* color */
 			"fill46: "
@@ -966,7 +966,7 @@ int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color
 
 	case 4:
 		switch (type) {
-		case FILL_FLOOD:
+		case GRAPH_FILL_FLOOD:
 			__asm__ volatile (
 			"movl %17, %%edx; "        /* color */
 			"movl %6, %%esi; "         /* data */
@@ -1111,7 +1111,7 @@ int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color
 			: "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "memory");
 			break;
 
-		case FILL_BOUND:
+		case GRAPH_FILL_BOUND:
 			__asm__ volatile (
 			"movl %14, %%edx; "        /* color */
 			"fill76: "
@@ -1683,7 +1683,7 @@ int soft_copy(graph_t *graph, void *src, void *dst, unsigned int dx, unsigned in
 		"rep movsl; "
 		"movl %%ebx, %%ecx; "
 		"andl $3, %%ecx; "
-		"jz copy3: "
+		"jz copy3; "
 		"rep movsb; "
 		"copy3: "
 		"addl %4, %%esi; " /* src += srcspan */

@@ -32,8 +32,9 @@
 
 
 /* Graphics modes */
-enum {
-	GRAPH_640x480x8 = 1,
+typedef enum {
+	GRAPH_NOMODE,
+	GRAPH_640x480x8,
 	GRAPH_800x600x8,
 	GRAPH_1024x768x8,
 	GRAPH_1280x1024x8,
@@ -73,12 +74,13 @@ enum {
 	GRAPH_1680x1050x32,
 	GRAPH_1920x540x32,
 	GRAPH_1920x1080x32
-};
+} graph_mode_t;
 
 
 /* Screen refresh rates */
-enum {
-	GRAPH_56Hz = 1,
+typedef enum {
+	GRAPH_NOFREQ,
+	GRAPH_56Hz,
 	GRAPH_60Hz,
 	GRAPH_70Hz,
 	GRAPH_72Hz,
@@ -92,23 +94,23 @@ enum {
 	GRAPH_240Hz,
 	GRAPH_300Hz,
 	GRAPH_360Hz
-};
+} graph_freq_t;
 
 
-/* Graphics task queues */
-enum {
-	GRAPH_QUEUE_HI,
-	GRAPH_QUEUE_LO,
+/* Graph queues */
+typedef enum {
+	GRAPH_QUEUE_HIGH,
+	GRAPH_QUEUE_LOW,
 	GRAPH_QUEUE_BOTH,
-	GRAPH_QUEUE_DEFAULT = GRAPH_QUEUE_LO
-};
+	GRAPH_QUEUE_DEFAULT = GRAPH_QUEUE_LOW
+} graph_queue_t;
 
 
-/* Polygon fill type */
-enum {
-	FILL_FLOOD,
-	FILL_BOUND
-};
+/* Graph fill type */
+typedef enum {
+	GRAPH_FILL_FLOOD,
+	GRAPH_FILL_BOUND
+} graph_fill_t;
 
 
 typedef struct {
@@ -116,7 +118,7 @@ typedef struct {
 	unsigned char height; /* Glyph height in pixels */
 	unsigned char span;   /* Glyph row span in bytes */
 	unsigned char offs;   /* First character (ASCII offset) */
-	unsigned char *data;  /* Font data */
+	unsigned char *data;  /* Font bitmap */
 } graph_font_t;
 
 
@@ -127,7 +129,7 @@ typedef struct {
 	unsigned char *end;   /* Task buffer end address */
 	unsigned char *free;  /* Free position */
 	unsigned char *used;  /* Used position */
-} graph_queue_t;
+} graph_taskq_t;
 
 
 typedef struct _graph_t graph_t;
@@ -138,30 +140,30 @@ struct _graph_t {
 	void *adapter;        /* Graphics adapter */
 
 	/* Screen info */
-	void *data;           /* Screen buffer */
+	void *data;           /* Framebuffer */
 	unsigned int width;   /* Screen width */
 	unsigned int height;  /* Screen height */
 	unsigned char depth;  /* Screen color depth */
 	unsigned int vsync;   /* Vertical synchronizations */
 
 	/* Task queues */
-	graph_queue_t hi;     /* High priority tasks */
-	graph_queue_t lo;     /* Low priority tasks */
+	graph_taskq_t hi;     /* High priority tasks queue */
+	graph_taskq_t lo;     /* Low priority tasks queue */
 
 	/* Synchronization */
-	handle_t vlock;       /* Vertical synchronization mutex */
-	handle_t lock;        /* Tasks synchronization mutex */
+	handle_t vlock;       /* Vertical synchronizations mutex */
+	handle_t lock;        /* Graph synchronization mutex */
 
 	/* Control functions */
 	void (*close)(graph_t *);
-	int (*mode)(graph_t *, unsigned int, unsigned int);
+	int (*mode)(graph_t *, graph_mode_t, graph_freq_t);
 	int (*isbusy)(graph_t *);
 	int (*trigger)(graph_t *);
 
 	/* Draw functions */
 	int (*line)(graph_t *, unsigned int, unsigned int, int, int, unsigned int, unsigned int);
 	int (*rect)(graph_t *, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int);
-	int (*fill)(graph_t *, unsigned int, unsigned int, unsigned int, unsigned char);
+	int (*fill)(graph_t *, unsigned int, unsigned int, unsigned int, graph_fill_t);
 	int (*print)(graph_t *, unsigned int, unsigned int, unsigned char, unsigned char, unsigned char *, unsigned char, unsigned char, unsigned char, unsigned int);
 
 	/* Copy functions */
@@ -181,27 +183,27 @@ struct _graph_t {
 
 
 /* Draws line */
-extern int graph_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, unsigned int stroke, unsigned int color, unsigned int queue);
+extern int graph_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, unsigned int stroke, unsigned int color, graph_queue_t queue);
 
 
 /* Draws rectangle */
-extern int graph_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color, unsigned int queue);
+extern int graph_rect(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color, graph_queue_t queue);
 
 
 /* Fills polygon */
-extern int graph_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color, unsigned int type, unsigned int queue);
+extern int graph_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color, graph_fill_t type, graph_queue_t queue);
 
 
 /* Prints text */
-extern int graph_print(graph_t *graph, graph_font_t *font, const char *text, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, unsigned int color, unsigned int queue);
+extern int graph_print(graph_t *graph, graph_font_t *font, const char *text, unsigned int x, unsigned int y, unsigned char dx, unsigned char dy, unsigned int color, graph_queue_t queue);
 
 
 /* Moves data */
-extern int graph_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, int mx, int my, unsigned int queue);
+extern int graph_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, unsigned int dy, int mx, int my, graph_queue_t queue);
 
 
 /* Copies data */
-extern int graph_copy(graph_t *graph, void *src, void *dst, unsigned int dx, unsigned int dy, unsigned int srcspan, unsigned int dstspan, unsigned int queue);
+extern int graph_copy(graph_t *graph, void *src, void *dst, unsigned int dx, unsigned int dy, unsigned int srcspan, unsigned int dstspan, graph_queue_t queue);
 
 
 /* Sets color palette */
@@ -232,20 +234,20 @@ extern int graph_cursorhide(graph_t *graph);
 extern int graph_trigger(graph_t *graph);
 
 
-/* Stops graphics task queue processing */
-extern int graph_stop(graph_t *graph, unsigned int queue);
+/* Disables queueing up new tasks */
+extern int graph_stop(graph_t *graph, graph_queue_t queue);
 
 
-/* Starts graphics task queue processing */
-extern int graph_start(graph_t *graph, unsigned int queue);
+/* Enables queueing up new tasks */
+extern int graph_start(graph_t *graph, graph_queue_t queue);
 
 
 /* Returns number of tasks in queue */
-extern int graph_tasks(graph_t *graph, unsigned int queue);
+extern int graph_tasks(graph_t *graph, graph_queue_t queue);
 
 
 /* Resets task queue */
-extern int graph_reset(graph_t *graph, unsigned int queue);
+extern int graph_reset(graph_t *graph, graph_queue_t queue);
 
 
 /* Returns number of vertical synchronizations since last call */
@@ -253,14 +255,14 @@ extern int graph_vsync(graph_t *graph);
 
 
 /* Sets graphics mode */
-extern int graph_mode(graph_t *graph, unsigned int mode, unsigned int freq);
+extern int graph_mode(graph_t *graph, graph_mode_t mode, graph_freq_t freq);
 
 
-/* Closes graphics adapter context */
+/* Closes graph context */
 extern void graph_close(graph_t *graph);
 
 
-/* Opens graphics adapter context */
+/* Opens graph context */
 extern int graph_open(graph_t *graph, unsigned int mem, unsigned int adapter);
 
 

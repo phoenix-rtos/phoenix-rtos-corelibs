@@ -265,7 +265,7 @@ static int cmp_bound(unsigned int data, unsigned int color)
 }
 
 
-int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color, unsigned char type)
+int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color, graph_fill_t type)
 {
 	int (*cmp)(unsigned int, unsigned int);
 	int *stack, *sp, lx, rx, dy;
@@ -293,13 +293,13 @@ int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color
 
 	data = soft_data(graph, x, y);
 	switch (type) {
-	case FILL_FLOOD:
+	case GRAPH_FILL_FLOOD:
 		if ((cmpcolor = soft_get(graph, data)) == color)
 			return EOK;
 		cmp = cmp_flood;
 		break;
 
-	case FILL_BOUND:
+	case GRAPH_FILL_BOUND:
 		cmpcolor = color;
 		cmp = cmp_bound;
 		break;
