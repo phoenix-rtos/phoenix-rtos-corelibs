@@ -343,7 +343,7 @@ static int _virtiogpu_send(virtiogpu_dev_t *vgpu, virtqueue_t *vq, virtiogpu_req
 	while (!req->done)
 		condWait(req->cond, req->lock, 0);
 
-	if (virtio_vtog32(vdev, *(volatile uint32_t *)(&req->hdr.type)) != resp)
+	if (resp && (virtio_vtog32(vdev, *(volatile uint32_t *)(&req->hdr.type)) != resp))
 		return -EFAULT;
 
 	return EOK;
@@ -691,7 +691,7 @@ static int virtiogpu_movecursor(virtiogpu_dev_t *vgpu, virtiogpu_req_t *req, uns
 	req->cursor.pos.x = virtio_gtov32(vdev, x);
 	req->cursor.pos.y = virtio_gtov32(vdev, y);
 
-	ret = _virtiogpu_send(vgpu, &vgpu->curq, req, 0x1100);
+	ret = _virtiogpu_send(vgpu, &vgpu->curq, req, 0);
 
 	mutexUnlock(req->lock);
 
@@ -721,7 +721,7 @@ static int virtiogpu_setcursor(virtiogpu_dev_t *vgpu, virtiogpu_req_t *req, unsi
 	req->cursor.hx = virtio_gtov32(vdev, hx);
 	req->cursor.hy = virtio_gtov32(vdev, hy);
 
-	ret = _virtiogpu_send(vgpu, &vgpu->curq, req, 0x1100);
+	ret = _virtiogpu_send(vgpu, &vgpu->curq, req, 0);
 
 	mutexUnlock(req->lock);
 
@@ -907,29 +907,27 @@ int virtiogpu_cursorset(graph_t *graph, unsigned char *and, unsigned char *xor, 
 {
 	virtiogpu_dev_t *vgpu = (virtiogpu_dev_t *)graph->adapter;
 	uint32_t *cur = vgpu->cur.buff;
-	uint64_t amsk, xmsk;
-	unsigned int i, j;
+	unsigned char amsk, xmsk;
+	unsigned int i, j, k;
 	int err;
 
-	bg = htobe32(bg);
-	fg = htobe32(fg);
-
 	for (i = 0; i < 64; i++) {
-		amsk = *(uint64_t *)(and + 8 * i);
-		xmsk = *(uint64_t *)(xor + 8 * i);
+		for (j = 0; j < 8; j++, and++, xor++) {
+			amsk = *and;
+			xmsk = *xor;
+			for (k = 0; k < 8; k++, amsk <<= 1, xmsk <<= 1) {
+				switch ((amsk & 0x80) >> 6 | (xmsk & 0x80) >> 7) {
+				case 0:
+					*cur++ = bg;
+					break;
 
-		for (j = 0; j < 64; j++, amsk >>= 1, xmsk >>= 1) {
-			switch ((amsk & 0x1) << 1 | (xmsk & 0x1)) {
-			case 0:
-				*cur++ = bg;
-				break;
+				case 1:
+					*cur++ = fg;
+					break;
 
-			case 1:
-				*cur++ = fg;
-				break;
-
-			default:
-				*cur++ = 0;
+				default:
+					*cur++ = 0;
+				}
 			}
 		}
 	}
@@ -937,7 +935,10 @@ int virtiogpu_cursorset(graph_t *graph, unsigned char *and, unsigned char *xor, 
 	if ((err = virtiogpu_transfer(vgpu, vgpu->req, 0, 0, 64, 64, 0, vgpu->cur.rid)) < 0)
 		return err;
 
-	return virtiogpu_setcursor(vgpu, vgpu->req, (vgpu->curst) ? vgpu->curx : graph->width, (vgpu->curst) ? vgpu->cury : graph->height, 0, 0, 0, vgpu->cur.rid);
+	if (vgpu->curst)
+		return virtiogpu_setcursor(vgpu, vgpu->req, vgpu->curx, vgpu->cury, 0, 0, 0, vgpu->cur.rid);
+
+	return EOK;
 }
 
 
@@ -946,7 +947,7 @@ int virtiogpu_cursorhide(graph_t *graph)
 	virtiogpu_dev_t *vgpu = (virtiogpu_dev_t *)graph->adapter;
 	int err;
 
-	if (vgpu->curst && ((err = virtiogpu_movecursor(vgpu, vgpu->req, graph->width, graph->height, 0)) < 0))
+	if (vgpu->curst && ((err = virtiogpu_setcursor(vgpu, vgpu->req, vgpu->curx, vgpu->cury, 0, 0, 0, 0)) < 0))
 		return err;
 	vgpu->curst = 0;
 
@@ -959,7 +960,7 @@ int virtiogpu_cursorshow(graph_t *graph)
 	virtiogpu_dev_t *vgpu = (virtiogpu_dev_t *)graph->adapter;
 	int err;
 
-	if (!vgpu->curst && ((err = virtiogpu_movecursor(vgpu, vgpu->req, vgpu->curx, vgpu->cury, 0)) < 0))
+	if (!vgpu->curst && ((err = virtiogpu_setcursor(vgpu, vgpu->req, vgpu->curx, vgpu->cury, 0, 0, 0, vgpu->cur.rid)) < 0))
 		return err;
 	vgpu->curst = 1;
 
@@ -1076,7 +1077,7 @@ static int virtiogpu_initdev(virtiogpu_dev_t *vgpu)
 
 	vgpu->done = 0;
 	vgpu->rbmp = -1;
-	vgpu->curst = 1;
+	vgpu->curst = 0;
 	vgpu->curx = 0;
 	vgpu->cury = 0;
 
