@@ -1,7 +1,7 @@
 /*
  * Phoenix-RTOS
  *
- * VirtIO PCI low level interface (RISCV64)
+ * VirtIO PCI low level interface (empty)
  *
  * Copyright 2020 Phoenix Systems
  * Author: Lukasz Kosinski

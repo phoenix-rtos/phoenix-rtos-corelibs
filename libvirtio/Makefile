@@ -13,8 +13,8 @@ OBJS = virtio.o virtiopci.o virtqueue.o
 
 ifeq ($(TARGET_FAMILY), ia32)
 	OBJS += virtiopci-ia32.o
-else ifeq ($(TARGET_FAMILY),riscv64)
-	OBJS += virtiopci-riscv64.o
+else
+	OBJS += virtiopci-empty.o
 endif
 
 $(PREFIX_A)libvirtio.a: $(addprefix $(PREFIX_O)libvirtio/, $(OBJS))
