@@ -67,7 +67,7 @@ typedef struct {
 			unsigned int y;
 			unsigned char dx;
 			unsigned char dy;
-			unsigned char *bmp;
+			const unsigned char *bmp;
 			unsigned char width;
 			unsigned char height;
 			unsigned char span;
@@ -84,7 +84,7 @@ typedef struct {
 		} move;
 
 		struct {
-			void *src;
+			const void *src;
 			void *dst;
 			unsigned int dx;
 			unsigned int dy;
@@ -285,7 +285,7 @@ int graph_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int colo
 }
 
 
-int graph_print(graph_t *graph, graph_font_t *font, const char *text, unsigned int x, unsigned int y, unsigned char dx, unsigned char dy, unsigned int color, graph_queue_t queue)
+int graph_print(graph_t *graph, const graph_font_t *font, const char *text, unsigned int x, unsigned int y, unsigned char dx, unsigned char dy, unsigned int color, graph_queue_t queue)
 {
 	graph_task_t task = {
 		.type = GRAPH_PRINT,
@@ -316,7 +316,7 @@ int graph_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, 
 }
 
 
-int graph_copy(graph_t *graph, void *src, void *dst, unsigned int dx, unsigned int dy, unsigned int srcspan, unsigned int dstspan, graph_queue_t queue)
+int graph_copy(graph_t *graph, const void *src, void *dst, unsigned int dx, unsigned int dy, unsigned int srcspan, unsigned int dstspan, graph_queue_t queue)
 {
 	graph_task_t task = {
 		.type = GRAPH_COPY,
@@ -328,7 +328,7 @@ int graph_copy(graph_t *graph, void *src, void *dst, unsigned int dx, unsigned i
 }
 
 
-int graph_colorset(graph_t *graph, unsigned char *colors, unsigned int first, unsigned int last)
+int graph_colorset(graph_t *graph, const unsigned char *colors, unsigned int first, unsigned int last)
 {
 	return graph->colorset(graph, colors, first, last);
 }
@@ -340,7 +340,7 @@ int graph_colorget(graph_t *graph, unsigned char *colors, unsigned int first, un
 }
 
 
-int graph_cursorset(graph_t *graph, unsigned char *and, unsigned char *xor, unsigned int bg, unsigned int fg)
+int graph_cursorset(graph_t *graph, const unsigned char *and, const unsigned char *xor, unsigned int bg, unsigned int fg)
 {
 	return graph->cursorset(graph, and, xor, bg, fg);
 }
@@ -361,6 +361,12 @@ int graph_cursorshow(graph_t *graph)
 int graph_cursorhide(graph_t *graph)
 {
 	return graph->cursorhide(graph);
+}
+
+
+int graph_commit(graph_t *graph)
+{
+	return graph->commit(graph);
 }
 
 
@@ -403,10 +409,10 @@ int graph_tasks(graph_t *graph, graph_queue_t queue)
 	int ret = 0;
 
 	if (queue != GRAPH_QUEUE_LOW)
-		ret += *(volatile unsigned int *)graph->hi.tasks;
+		ret += *(volatile unsigned int *)&graph->hi.tasks;
 
 	if (queue != GRAPH_QUEUE_HIGH)
-		ret += *(volatile unsigned int *)graph->lo.tasks;
+		ret += *(volatile unsigned int *)&graph->lo.tasks;
 
 	return ret;
 }
@@ -438,16 +444,7 @@ int graph_reset(graph_t *graph, graph_queue_t queue)
 
 int graph_vsync(graph_t *graph)
 {
-	int ret;
-
-	mutexLock(graph->vlock);
-
-	ret = graph->vsync;
-	graph->vsync = 0;
-
-	mutexUnlock(graph->vlock);
-
-	return ret;
+	return graph->vsync(graph);
 }
 
 
@@ -464,7 +461,6 @@ void graph_close(graph_t *graph)
 {
 	graph->close(graph);
 	resourceDestroy(graph->lock);
-	resourceDestroy(graph->vlock);
 	free(graph->hi.fifo);
 }
 
@@ -481,13 +477,7 @@ int graph_open(graph_t *graph, unsigned int mem, unsigned int adapter)
 	if ((graph->hi.fifo = malloc(himem + lomem)) == NULL)
 		return -ENOMEM;
 
-	if ((err = mutexCreate(&graph->vlock)) < 0) {
-		free(graph->hi.fifo);
-		return err;
-	}
-
 	if ((err = mutexCreate(&graph->lock)) < 0) {
-		resourceDestroy(graph->vlock);
 		free(graph->hi.fifo);
 		return err;
 	}
@@ -541,7 +531,6 @@ int graph_open(graph_t *graph, unsigned int mem, unsigned int adapter)
 
 	if (err < 0) {
 		resourceDestroy(graph->lock);
-		resourceDestroy(graph->vlock);
 		free(graph->hi.fifo);
 	}
 

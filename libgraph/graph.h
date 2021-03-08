@@ -114,21 +114,21 @@ typedef enum {
 
 
 typedef struct {
-	unsigned char width;  /* Glyph width in pixels */
-	unsigned char height; /* Glyph height in pixels */
-	unsigned char span;   /* Glyph row span in bytes */
-	unsigned char offs;   /* First character (ASCII offset) */
-	unsigned char *data;  /* Font bitmap */
+	unsigned char width;       /* Glyph width in pixels */
+	unsigned char height;      /* Glyph height in pixels */
+	unsigned char span;        /* Glyph row span in bytes */
+	unsigned char offs;        /* First character (ASCII offset) */
+	const unsigned char *data; /* Font bitmap */
 } graph_font_t;
 
 
 typedef struct {
-	unsigned int stop;    /* Stop counter */
-	unsigned int tasks;   /* Number of tasks to process */
-	unsigned char *fifo;  /* Task buffer start address */
-	unsigned char *end;   /* Task buffer end address */
-	unsigned char *free;  /* Free position */
-	unsigned char *used;  /* Used position */
+	unsigned int stop;         /* Stop counter */
+	unsigned int tasks;        /* Number of tasks to process */
+	unsigned char *fifo;       /* Task buffer start address */
+	unsigned char *end;        /* Task buffer end address */
+	unsigned char *free;       /* Free position */
+	unsigned char *used;       /* Used position */
 } graph_taskq_t;
 
 
@@ -137,45 +137,45 @@ typedef struct _graph_t graph_t;
 
 struct _graph_t {
 	/* Graph info */
-	void *adapter;        /* Graphics adapter */
+	void *adapter;             /* Graphics adapter */
 
 	/* Screen info */
-	void *data;           /* Framebuffer */
-	unsigned int width;   /* Screen width */
-	unsigned int height;  /* Screen height */
-	unsigned char depth;  /* Screen color depth */
-	unsigned int vsync;   /* Vertical synchronizations */
+	void *data;                /* Framebuffer */
+	unsigned int width;        /* Screen width */
+	unsigned int height;       /* Screen height */
+	unsigned char depth;       /* Screen color depth */
 
 	/* Task queues */
-	graph_taskq_t hi;     /* High priority tasks queue */
-	graph_taskq_t lo;     /* Low priority tasks queue */
+	graph_taskq_t hi;          /* High priority tasks queue */
+	graph_taskq_t lo;          /* Low priority tasks queue */
 
 	/* Synchronization */
-	handle_t vlock;       /* Vertical synchronizations mutex */
-	handle_t lock;        /* Graph synchronization mutex */
+	handle_t lock;             /* Graph synchronization mutex */
 
 	/* Control functions */
 	void (*close)(graph_t *);
 	int (*mode)(graph_t *, graph_mode_t, graph_freq_t);
+	int (*vsync)(graph_t *);
 	int (*isbusy)(graph_t *);
 	int (*trigger)(graph_t *);
+	int (*commit)(graph_t *);
 
 	/* Draw functions */
 	int (*line)(graph_t *, unsigned int, unsigned int, int, int, unsigned int, unsigned int);
 	int (*rect)(graph_t *, unsigned int, unsigned int, unsigned int, unsigned int, unsigned int);
 	int (*fill)(graph_t *, unsigned int, unsigned int, unsigned int, graph_fill_t);
-	int (*print)(graph_t *, unsigned int, unsigned int, unsigned char, unsigned char, unsigned char *, unsigned char, unsigned char, unsigned char, unsigned int);
+	int (*print)(graph_t *, unsigned int, unsigned int, unsigned char, unsigned char, const unsigned char *, unsigned char, unsigned char, unsigned char, unsigned int);
 
 	/* Copy functions */
 	int (*move)(graph_t *, unsigned int, unsigned int, unsigned int, unsigned int, int, int);
-	int (*copy)(graph_t *, void *, void *, unsigned int, unsigned int, unsigned int, unsigned int);
+	int (*copy)(graph_t *, const void *, void *, unsigned int, unsigned int, unsigned int, unsigned int);
 
 	/* Color palette functions */
-	int (*colorset)(graph_t *, unsigned char *, unsigned int, unsigned int);
+	int (*colorset)(graph_t *, const unsigned char *, unsigned int, unsigned int);
 	int (*colorget)(graph_t *, unsigned char *, unsigned int, unsigned int);
 
 	/* Cursor functions */
-	int (*cursorset)(graph_t *, unsigned char *, unsigned char *, unsigned int, unsigned int);
+	int (*cursorset)(graph_t *, const unsigned char *, const unsigned char *, unsigned int, unsigned int);
 	int (*cursorpos)(graph_t *, unsigned int, unsigned int);
 	int (*cursorshow)(graph_t *);
 	int (*cursorhide)(graph_t *);
@@ -195,7 +195,7 @@ extern int graph_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned i
 
 
 /* Prints text */
-extern int graph_print(graph_t *graph, graph_font_t *font, const char *text, unsigned int x, unsigned int y, unsigned char dx, unsigned char dy, unsigned int color, graph_queue_t queue);
+extern int graph_print(graph_t *graph, const graph_font_t *font, const char *text, unsigned int x, unsigned int y, unsigned char dx, unsigned char dy, unsigned int color, graph_queue_t queue);
 
 
 /* Moves data */
@@ -203,11 +203,11 @@ extern int graph_move(graph_t *graph, unsigned int x, unsigned int y, unsigned i
 
 
 /* Copies data */
-extern int graph_copy(graph_t *graph, void *src, void *dst, unsigned int dx, unsigned int dy, unsigned int srcspan, unsigned int dstspan, graph_queue_t queue);
+extern int graph_copy(graph_t *graph, const void *src, void *dst, unsigned int dx, unsigned int dy, unsigned int srcspan, unsigned int dstspan, graph_queue_t queue);
 
 
 /* Sets color palette */
-extern int graph_colorset(graph_t *graph, unsigned char *colors, unsigned int first, unsigned int last);
+extern int graph_colorset(graph_t *graph, const unsigned char *colors, unsigned int first, unsigned int last);
 
 
 /* Retrieves color palette */
@@ -215,7 +215,7 @@ extern int graph_colorget(graph_t *graph, unsigned char *colors, unsigned int fi
 
 
 /* Sets cursor icon */
-extern int graph_cursorset(graph_t *graph, unsigned char *and, unsigned char *xor, unsigned int bg, unsigned int fg);
+extern int graph_cursorset(graph_t *graph, const unsigned char *and, const unsigned char *xor, unsigned int bg, unsigned int fg);
 
 
 /* Updates cursor position */
@@ -228,6 +228,10 @@ extern int graph_cursorshow(graph_t *graph);
 
 /* Disables cursor */
 extern int graph_cursorhide(graph_t *graph);
+
+
+/* Commits framebuffer changes (flushes framebuffer to screen) */
+extern int graph_commit(graph_t *graph);
 
 
 /* Triggers next task execution */

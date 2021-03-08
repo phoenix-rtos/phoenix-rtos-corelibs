@@ -23,7 +23,4 @@ $(PREFIX_A)libgraph.a: $(addprefix $(PREFIX_O)libgraph/, $(OBJS)) $(PREFIX_A)lib
 $(PREFIX_H)libgraph.h: libgraph/graph.h
 	$(HEADER)
 
-$(PREFIX_PROG)test: $(addprefix $(PREFIX_O)libgraph/, test.o) $(PREFIX_A)libgraph.a $(PREFIX_A)libvirtio.a
-	$(LINK)
-
-all: $(PREFIX_A)libgraph.a $(PREFIX_H)libgraph.h $(PREFIX_PROG_STRIPPED)test
+all: $(PREFIX_A)libgraph.a $(PREFIX_H)libgraph.h

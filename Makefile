@@ -34,5 +34,6 @@ ifneq ($(filter clean,$(MAKECMDGOALS)),)
 endif
 
 include libcgi/Makefile
-#include libgraph/Makefile
 include libvirtio/Makefile
+include libgraph/Makefile
+include libgraph/test/Makefile

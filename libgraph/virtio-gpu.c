@@ -11,7 +11,6 @@
  * %LICENSE%
  */
 
-#include <endian.h>
 #include <errno.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -21,7 +20,6 @@
 #include <sys/interrupt.h>
 #include <sys/mman.h>
 #include <sys/threads.h>
-#include <sys/time.h>
 #include <sys/types.h>
 
 #include <libvirtio.h>
@@ -178,10 +176,6 @@ typedef struct {
 	unsigned int curx;              /* Cursor horizontal coordinate */
 	unsigned int cury;              /* Cursor vertical coordinate */
 
-	/* Vsync thread */
-	volatile unsigned int vtime;    /* Vsync refresh time cycle (in us) */
-	char vstack[2048] __attribute__((aligned(8)));
-
 	/* Interrupt/polling thread */
 	volatile unsigned int isr;      /* Interrupt status */
 	handle_t lock;                  /* Interrupt mutex */
@@ -197,12 +191,6 @@ typedef struct {
 	unsigned int height;            /* Screen height */
 	unsigned char depth;            /* Screen color depth */
 } virtiogpu_mode_t;
-
-
-typedef struct {
-	graph_freq_t freq;              /* Screen refresh rate */
-	unsigned int time;              /* Refresh time cycle (in us) */
-} virtiogpu_freq_t;
 
 
 /* VirtIO GPU device descriptors */
@@ -262,26 +250,6 @@ static const virtiogpu_mode_t modes[] = {
 };
 
 
-/* Screen refresh rates table */
-static const virtiogpu_freq_t freqs[] = {
-	{ GRAPH_56Hz,  17857 },
-	{ GRAPH_60Hz,  16666 },
-	{ GRAPH_70Hz,  14285 },
-	{ GRAPH_72Hz,  13888 },
-	{ GRAPH_75Hz,  13333 },
-	{ GRAPH_80Hz,  12500 },
-	{ GRAPH_87Hz,  11494 },
-	{ GRAPH_90Hz,  11111 },
-	{ GRAPH_120Hz, 8333 },
-	{ GRAPH_144HZ, 6944 },
-	{ GRAPH_165Hz, 6060 },
-	{ GRAPH_240Hz, 4166 },
-	{ GRAPH_300Hz, 3333 },
-	{ GRAPH_360Hz, 2777 },
-	{ GRAPH_NOFREQ }
-};
-
-
 struct {
 	virtio_ctx_t vctx;              /* Device detection context */
 	unsigned int desc;              /* Processed descriptors */
@@ -292,31 +260,24 @@ struct {
 extern int graph_schedule(graph_t *graph);
 
 
-/* Returns timestamp */
-static inline unsigned long long virtiogpu_timestamp(void)
-{
-	struct timeval time;
-
-	gettimeofday(&time, NULL);
-
-	return 1000000ULL * (unsigned long long)time.tv_sec + (unsigned long long)time.tv_usec;
-}
-
-
-/* Returns time delta */
-static inline unsigned long long virtiogpu_timediff(unsigned long long start, unsigned long long end)
-{
-	return (end < start) ? (unsigned long long)-1 - start + end : end - start;
-}
-
-
-/* Returns host resource format (RGBA big endian) */
-static inline int virtiogpu_format(void)
+/* Returns host framebuffer resource format (RGBA big endian, ABGR little endian) */
+static inline int virtiogpu_rgba(void)
 {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 	return 121;
 #else
 	return 67;
+#endif
+}
+
+
+/* Returns host cursor icon resource format (ARGB big endian, BGRA little endian) */
+static inline int virtiogpu_argb(void)
+{
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+	return 1;
+#else
+	return 3;
 #endif
 }
 
@@ -418,7 +379,7 @@ static int virtiogpu_info(virtiogpu_dev_t *vgpu, virtiogpu_req_t *req, virtiogpu
 			info->pmodes[i].enabled = virtio_vtog32(vdev, req->info.pmodes[i].enabled);
 			info->pmodes[i].flags = virtio_vtog32(vdev, req->info.pmodes[i].flags);
 		}
-	} while(0);
+	} while (0);
 
 	mutexUnlock(req->lock);
 
@@ -492,7 +453,7 @@ static int virtiogpu_alloc(virtiogpu_dev_t *vgpu, virtiogpu_req_t *req, unsigned
 
 		ret = virtio_vtog32(vdev, req->alloc.rid);
 		vgpu->rbmp &= ~ret;
-	} while(0);
+	} while (0);
 
 	mutexUnlock(req->lock);
 
@@ -522,7 +483,7 @@ static int virtiogpu_free(virtiogpu_dev_t *vgpu, virtiogpu_req_t *req, unsigned 
 			break;
 
 		vgpu->rbmp |= rid;
-	} while(0);
+	} while (0);
 
 	mutexUnlock(req->lock);
 
@@ -729,8 +690,8 @@ static int virtiogpu_setcursor(virtiogpu_dev_t *vgpu, virtiogpu_req_t *req, unsi
 }
 
 
-/* Creates resources */
-static int virtiogpu_create(virtiogpu_dev_t *vgpu, virtiogpu_req_t *req, unsigned int width, unsigned int height, virtiogpu_resource_t *res)
+/* Creates resource */
+static int virtiogpu_create(virtiogpu_dev_t *vgpu, virtiogpu_req_t *req, unsigned int format, unsigned int width, unsigned int height, virtiogpu_resource_t *res)
 {
 	int err;
 
@@ -738,7 +699,7 @@ static int virtiogpu_create(virtiogpu_dev_t *vgpu, virtiogpu_req_t *req, unsigne
 	if ((res->buff = mmap(NULL, res->len, PROT_READ | PROT_WRITE, MAP_UNCACHED | MAP_ANONYMOUS, OID_CONTIGUOUS, 0)) == MAP_FAILED)
 		return -ENOMEM;
 
-	if ((err = virtiogpu_alloc(vgpu, req, virtiogpu_format(), width, height)) < 0) {
+	if ((err = virtiogpu_alloc(vgpu, req, format, width, height)) < 0) {
 		munmap(res->buff, res->len);
 		return err;
 	}
@@ -847,47 +808,6 @@ static void virtiogpu_intthr(void *arg)
 }
 
 
-/* Vsync thread */
-static void virtiogpu_vsyncthr(void *arg)
-{
-	graph_t *graph = (graph_t *)arg;
-	virtiogpu_dev_t *vgpu = (virtiogpu_dev_t *)graph->adapter;
-	unsigned long long diff, vtime, time = virtiogpu_timestamp();
-	virtiogpu_req_t *req;
-
-	if ((req = virtiogpu_get()) == NULL)
-		endthread();
-
-	while (!vgpu->done) {
-		vtime = vgpu->vtime;
-		if ((diff = virtiogpu_timediff(time, virtiogpu_timestamp())) < vtime)
-			usleep(vtime - diff);
-		time += vtime;
-
-		/* Transfer and flush framebuffer */
-		mutexLock(graph->lock);
-
-		virtiogpu_transfer(vgpu, req, 0, 0, graph->width, graph->height, 0, vgpu->fb.rid);
-		virtiogpu_flush(vgpu, req, 0, 0, graph->width, graph->height, vgpu->fb.rid);
-
-		mutexUnlock(graph->lock);
-
-		/* Update vsync counter */
-		mutexLock(graph->vlock);
-
-		graph->vsync++;
-
-		mutexUnlock(graph->vlock);
-
-		/* Try to reschedule */
-		graph_schedule(graph);
-	}
-
-	virtiogpu_put(req);
-	endthread();
-}
-
-
 int virtiogpu_cursorpos(graph_t *graph, unsigned int x, unsigned int y)
 {
 	virtiogpu_dev_t *vgpu = (virtiogpu_dev_t *)graph->adapter;
@@ -903,7 +823,7 @@ int virtiogpu_cursorpos(graph_t *graph, unsigned int x, unsigned int y)
 }
 
 
-int virtiogpu_cursorset(graph_t *graph, unsigned char *and, unsigned char *xor, unsigned int bg, unsigned int fg)
+int virtiogpu_cursorset(graph_t *graph, const unsigned char *and, const unsigned char *xor, unsigned int bg, unsigned int fg)
 {
 	virtiogpu_dev_t *vgpu = (virtiogpu_dev_t *)graph->adapter;
 	uint32_t *cur = vgpu->cur.buff;
@@ -968,7 +888,7 @@ int virtiogpu_cursorshow(graph_t *graph)
 }
 
 
-int virtiogpu_colorset(graph_t *graph, unsigned char *colors, unsigned int first, unsigned int last)
+int virtiogpu_colorset(graph_t *graph, const unsigned char *colors, unsigned int first, unsigned int last)
 {
 	return -ENOTSUP;
 }
@@ -1004,6 +924,31 @@ int virtiogpu_isbusy(graph_t *graph)
 }
 
 
+int virtiogpu_commit(graph_t *graph)
+{
+	virtiogpu_dev_t *vgpu = (virtiogpu_dev_t *)graph->adapter;
+	int ret;
+
+	/* Transfer and flush framebuffer */
+	mutexLock(graph->lock);
+
+	do {
+		if ((ret = virtiogpu_transfer(vgpu, vgpu->req, 0, 0, graph->width, graph->height, 0, vgpu->fb.rid)) < 0)
+			break;
+
+		if ((ret = virtiogpu_flush(vgpu, vgpu->req, 0, 0, graph->width, graph->height, vgpu->fb.rid)) < 0)
+			break;
+	} while (0);
+
+	mutexUnlock(graph->lock);
+
+	/* Try to reschedule */
+	graph_schedule(graph);
+
+	return ret;
+}
+
+
 int virtiogpu_trigger(graph_t *graph)
 {
 	if (virtiogpu_isbusy(graph))
@@ -1013,23 +958,25 @@ int virtiogpu_trigger(graph_t *graph)
 }
 
 
+int virtiogpu_vsync(graph_t *graph)
+{
+	return 1;
+}
+
+
 int virtiogpu_mode(graph_t *graph, graph_mode_t mode, graph_freq_t freq)
 {
 	virtiogpu_dev_t *vgpu = (virtiogpu_dev_t *)graph->adapter;
 	virtiogpu_resource_t res;
-	unsigned int i, j;
+	unsigned int i;
 	int err;
 
 	for (i = 0; modes[i].mode != mode; i++)
 		if (modes[i].mode == GRAPH_NOMODE)
 			return -ENOTSUP;
 
-	for (j = 0; freqs[j].freq != freq; j++)
-		if (freqs[j].freq == GRAPH_NOFREQ)
-			return -ENOTSUP;
-
 	/* Create new framebuffer resource and set it as scanout for the display */
-	if ((err = virtiogpu_create(vgpu, vgpu->req, modes[i].width, modes[i].height, &res)) < 0)
+	if ((err = virtiogpu_create(vgpu, vgpu->req, virtiogpu_rgba(), modes[i].width, modes[i].height, &res)) < 0)
 		return err;
 
 	if ((err = virtiogpu_scanout(vgpu, vgpu->req, 0, 0, modes[i].width, modes[i].height, 0, res.rid)) < 0) {
@@ -1044,7 +991,6 @@ int virtiogpu_mode(graph_t *graph, graph_mode_t mode, graph_freq_t freq)
 	graph->width = modes[i].width;
 	graph->height = modes[i].height;
 	graph->depth = modes[i].depth;
-	vgpu->vtime = freqs[j].time;
 	virtiogpu_destroy(vgpu, vgpu->req, &vgpu->fb);
 	vgpu->fb = res;
 
@@ -1126,6 +1072,7 @@ static int virtiogpu_initdev(virtiogpu_dev_t *vgpu)
 		if ((err = interrupt(vdev->info.irq, virtiogpu_int, vgpu, vgpu->cond, &vgpu->inth)) < 0) {
 			/* End interrupt/polling thread */
 			mutexLock(vgpu->lock);
+			vgpu->isr |= (1 << 1);
 			vgpu->done = 1;
 			condSignal(vgpu->cond);
 			mutexUnlock(vgpu->lock);
@@ -1141,7 +1088,7 @@ static int virtiogpu_initdev(virtiogpu_dev_t *vgpu)
 		virtio_writeStatus(vdev, virtio_readStatus(vdev) | (1 << 2));
 
 		return EOK;
-	} while(0);
+	} while (0);
 
 	virtio_writeStatus(vdev, virtio_readStatus(vdev) | (1 << 7));
 	virtio_destroyDev(vdev);
@@ -1160,14 +1107,12 @@ void virtiogpu_close(graph_t *graph)
 	virtiogpu_put(vgpu->req);
 
 	/* TODO: uninstall interrupt handler */
-	/* End threads */
+	/* End interrupt/polling thread */
 	mutexLock(vgpu->lock);
+	vgpu->isr |= (1 << 1);
 	vgpu->done = 1;
 	condSignal(vgpu->cond);
 	mutexUnlock(vgpu->lock);
-
-	/* Join interrupt/polling and vsync threads */
-	while (threadJoin(0) < 0);
 	while (threadJoin(0) < 0);
 
 	/* Destroy device */
@@ -1221,13 +1166,13 @@ int virtiogpu_open(graph_t *graph)
 				}
 
 				/* Create framebuffer */
-				if ((err = virtiogpu_create(vgpu, vgpu->req, vinfo.pmodes[0].r.w, vinfo.pmodes[0].r.h, &vgpu->fb)) < 0) {
+				if ((err = virtiogpu_create(vgpu, vgpu->req, virtiogpu_rgba(), vinfo.pmodes[0].r.w, vinfo.pmodes[0].r.h, &vgpu->fb)) < 0) {
 					virtiogpu_put(vgpu->req);
 					break;
 				}
 
 				/* Create cursor */
-				if ((err = virtiogpu_create(vgpu, vgpu->req, 64, 64, &vgpu->cur)) < 0) {
+				if ((err = virtiogpu_create(vgpu, vgpu->req, virtiogpu_argb(), 64, 64, &vgpu->cur)) < 0) {
 					virtiogpu_destroy(vgpu, vgpu->req, &vgpu->fb);
 					virtiogpu_put(vgpu->req);
 					break;
@@ -1247,22 +1192,14 @@ int virtiogpu_open(graph_t *graph)
 				graph->width = vinfo.pmodes[0].r.w;
 				graph->height = vinfo.pmodes[0].r.h;
 				graph->depth = 4;
-				graph->vsync = 0;
-				vgpu->vtime = freqs[1].time;
-
-				/* Run vsync thread */
-				if ((err = beginthread(virtiogpu_vsyncthr, 4, vgpu->vstack, sizeof(vgpu->vstack), graph)) < 0) {
-					virtiogpu_destroy(vgpu, vgpu->req, &vgpu->cur);
-					virtiogpu_destroy(vgpu, vgpu->req, &vgpu->fb);
-					virtiogpu_put(vgpu->req);
-					break;
-				}
 
 				/* Set graph functions */
 				graph->close = virtiogpu_close;
 				graph->mode = virtiogpu_mode;
+				graph->vsync = virtiogpu_vsync;
 				graph->isbusy = virtiogpu_isbusy;
 				graph->trigger = virtiogpu_trigger;
+				graph->commit = virtiogpu_commit;
 				graph->colorset = virtiogpu_colorset;
 				graph->colorget = virtiogpu_colorget;
 				graph->cursorset = virtiogpu_cursorset;
@@ -1271,10 +1208,11 @@ int virtiogpu_open(graph_t *graph)
 				graph->cursorhide = virtiogpu_cursorhide;
 
 				return EOK;
-			} while(0);
+			} while (0);
 
 			/* End interrupt/polling thread */
 			mutexLock(vgpu->lock);
+			vgpu->isr |= (1 << 1);
 			vgpu->done = 1;
 			condSignal(vgpu->cond);
 			mutexUnlock(vgpu->lock);

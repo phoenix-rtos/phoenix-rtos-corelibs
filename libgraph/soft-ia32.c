@@ -1258,7 +1258,7 @@ int soft_fill(graph_t *graph, unsigned int x, unsigned int y, unsigned int color
 }
 
 
-int soft_print(graph_t *graph, unsigned int x, unsigned int y, unsigned char dx, unsigned char dy, unsigned char *bmp, unsigned char width, unsigned char height, unsigned char span, unsigned int color)
+int soft_print(graph_t *graph, unsigned int x, unsigned int y, unsigned char dx, unsigned char dy, const unsigned char *bmp, unsigned char width, unsigned char height, unsigned char span, unsigned int color)
 {
 	unsigned int line[0x100];
 	int sl, dl;
@@ -1508,14 +1508,14 @@ int soft_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, u
 	void *src, *dst;
 
 #ifdef GRAPH_VERIFY_ARGS
-	if ((x + dx >= graph->width) || (y + dy >= graph->height)||
+	if ((x + dx > graph->width) || (y + dy > graph->height)||
 		((int)x + mx < 0) || ((int)y + my < 0) ||
 		((int)x + mx > graph->width) || ((int)y + my > graph->height) ||
-		(x + dx + mx >= graph->width) || (y + dy + mx >= graph->height))
+		(x + dx + mx > graph->width) || (y + dy + my > graph->height))
 		return -EINVAL;
 #endif
 
-	if (!dx || !dy || !mx || !my)
+	if (!dx || !dy || (!mx && !my))
 		return EOK;
 
 	src = soft_data(graph, x, y);
@@ -1648,7 +1648,7 @@ int soft_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx, u
 }
 
 
-int soft_copy(graph_t *graph, void *src, void *dst, unsigned int dx, unsigned int dy, unsigned int srcspan, unsigned int dstspan)
+int soft_copy(graph_t *graph, const void *src, void *dst, unsigned int dx, unsigned int dy, unsigned int srcspan, unsigned int dstspan)
 {
 #ifdef GRAPH_VERIFY_ARGS
 	if ((srcspan < graph->depth * dx) || (dstspan < graph->depth * dx))
