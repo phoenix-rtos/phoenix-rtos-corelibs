@@ -15,6 +15,8 @@
 #ifndef _FONT_H_
 #define _FONT_H_
 
+#include <libgraph.h>
+
 
 /* VGAROM 16x32 font */
 static const unsigned char vgarom16x32[4672][8] = {
@@ -4690,6 +4692,15 @@ static const unsigned char vgarom16x32[4672][8] = {
 	{ 0x3f, 0xfc, 0x3f, 0xfc, 0x3c, 0xfc, 0x3c, 0xfc },
 	{ 0x00, 0xf0, 0x00, 0xf0, 0x00, 0x00, 0x00, 0x00 },
 	{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 }
+};
+
+
+static const graph_font_t font = {
+	.width = 16,
+	.height = 32,
+	.span = 2,
+	.offs = ' ' - 1,
+	.data = vgarom16x32[0]
 };
 
 

@@ -14,8 +14,6 @@
 #ifndef _LOGO_H_
 #define _LOGO_H_
 
-#include <libgraph.h>
-
 
 /* 300x225x4 RGBA Phoenix-RTOS logo */
 static const unsigned char logo[33750][8] = {
@@ -33769,15 +33767,6 @@ static const unsigned char logo[33750][8] = {
 	{ 0x00, 0x3a, 0x42, 0xf9, 0x00, 0x3a, 0x42, 0xf9 },
 	{ 0x00, 0x3a, 0x42, 0xf9, 0x00, 0x3a, 0x42, 0xf9 },
 	{ 0x00, 0x3a, 0x42, 0xf9, 0x00, 0x3a, 0x42, 0xf9 }
-};
-
-
-static const graph_font_t font = {
-	.width = 16,
-	.height = 32,
-	.span = 2,
-	.offs = ' ' - 1,
-	.data = vgarom16x32[0]
 };
 
 
