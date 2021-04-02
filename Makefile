@@ -35,5 +35,6 @@ endif
 
 include libcgi/Makefile
 include libvirtio/Makefile
+include libvga/Makefile
 include libgraph/Makefile
 include libgraph/test/Makefile
