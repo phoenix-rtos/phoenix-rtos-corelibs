@@ -9,7 +9,8 @@
 # %LICENSE%
 #
 
-OBJS = graph.o virtio-gpu.o
+OBJS = graph.o vgadev.o virtio-gpu.o
+LIBS = libvga.a libvirtio.a
 
 ifeq ($(TARGET_FAMILY), ia32)
 	OBJS += soft-ia32.o
@@ -17,7 +18,7 @@ else
 	OBJS += soft.o
 endif
 
-$(PREFIX_A)libgraph.a: $(addprefix $(PREFIX_O)libgraph/, $(OBJS)) $(PREFIX_A)libvirtio.a
+$(PREFIX_A)libgraph.a: $(addprefix $(PREFIX_O)libgraph/, $(OBJS)) $(addprefix $(PREFIX_A), $(LIBS))
 	$(ARCH)
 
 $(PREFIX_H)libgraph.h: libgraph/graph.h

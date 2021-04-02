@@ -18,29 +18,45 @@
 #include <sys/types.h>
 
 
-/* Check graphics functions arguments */
-// #define GRAPH_VERIFY_ARGS
-
-
-/* Graphics adapters */
-// #define GRAPH_CT69000   (1 << 0)
-// #define GRAPH_SAVAGE4   (1 << 1)
-// #define GRAPH_GEODELX   (1 << 2)
-#define GRAPH_VIRTIOGPU (1 << 3)
-#define GRAPH_ANY       -1
+/* Generic graphics adapters */
 #define GRAPH_NONE       0
+#define GRAPH_ANY       -1
+#define GRAPH_VGADEV    (1 << 0)
+#define GRAPH_VIRTIOGPU (1 << 1)
+
+
+/* Graphics adapters supported on IA32 platform */
+#ifdef TARGET_IA32
+// #define GRAPH_CIRRUS    (1 << 2)
+// #define GRAPH_CT69000   (1 << 3)
+// #define GRAPH_SAVAGE4   (1 << 4)
+// #define GRAPH_GEODELX   (1 << 5)
+#endif
 
 
 /* Graphics modes */
 typedef enum {
+	/* Control modes */
 	GRAPH_NOMODE,
+	GRAPH_ON,
+	GRAPH_OFF,
+	GRAPH_STANDBY,
+	GRAPH_SUSPEND,
+	/* 1-byte color */
+	GRAPH_320x200x8,
+	GRAPH_640x400x8,
 	GRAPH_640x480x8,
 	GRAPH_800x600x8,
 	GRAPH_1024x768x8,
+	GRAPH_1152x864x8,
 	GRAPH_1280x1024x8,
+	GRAPH_1600x1200x8,
+	/* 2-byte color */
 	GRAPH_640x480x16,
 	GRAPH_800x600x16,
 	GRAPH_1024x768x16,
+	GRAPH_1280x1024x16,
+	/* 4-byte color */
 	GRAPH_640x480x32,
 	GRAPH_720x480x32,
 	GRAPH_720x576x32,
@@ -80,12 +96,16 @@ typedef enum {
 /* Screen refresh rates */
 typedef enum {
 	GRAPH_NOFREQ,
+	GRAPH_24Hz,
+	GRAPH_30Hz,
+	GRAPH_43Hz,
 	GRAPH_56Hz,
 	GRAPH_60Hz,
 	GRAPH_70Hz,
 	GRAPH_72Hz,
 	GRAPH_75Hz,
 	GRAPH_80Hz,
+	GRAPH_85Hz,
 	GRAPH_87Hz,
 	GRAPH_90Hz,
 	GRAPH_120Hz,

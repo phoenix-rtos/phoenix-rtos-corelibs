@@ -116,10 +116,24 @@ extern int geode_init(void);
 #endif
 
 
+#ifdef GRAPH_CIRRUS
+extern int cirrus_open(graph_t *);
+extern void cirrus_done(void);
+extern int cirrus_init(void);
+#endif
+
+
 #ifdef GRAPH_VIRTIOGPU
 extern int virtiogpu_open(graph_t *);
 extern void virtiogpu_done(void);
 extern int virtiogpu_init(void);
+#endif
+
+
+#ifdef GRAPH_VGADEV
+extern int vgadev_open(graph_t *);
+extern void vgadev_done(void);
+extern int vgadev_init(void);
 #endif
 
 
@@ -194,30 +208,11 @@ int graph_schedule(graph_t *graph)
 }
 
 
-/* Queues up task for execution */
-static int graph_queue(graph_t *graph, graph_task_t *task, graph_queue_t queue)
+static int _graph_queue(graph_t *graph, graph_task_t *task, graph_taskq_t *q)
 {
-	graph_taskq_t *q;
-
-	switch (queue) {
-	case GRAPH_QUEUE_LOW:
-		q = &graph->lo;
-		break;
-
-	case GRAPH_QUEUE_HIGH:
-		q = &graph->hi;
-		break;
-
-	default:
-		return -EINVAL;
-	}
-
 	if (q->stop)
 		return -EACCES;
 
-	mutexLock(graph->lock);
-
-	/* Queue up task */
 	if (graph->isbusy(graph) || graph->hi.tasks || q->tasks) {
 		if (q->free < q->used) {
 			if (q->free + task->size > q->used)
@@ -234,18 +229,41 @@ static int graph_queue(graph_t *graph, graph_task_t *task, graph_queue_t queue)
 		memcpy(q->free, task, task->size);
 		q->free += task->size;
 		q->tasks++;
-	}
-	/* Execute task */
-	else {
-		_graph_exec(graph, task);
+
+		return EOK;
 	}
 
-	/* Try to reschedule */
+	return _graph_exec(graph, task);
+}
+
+
+/* Queues up task for execution */
+static int graph_queue(graph_t *graph, graph_task_t *task, graph_queue_t queue)
+{
+	graph_taskq_t *q;
+	int ret;
+
+	switch (queue) {
+	case GRAPH_QUEUE_LOW:
+		q = &graph->lo;
+		break;
+
+	case GRAPH_QUEUE_HIGH:
+		q = &graph->hi;
+		break;
+
+	default:
+		return -EINVAL;
+	}
+
+	mutexLock(graph->lock);
+
+	ret = _graph_queue(graph, task, q);
 	_graph_schedule(graph);
 
 	mutexUnlock(graph->lock);
 
-	return EOK;
+	return ret;
 }
 
 
@@ -522,8 +540,18 @@ int graph_open(graph_t *graph, unsigned int mem, unsigned int adapter)
 			break;
 #endif
 
+#ifdef GRAPH_CIRRUS
+		if ((adapter & GRAPH_CIRRUS) && ((err = cirrus_open(graph)) != -ENODEV))
+			break;
+#endif
+
 #ifdef GRAPH_VIRTIOGPU
 		if ((adapter & GRAPH_VIRTIOGPU) && ((err = virtiogpu_open(graph)) != -ENODEV))
+			break;
+#endif
+
+#ifdef GRAPH_VGADEV
+		if ((adapter & GRAPH_VGADEV) && ((err = vgadev_open(graph)) != -ENODEV))
 			break;
 #endif
 		err = -ENODEV;
@@ -552,8 +580,16 @@ void graph_done(void)
 	geode_done();
 #endif
 
+#ifdef GRAPH_CIRRUS
+	cirrus_done();
+#endif
+
 #ifdef GRAPH_VIRTIOGPU
 	virtiogpu_done();
+#endif
+
+#ifdef GRAPH_VGADEV
+	vgadev_done();
 #endif
 }
 
@@ -577,8 +613,18 @@ int graph_init(void)
 		return err;
 #endif
 
+#ifdef GRAPH_CIRRUS
+	if ((err = cirrus_init()) < 0)
+		return err;
+#endif
+
 #ifdef GRAPH_VIRTIOGPU
 	if ((err = virtiogpu_init()) < 0)
+		return err;
+#endif
+
+#ifdef GRAPH_VGADEV
+	if ((err = vgadev_init()) < 0)
 		return err;
 #endif
 
