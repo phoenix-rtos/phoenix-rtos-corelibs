@@ -1,9 +1,12 @@
-CGI_OBJS := params.o auth.o request.o http.o
+#
+# Makefile for CGI library
+#
+# Copyright 2021 Phoenix Systems
+#
 
-$(PREFIX_A)libcgi.a: $(addprefix $(PREFIX_O)libcgi/, $(CGI_OBJS))
-	$(ARCH)
+NAME := libcgi
+LOCAL_PATH := $(call my-dir)
+SRCS := $(wildcard $(LOCAL_PATH)*.c)
+LOCAL_HEADERS := libcgi.h
 
-$(PREFIX_H)libcgi.h: libcgi/libcgi.h
-	$(HEADER)
-
-all: $(PREFIX_A)libcgi.a $(PREFIX_H)libcgi.h
+include $(static-lib.mk)

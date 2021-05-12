@@ -17,7 +17,7 @@
 #include <sys/io.h>
 #include <sys/mman.h>
 
-#include "vga.h"
+#include "libvga.h"
 
 
 unsigned char vga_status(vga_t *vga)

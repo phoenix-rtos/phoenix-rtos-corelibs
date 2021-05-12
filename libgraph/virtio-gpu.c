@@ -24,7 +24,7 @@
 
 #include <libvirtio.h>
 
-#include "graph.h"
+#include "libgraph.h"
 
 
 /* Use polling on RISCV64 (interrupts trigger memory protection exception) */

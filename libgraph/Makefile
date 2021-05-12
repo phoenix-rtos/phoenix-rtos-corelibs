@@ -9,19 +9,17 @@
 # %LICENSE%
 #
 
-OBJS = graph.o vgadev.o virtio-gpu.o
-LIBS = libvga.a libvirtio.a
+NAME := libgraph
+
+LOCAL_HEADERS := libgraph.h
+DEPS := libvga libvirtio
+
+LOCAL_SRCS := graph.c vgadev.c virtio-gpu.c
 
 ifeq ($(TARGET_FAMILY), ia32)
-	OBJS += soft-ia32.o
+  LOCAL_SRCS += soft-ia32.c
 else
-	OBJS += soft.o
+  LOCAL_SRCS += soft.c
 endif
 
-$(PREFIX_A)libgraph.a: $(addprefix $(PREFIX_O)libgraph/, $(OBJS)) $(addprefix $(PREFIX_A), $(LIBS))
-	$(ARCH)
-
-$(PREFIX_H)libgraph.h: libgraph/graph.h
-	$(HEADER)
-
-all: $(PREFIX_A)libgraph.a $(PREFIX_H)libgraph.h
+include $(static-lib.mk)

@@ -66,7 +66,7 @@
 
 #include <libvga.h>
 
-#include "graph.h"
+#include "libgraph.h"
 
 
 /* Graphics mode flags */

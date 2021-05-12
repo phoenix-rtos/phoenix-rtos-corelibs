@@ -9,18 +9,15 @@
 # %LICENSE%
 #
 
-OBJS = vga.o
+NAME := libvga
+LOCAL_HEADERS := libvga.h
+
+LOCAL_SRCS := vga.c
 
 ifeq ($(TARGET_FAMILY), ia32)
-	OBJS += vgahw-pc.o
+  LOCAL_SRCS += vgahw-pc.c
 else
-	OBJS += vgahw-empty.o
+  LOCAL_SRCS += vgahw-empty.c
 endif
 
-$(PREFIX_A)libvga.a: $(addprefix $(PREFIX_O)libvga/, $(OBJS))
-	$(ARCH)
-
-$(PREFIX_H)libvga.h: libvga/vga.h
-	$(HEADER)
-
-all: $(PREFIX_A)libvga.a $(PREFIX_H)libvga.h
+include $(static-lib.mk)
