@@ -12,7 +12,7 @@
 
 #include <kernel.h>
 
-#include "graph.h"
+#include "libgraph.h"
 
 
 #define VENDOR 0x1022                  // AMD

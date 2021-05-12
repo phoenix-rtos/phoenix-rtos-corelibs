@@ -15,7 +15,7 @@
 #ifndef _SOFT_H_
 #define _SOFT_H_
 
-#include "graph.h"
+#include "libgraph.h"
 
 
 extern int soft_line(graph_t *graph, unsigned int x, unsigned int y, int dx, int dy, unsigned int stroke, unsigned int color);

@@ -13,7 +13,7 @@
 
 #include <errno.h>
 
-#include "vga.h"
+#include "libvga.h"
 
 
 unsigned char vga_status(vga_t *vga)

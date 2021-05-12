@@ -11,7 +11,7 @@
 
 #include <kernel.h>
 
-#include "graph.h"
+#include "libgraph.h"
 
 
 #define VENDOR 0x102c               // C&T

@@ -9,18 +9,15 @@
 # %LICENSE%
 #
 
-OBJS = virtio.o virtiopci.o virtqueue.o
+NAME := libvirtio
+LOCAL_HEADERS := libvirtio.h
+
+LOCAL_SRCS := virtio.c virtiopci.c virtqueue.c
 
 ifeq ($(TARGET_FAMILY), ia32)
-	OBJS += virtiopci-ia32.o
+  LOCAL_SRCS += virtiopci-ia32.c
 else
-	OBJS += virtiopci-empty.o
+  LOCAL_SRCS += virtiopci-empty.c
 endif
 
-$(PREFIX_A)libvirtio.a: $(addprefix $(PREFIX_O)libvirtio/, $(OBJS))
-	$(ARCH)
-
-$(PREFIX_H)libvirtio.h: libvirtio/libvirtio.h
-	$(HEADER)
-
-all: $(PREFIX_A)libvirtio.a $(PREFIX_H)libvirtio.h
+include $(static-lib.mk)
