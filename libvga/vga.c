@@ -1,7 +1,7 @@
 /*
  * Phoenix-RTOS
  *
- * VGA library internal interface based on XFree86 implementation
+ * VGA high level interface based on XFree86 implementation
  *
  * Copyright 2021 Phoenix Systems
  * Author: Lukasz Kosinski
@@ -60,106 +60,108 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <sys/minmax.h>
+
 #include "libvga.h"
 
 
-void vga_lock(vga_t *vga)
+void vga_lock(void *hwctx)
 {
-	vga_writecrtc(vga, 0x11, vga_readcrtc(vga, 0x11) | 0x80);
+	vgahw_writecrtc(hwctx, 0x11, vgahw_readcrtc(hwctx, 0x11) | 0x80);
 }
 
 
-void vga_unlock(vga_t *vga)
+void vga_unlock(void *hwctx)
 {
-	vga_writecrtc(vga, 0x11, vga_readcrtc(vga, 0x11) & ~0x80);
+	vgahw_writecrtc(hwctx, 0x11, vgahw_readcrtc(hwctx, 0x11) & ~0x80);
 }
 
 
-void vga_mlock(vga_t *vga)
+void vga_mlock(void *hwctx)
 {
 	/* Disable display and sequencer */
-	vga_writeseq(vga, 0x01, vga_readseq(vga, 0x01) | 0x20);
-	vga_writeseq(vga, 0x00, 0x01);
-	vga_enablecmap(vga);
+	vgahw_writeseq(hwctx, 0x01, vgahw_readseq(hwctx, 0x01) | 0x20);
+	vgahw_writeseq(hwctx, 0x00, 0x01);
+	vgahw_enablecmap(hwctx);
 }
 
 
-void vga_munlock(vga_t *vga)
+void vga_munlock(void *hwctx)
 {
 	/* Enable sequencer and display */
-	vga_writeseq(vga, 0x00, 0x03);
-	vga_writeseq(vga, 0x01, vga_readseq(vga, 0x01) & ~0x20);
-	vga_disablecmap(vga);
+	vgahw_writeseq(hwctx, 0x00, 0x03);
+	vgahw_writeseq(hwctx, 0x01, vgahw_readseq(hwctx, 0x01) & ~0x20);
+	vgahw_disablecmap(hwctx);
 }
 
 
-void vga_blank(vga_t *vga)
+void vga_blank(void *hwctx)
 {
-	unsigned char seq01 = vga_readseq(vga, 0x01);
+	unsigned char sr01 = vgahw_readseq(hwctx, 0x01);
 
-	vga_writeseq(vga, 0x00, 0x01);
-	vga_writeseq(vga, 0x01, seq01 | 0x20);
-	vga_writeseq(vga, 0x00, 0x03);
+	vgahw_writeseq(hwctx, 0x00, 0x01);
+	vgahw_writeseq(hwctx, 0x01, sr01 | 0x20);
+	vgahw_writeseq(hwctx, 0x00, 0x03);
 }
 
 
-void vga_unblank(vga_t *vga)
+void vga_unblank(void *hwctx)
 {
-	unsigned char seq01 = vga_readseq(vga, 0x01);
+	unsigned char sr01 = vgahw_readseq(hwctx, 0x01);
 
-	vga_writeseq(vga, 0x00, 0x01);
-	vga_writeseq(vga, 0x01, seq01 & ~0x20);
-	vga_writeseq(vga, 0x00, 0x03);
+	vgahw_writeseq(hwctx, 0x00, 0x01);
+	vgahw_writeseq(hwctx, 0x01, sr01 & ~0x20);
+	vgahw_writeseq(hwctx, 0x00, 0x03);
 }
 
 
-void vga_savemode(vga_t *vga, vga_state_t *state)
-{
-	unsigned int i;
-
-	state->misc = vga_readmisc(vga);
-
-	for (i = 0; i < sizeof(state->crtc); i++)
-		state->crtc[i] = vga_readcrtc(vga, i);
-
-	for (i = 1; i < sizeof(state->seq); i++)
-		state->seq[i] = vga_readseq(vga, i);
-
-	for (i = 0; i < sizeof(state->gfx); i++)
-		state->gfx[i] = vga_readgfx(vga, i);
-
-	vga_enablecmap(vga);
-	for (i = 0; i < sizeof(state->attr); i++)
-		state->attr[i] = vga_readattr(vga, i);
-	vga_disablecmap(vga);
-}
-
-
-void vga_restoremode(vga_t *vga, vga_state_t *state)
+void vga_savemode(void *hwctx, vga_state_t *state)
 {
 	unsigned int i;
 
-	vga_writemisc(vga, state->misc);
+	state->mr = vgahw_readmisc(hwctx);
+
+	for (i = 0; i < sizeof(state->cr); i++)
+		state->cr[i] = vgahw_readcrtc(hwctx, i);
+
+	for (i = 1; i < sizeof(state->sr); i++)
+		state->sr[i] = vgahw_readseq(hwctx, i);
+
+	for (i = 0; i < sizeof(state->gr); i++)
+		state->gr[i] = vgahw_readgfx(hwctx, i);
+
+	vgahw_enablecmap(hwctx);
+	for (i = 0; i < sizeof(state->ar); i++)
+		state->ar[i] = vgahw_readattr(hwctx, i);
+	vgahw_disablecmap(hwctx);
+}
+
+
+void vga_restoremode(void *hwctx, vga_state_t *state)
+{
+	unsigned int i;
+
+	vgahw_writemisc(hwctx, state->mr);
 
 	/* Unlock restored CRTC[0-7] registers */
-	vga_writecrtc(vga, 0x11, state->crtc[0x11] & ~0x80);
-	for (i = 0; i < sizeof(state->crtc); i++)
-		vga_writecrtc(vga, i, state->crtc[i]);
+	vgahw_writecrtc(hwctx, 0x11, state->cr[0x11] & ~0x80);
+	for (i = 0; i < sizeof(state->cr); i++)
+		vgahw_writecrtc(hwctx, i, state->cr[i]);
 
-	for (i = 1; i < sizeof(state->seq); i++)
-		vga_writeseq(vga, i, state->seq[i]);
+	for (i = 1; i < sizeof(state->sr); i++)
+		vgahw_writeseq(hwctx, i, state->sr[i]);
 
-	for (i = 0; i < sizeof(state->gfx); i++)
-		vga_writegfx(vga, i, state->gfx[i]);
+	for (i = 0; i < sizeof(state->gr); i++)
+		vgahw_writegfx(hwctx, i, state->gr[i]);
 
-	vga_enablecmap(vga);
-	for (i = 0; i < sizeof(state->attr); i++)
-		vga_writeattr(vga, i, state->attr[i]);
-	vga_disablecmap(vga);
+	vgahw_enablecmap(hwctx);
+	for (i = 0; i < sizeof(state->ar); i++)
+		vgahw_writeattr(hwctx, i, state->ar[i]);
+	vgahw_disablecmap(hwctx);
 }
 
 
-void vga_savecmap(vga_t *vga, vga_state_t *state)
+void vga_savecmap(void *hwctx, vga_state_t *state)
 {
 	unsigned int i;
 
@@ -167,22 +169,19 @@ void vga_savecmap(vga_t *vga, vga_state_t *state)
 		return;
 
 	/* Assume DAC is readable */
-	vga_writedac(vga, 0x00, 0xff);
-	vga_writedac(vga, 0x01, 0x00);
+	vgahw_writedac(hwctx, 0x00, 0xff);
+	vgahw_writedac(hwctx, 0x01, 0x00);
 
 	for (i = 0; i < VGA_CMAPSZ; i++) {
-		state->cmap[i] = vga_readdac(vga, 0x03);
-
-		/* DAC delay */
-		vga_status(vga);
-		vga_status(vga);
+		vgahw_status(hwctx);
+		state->cmap[i] = vgahw_readdac(hwctx, 0x03);
 	}
 
-	vga_disablecmap(vga);
+	vgahw_disablecmap(hwctx);
 }
 
 
-void vga_restorecmap(vga_t *vga, vga_state_t *state)
+void vga_restorecmap(void *hwctx, vga_state_t *state)
 {
 	unsigned int i;
 
@@ -190,129 +189,212 @@ void vga_restorecmap(vga_t *vga, vga_state_t *state)
 		return;
 
 	/* Assume DAC is writable */
-	vga_writedac(vga, 0x00, 0xff);
-	vga_writedac(vga, 0x02, 0x00);
+	vgahw_writedac(hwctx, 0x00, 0xff);
+	vgahw_writedac(hwctx, 0x02, 0x00);
 
 	for (i = 0; i < VGA_CMAPSZ; i++) {
-		vga_writedac(vga, 0x03, state->cmap[i]);
-
-		/* DAC delay */
-		vga_status(vga);
-		vga_status(vga);
+		vgahw_status(hwctx);
+		vgahw_writedac(hwctx, 0x03, state->cmap[i]);
 	}
 
-	vga_disablecmap(vga);
+	vgahw_disablecmap(hwctx);
 }
 
 
 /* Copies VGA fonts and text */
-static void vga_copytext(vga_t *vga, vga_state_t *state, unsigned char dir)
+static void vga_copytext(void *hwctx, vga_state_t *state, unsigned char dir)
 {
-	unsigned char misc, gr01, gr03, gr04, gr05, gr06, gr08, seq02, seq04;
+	unsigned char mr, gr01, gr03, gr04, gr05, gr06, gr08, sr02, sr04;
 
 	/* Save registers */
-	misc = vga_readmisc(vga);
-	gr01 = vga_readgfx(vga, 0x01);
-	gr03 = vga_readgfx(vga, 0x03);
-	gr04 = vga_readgfx(vga, 0x04);
-	gr05 = vga_readgfx(vga, 0x05);
-	gr06 = vga_readgfx(vga, 0x06);
-	gr08 = vga_readgfx(vga, 0x08);
-	seq02 = vga_readseq(vga, 0x02);
-	seq04 = vga_readseq(vga, 0x04);
+	mr = vgahw_readmisc(hwctx);
+	gr01 = vgahw_readgfx(hwctx, 0x01);
+	gr03 = vgahw_readgfx(hwctx, 0x03);
+	gr04 = vgahw_readgfx(hwctx, 0x04);
+	gr05 = vgahw_readgfx(hwctx, 0x05);
+	gr06 = vgahw_readgfx(hwctx, 0x06);
+	gr08 = vgahw_readgfx(hwctx, 0x08);
+	sr02 = vgahw_readseq(hwctx, 0x02);
+	sr04 = vgahw_readseq(hwctx, 0x04);
 
 	/* Force into color mode */
-	vga_writemisc(vga, misc | 0x01);
-	vga_blank(vga);
+	vgahw_writemisc(hwctx, mr | 0x01);
+	vga_blank(hwctx);
 
-	vga_writeseq(vga, 0x04, 0x06); /* Enable plane graphics */
-	vga_writegfx(vga, 0x01, 0x00); /* All planes come from CPU */
-	vga_writegfx(vga, 0x03, 0x00); /* Don't rotate, write unmodified */
-	vga_writegfx(vga, 0x05, 0x00); /* Write mode 0, read mode 0 */
-	vga_writegfx(vga, 0x06, 0x05); /* Set graphics */
-	vga_writegfx(vga, 0x08, 0xff); /* Write all bits in a byte */
+	vgahw_writeseq(hwctx, 0x04, 0x06); /* Enable plane graphics */
+	vgahw_writegfx(hwctx, 0x01, 0x00); /* All planes come from CPU */
+	vgahw_writegfx(hwctx, 0x03, 0x00); /* Don't rotate, write unmodified */
+	vgahw_writegfx(hwctx, 0x05, 0x00); /* Write mode 0, read mode 0 */
+	vgahw_writegfx(hwctx, 0x06, 0x05); /* Set graphics */
+	vgahw_writegfx(hwctx, 0x08, 0xff); /* Write all bits in a byte */
 
 	if (state->font1 != NULL) {
 		/* Read/Write plane 2 */
-		vga_writeseq(vga, 0x02, 0x04);
-		vga_writegfx(vga, 0x04, 0x02);
+		vgahw_writeseq(hwctx, 0x02, 0x04);
+		vgahw_writegfx(hwctx, 0x04, 0x02);
 		if (dir)
-			memcpy(vga->mem, state->font1, VGA_FONTSZ);
+			memcpy(vgahw_mem(hwctx), state->font1, VGA_FONTSZ);
 		else
-			memcpy(state->font1, vga->mem, VGA_FONTSZ);
+			memcpy(state->font1, vgahw_mem(hwctx), VGA_FONTSZ);
 	}
 
 	if (state->font2 != NULL) {
 		/* Read/Write plane 3 */
-		vga_writeseq(vga, 0x02, 0x08);
-		vga_writegfx(vga, 0x04, 0x03);
+		vgahw_writeseq(hwctx, 0x02, 0x08);
+		vgahw_writegfx(hwctx, 0x04, 0x03);
 		if (dir)
-			memcpy(vga->mem, state->font2, VGA_FONTSZ);
+			memcpy(vgahw_mem(hwctx), state->font2, VGA_FONTSZ);
 		else
-			memcpy(state->font2, vga->mem, VGA_FONTSZ);
+			memcpy(state->font2, vgahw_mem(hwctx), VGA_FONTSZ);
 	}
 
 	if (state->text != NULL) {
 		/* Read/Write plane 0 */
-		vga_writeseq(vga, 0x02, 0x01);
-		vga_writegfx(vga, 0x04, 0x00);
+		vgahw_writeseq(hwctx, 0x02, 0x01);
+		vgahw_writegfx(hwctx, 0x04, 0x00);
 		if (dir)
-			memcpy(vga->mem, state->text, VGA_TEXTSZ >> 1);
+			memcpy(vgahw_mem(hwctx), state->text, VGA_TEXTSZ >> 1);
 		else
-			memcpy(state->text, vga->mem, VGA_TEXTSZ >> 1);
+			memcpy(state->text, vgahw_mem(hwctx), VGA_TEXTSZ >> 1);
 
 		/* Read/Write plane 1 */
-		vga_writeseq(vga, 0x02, 0x02);
-		vga_writegfx(vga, 0x04, 0x01);
+		vgahw_writeseq(hwctx, 0x02, 0x02);
+		vgahw_writegfx(hwctx, 0x04, 0x01);
 		if (dir)
-			memcpy(vga->mem, state->text + (VGA_TEXTSZ >> 1), VGA_TEXTSZ >> 1);
+			memcpy(vgahw_mem(hwctx), state->text + (VGA_TEXTSZ >> 1), VGA_TEXTSZ >> 1);
 		else
-			memcpy(state->text + (VGA_TEXTSZ >> 1), vga->mem, VGA_TEXTSZ >> 1);
+			memcpy(state->text + (VGA_TEXTSZ >> 1), vgahw_mem(hwctx), VGA_TEXTSZ >> 1);
 	}
 
 	/* Restore registers */
-	vga_writeseq(vga, 0x04, seq04);
-	vga_writeseq(vga, 0x02, seq02);
-	vga_writegfx(vga, 0x08, gr08);
-	vga_writegfx(vga, 0x06, gr06);
-	vga_writegfx(vga, 0x05, gr05);
-	vga_writegfx(vga, 0x04, gr04);
-	vga_writegfx(vga, 0x03, gr03);
-	vga_writegfx(vga, 0x01, gr01);
+	vgahw_writeseq(hwctx, 0x04, sr04);
+	vgahw_writeseq(hwctx, 0x02, sr02);
+	vgahw_writegfx(hwctx, 0x08, gr08);
+	vgahw_writegfx(hwctx, 0x06, gr06);
+	vgahw_writegfx(hwctx, 0x05, gr05);
+	vgahw_writegfx(hwctx, 0x04, gr04);
+	vgahw_writegfx(hwctx, 0x03, gr03);
+	vgahw_writegfx(hwctx, 0x01, gr01);
 
 	/* Restore mode */
-	vga_writemisc(vga, misc);
-	vga_unblank(vga);
+	vgahw_writemisc(hwctx, mr);
+	vga_unblank(hwctx);
 }
 
 
-void vga_savetext(vga_t *vga, vga_state_t *state)
+void vga_savetext(void *hwctx, vga_state_t *state)
 {
 	/* No fonts and text in graphics mode */
-	if (vga_readattr(vga, 0x10) & 0x01)
+	if (vgahw_readattr(hwctx, 0x10) & 0x01)
 		return;
 
-	vga_copytext(vga, state, 0);
+	vga_copytext(hwctx, state, 0);
 }
 
 
-void vga_restoretext(vga_t *vga, vga_state_t *state)
+void vga_restoretext(void *hwctx, vga_state_t *state)
 {
-	vga_copytext(vga, state, 1);
+	vga_copytext(hwctx, state, 1);
 }
 
 
-void vga_save(vga_t *vga, vga_state_t *state)
+void vga_save(void *hwctx, vga_state_t *state)
 {
-	vga_savetext(vga, state);
-	vga_savecmap(vga, state);
-	vga_savemode(vga, state);
+	vga_savetext(hwctx, state);
+	vga_savecmap(hwctx, state);
+	vga_savemode(hwctx, state);
 }
 
 
-void vga_restore(vga_t *vga, vga_state_t *state)
+void vga_restore(void *hwctx, vga_state_t *state)
 {
-	vga_restoremode(vga, state);
-	vga_restorecmap(vga, state);
-	vga_restoretext(vga, state);
+	vga_restoremode(hwctx, state);
+	vga_restorecmap(hwctx, state);
+	vga_restoretext(hwctx, state);
+}
+
+
+void vga_initstate(vga_cfg_t *cfg, vga_state_t *state)
+{
+	unsigned int i, vres = cfg->vres, vsyncs = cfg->vsyncs, vsynce = cfg->vsynce, vtotal = cfg->vtotal;
+
+	/* Adjust vertical timings */
+	if (cfg->flags & VGA_DBLSCAN) {
+		vres <<= 1;
+		vsyncs <<= 1;
+		vsynce <<= 1;
+		vtotal <<= 1;
+	}
+
+	if (cfg->flags & VGA_INTERLACE) {
+		vres >>= 1;
+		vsyncs >>= 1;
+		vsynce >>= 1;
+		vtotal >>= 1;
+	}
+
+	/* Miscellaneous register */
+	state->mr = ((cfg->clkidx & 0x03) << 2) | 0x23;
+	if (!(cfg->flags & VGA_HSYNCP))
+		state->mr |= 0x40;
+	if (!(cfg->flags & VGA_VSYNCP))
+		state->mr |= 0x80;
+
+	/* Sequencer registers */
+	state->sr[0] = 0x00;
+	state->sr[1] = (cfg->flags & VGA_CLKDIV) ? 0x09 : 0x01;
+	state->sr[2] = 0x0f;
+	state->sr[3] = 0x00;
+	state->sr[4] = 0x0e;
+
+	/* CRT controller registers */
+	state->cr[0] = (cfg->htotal >> 3) - 5;
+	state->cr[1] = (cfg->hres >> 3) - 1;
+	state->cr[2] = (cfg->hsyncs >> 3) - 1;
+	state->cr[3] = (((cfg->hsynce >> 3) - 1) & 0x1f) | 0x80;
+	state->cr[4] = (cfg->hsyncs >> 3) - 1;
+	state->cr[5] = ((((cfg->hsynce >> 3) - 1) & 0x20) << 2) | (((cfg->hsynce >> 3) - 1) & 0x1f);
+	state->cr[6] = (vtotal - 2) & 0xff;
+	state->cr[7] =
+		(((vtotal - 2) & 0x100) >> 8) | (((vres - 1) & 0x100) >> 7) | (((vsyncs - 1) & 0x100) >> 6) | (((vsyncs - 1) & 0x100) >> 5) |
+		(((vtotal - 2) & 0x200) >> 4) | (((vres - 1) & 0x200) >> 3) | (((vsyncs - 1) & 0x200) >> 2) | 0x10;
+	state->cr[8] = 0x00;
+	state->cr[9] = (((vsyncs - 1) & 0x200) >> 4) | 0x40;
+	if (cfg->flags & VGA_DBLSCAN)
+		state->cr[9] |= 0x80;
+	state->cr[10] = 0x00;
+	state->cr[11] = 0x00;
+	state->cr[12] = 0x00;
+	state->cr[13] = 0x00;
+	state->cr[14] = 0x00;
+	state->cr[15] = 0x00;
+	state->cr[16] = (vsyncs - 1) & 0xff;
+	state->cr[17] = ((vsynce - 1) & 0x0f) | 0x20;
+	state->cr[18] = (vres - 1) & 0xff;
+	state->cr[19] = cfg->hres >> 4;
+	state->cr[20] = 0x00;
+	state->cr[21] = (vsyncs - 1) & 0xff;
+	state->cr[22] = (vsynce - 1) & 0xff;
+	state->cr[23] = 0xc3;
+	state->cr[24] = 0xff;
+
+	/* Graphics controller registers */
+	state->gr[0] = 0x00;
+	state->gr[1] = 0x00;
+	state->gr[2] = 0x00;
+	state->gr[3] = 0x00;
+	state->gr[4] = 0x00;
+	state->gr[5] = 0x40;
+	state->gr[6] = 0x05;
+	state->gr[7] = 0x0f;
+	state->gr[8] = 0xff;
+
+	/* Attributes controller registers */
+	for (i = 0; i < 16; i++)
+		state->ar[i] = i;
+	state->ar[16] = 0x41;
+	state->ar[17] = 0x00;
+	state->ar[18] = 0x0f;
+	state->ar[19] = 0x00;
+	state->ar[20] = 0x00;
 }
