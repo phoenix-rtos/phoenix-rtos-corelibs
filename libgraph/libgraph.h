@@ -1,7 +1,7 @@
 /*
  * Phoenix-RTOS
  *
- * Graph library
+ * Graphics library
  *
  * Copyright 2009, 2021 Phoenix Systems
  * Copyright 2002-2007 IMMOS
@@ -12,143 +12,163 @@
  * %LICENSE%
  */
 
-#ifndef _GRAPH_H_
-#define _GRAPH_H_
+#ifndef _LIBGRAPH_H_
+#define _LIBGRAPH_H_
 
 #include <sys/types.h>
 
 
 /* Generic graphics adapters */
-#define GRAPH_NONE       0
-#define GRAPH_ANY       -1
-#define GRAPH_VGADEV    (1 << 0)
-#define GRAPH_VIRTIOGPU (1 << 1)
+#define GRAPH_NONE       0       /* No graphics adapter */
+#define GRAPH_ANY       -1       /* Any graphics adapter */
+#define GRAPH_VIRTIOGPU (1 << 0) /* Generic VirtIO GPU graphics adapter */
+#define GRAPH_VGA       (1 << 1) /* Generic VGA graphics adapter */
 
 
 /* Graphics adapters supported on IA32 platform */
 #ifdef TARGET_IA32
-// #define GRAPH_CIRRUS    (1 << 2)
-// #define GRAPH_CT69000   (1 << 3)
-// #define GRAPH_SAVAGE4   (1 << 4)
-// #define GRAPH_GEODELX   (1 << 5)
+#define GRAPH_CIRRUS    (1 << 2) /* Cirrus Logic graphics adapter */
 #endif
 
 
 /* Graphics modes */
 typedef enum {
-	/* Control modes */
-	GRAPH_NOMODE,
-	GRAPH_ON,
-	GRAPH_OFF,
-	GRAPH_STANDBY,
-	GRAPH_SUSPEND,
-	/* 1-byte color */
-	GRAPH_320x200x8,
-	GRAPH_640x400x8,
-	GRAPH_640x480x8,
-	GRAPH_800x600x8,
-	GRAPH_1024x768x8,
-	GRAPH_1152x864x8,
-	GRAPH_1280x1024x8,
-	GRAPH_1600x1200x8,
-	/* 2-byte color */
-	GRAPH_640x480x16,
-	GRAPH_800x600x16,
-	GRAPH_1024x768x16,
-	GRAPH_1280x1024x16,
-	/* 4-byte color */
-	GRAPH_640x480x32,
-	GRAPH_720x480x32,
-	GRAPH_720x576x32,
-	GRAPH_800x600x32,
-	GRAPH_832x624x32,
-	GRAPH_896x672x32,
-	GRAPH_928x696x32,
-	GRAPH_960x540x32,
-	GRAPH_960x600x32,
-	GRAPH_960x720x32,
-	GRAPH_1024x576x32,
-	GRAPH_1024x768x32,
-	GRAPH_1152x864x32,
-	GRAPH_1280x720x32,
-	GRAPH_1280x800x32,
-	GRAPH_1280x960x32,
-	GRAPH_1280x1024x32,
-	GRAPH_1360x768x32,
-	GRAPH_1368x768x32,
-	GRAPH_1400x900x32,
-	GRAPH_1400x1050x32,
-	GRAPH_1440x240x32,
-	GRAPH_1440x288x32,
-	GRAPH_1440x576x32,
-	GRAPH_1440x810x32,
-	GRAPH_1440x900x32,
-	GRAPH_1600x900x32,
-	GRAPH_1600x1024x32,
-	GRAPH_1650x750x32,
-	GRAPH_1680x720x32,
-	GRAPH_1680x1050x32,
-	GRAPH_1920x540x32,
-	GRAPH_1920x1080x32
+	GRAPH_DEFMODE,               /* Default graphics mode */
+	/* Power management modes */
+	GRAPH_ON,                    /* Display enabled mode */
+	GRAPH_OFF,                   /* Display disabled mode */
+	GRAPH_STANDBY,               /* Display standby mode */
+	GRAPH_SUSPEND,               /* Display suspend mode */
+	/* 8-bit color palette */
+	GRAPH_320x200x8,             /* 320x200   8-bit color */
+	GRAPH_640x400x8,             /* 640x400   8-bit color */
+	GRAPH_640x480x8,             /* 640x480   8-bit color */
+	GRAPH_800x500x8,             /* 800x500   8-bit color */
+	GRAPH_800x600x8,             /* 800x600   8-bit color */
+	GRAPH_896x672x8,             /* 896x672   8-bit color */
+	GRAPH_1024x640x8,            /* 1024x640  8-bit color */
+	GRAPH_1024x768x8,            /* 1024x768  8-bit color */
+	GRAPH_1152x720x8,            /* 1024x720  8-bit color */
+	GRAPH_1152x864x8,            /* 1152x864  8-bit color */
+	GRAPH_1280x1024x8,           /* 1280x1024 8-bit color */
+	GRAPH_1440x900x8,            /* 1440x900  8-bit color */
+	GRAPH_1600x1200x8,           /* 1600x1200 8-bit color */
+	/* 16-bit color (5:6:5) */
+	GRAPH_320x200x16,            /* 320x200   16-bit color */
+	GRAPH_640x400x16,            /* 640x400   16-bit color */
+	GRAPH_640x480x16,            /* 640x480   16-bit color */
+	GRAPH_800x500x16,            /* 800x500   16-bit color */
+	GRAPH_800x600x16,            /* 800x600   16-bit color */
+	GRAPH_896x672x16,            /* 896x672   16-bit color */
+	GRAPH_1024x640x16,           /* 1024x640  16-bit color */
+	GRAPH_1024x768x16,           /* 1024x768  16-bit color */
+	GRAPH_1152x720x16,           /* 1152x720  16-bit color */
+	GRAPH_1280x1024x16,          /* 1280x1024 16-bit color */
+	GRAPH_1360x768x16,           /* 1360x768  16-bit color */
+	GRAPH_1440x900x16,           /* 1440x900  16-bit color */
+	GRAPH_1600x1200x16,          /* 1600x1200 16-bit color */
+	/* 24-bit color (8:8:8) */
+	GRAPH_640x480x24,            /* 640x480   24-bit color */
+	GRAPH_800x600x24,            /* 800x600   24-bit color */
+	GRAPH_1024x768x24,           /* 1024x768  24-bit color */
+	/* 32-bit color (8:8:8:8) */
+	GRAPH_640x400x32,            /* 640x400   32-bit color */
+	GRAPH_640x480x32,            /* 640x480   32-bit color */
+	GRAPH_720x480x32,            /* 720x480   32-bit color */
+	GRAPH_720x576x32,            /* 720x576   32-bit color */
+	GRAPH_800x500x32,            /* 800x500   32-bit color */
+	GRAPH_800x600x32,            /* 800x600   32-bit color */
+	GRAPH_832x624x32,            /* 832x624   32-bit color */
+	GRAPH_896x672x32,            /* 896x672   32-bit color */
+	GRAPH_928x696x32,            /* 928x696   32-bit color */
+	GRAPH_960x540x32,            /* 960x540   32-bit color */
+	GRAPH_960x600x32,            /* 960x600   32-bit color */
+	GRAPH_960x720x32,            /* 960x720   32-bit color */
+	GRAPH_1024x576x32,           /* 1024x576  32-bit color */
+	GRAPH_1024x640x32,           /* 1024x640  32-bit color */
+	GRAPH_1024x768x32,           /* 1024x768  32-bit color */
+	GRAPH_1152x720x32,           /* 1152x720  32-bit color */
+	GRAPH_1152x864x32,           /* 1152x864  32-bit color */
+	GRAPH_1280x720x32,           /* 1280x720  32-bit color */
+	GRAPH_1280x800x32,           /* 1280x800  32-bit color */
+	GRAPH_1280x960x32,           /* 1280x960  32-bit color */
+	GRAPH_1280x1024x32,          /* 1280x1024 32-bit color */
+	GRAPH_1360x768x32,           /* 1360x768  32-bit color */
+	GRAPH_1368x768x32,           /* 1368x768  32-bit color */
+	GRAPH_1400x900x32,           /* 1400x900  32-bit color */
+	GRAPH_1400x1050x32,          /* 1400x1050 32-bit color */
+	GRAPH_1440x240x32,           /* 1440x240  32-bit color */
+	GRAPH_1440x288x32,           /* 1440x288  32-bit color */
+	GRAPH_1440x576x32,           /* 1440x576  32-bit color */
+	GRAPH_1440x810x32,           /* 1440x810  32-bit color */
+	GRAPH_1440x900x32,           /* 1440x900  32-bit color */
+	GRAPH_1600x900x32,           /* 1600x900  32-bit color */
+	GRAPH_1600x1024x32,          /* 1600x1024 32-bit color */
+	GRAPH_1600x1200x32,          /* 1600x1200 32-bit color */
+	GRAPH_1650x750x32,           /* 1650x750  32-bit color */
+	GRAPH_1680x720x32,           /* 1680x720  32-bit color */
+	GRAPH_1680x1050x32,          /* 1680x1050 32-bit color */
+	GRAPH_1920x540x32,           /* 1920x540  32-bit color */
+	GRAPH_1920x1080x32           /* 1920x1080 32-bit color */
 } graph_mode_t;
 
 
 /* Screen refresh rates */
 typedef enum {
-	GRAPH_NOFREQ,
-	GRAPH_24Hz,
-	GRAPH_30Hz,
-	GRAPH_43Hz,
-	GRAPH_56Hz,
-	GRAPH_60Hz,
-	GRAPH_70Hz,
-	GRAPH_72Hz,
-	GRAPH_75Hz,
-	GRAPH_80Hz,
-	GRAPH_85Hz,
-	GRAPH_87Hz,
-	GRAPH_90Hz,
-	GRAPH_120Hz,
-	GRAPH_144HZ,
-	GRAPH_165Hz,
-	GRAPH_240Hz,
-	GRAPH_300Hz,
-	GRAPH_360Hz
+	GRAPH_DEFFREQ,               /* Default refresh rate */
+	GRAPH_24Hz,                  /* 24Hz  refresh rate */
+	GRAPH_30Hz,                  /* 30Hz  refresh rate */
+	GRAPH_43Hzi,                 /* 43Hz  refresh rate interlaced */
+	GRAPH_56Hz,                  /* 56Hz  refresh rate */
+	GRAPH_60Hz,                  /* 60Hz  refresh rate */
+	GRAPH_70Hz,                  /* 70Hz  refresh rate */
+	GRAPH_72Hz,                  /* 72Hz  refresh rate */
+	GRAPH_75Hz,                  /* 75Hz  refresh rate */
+	GRAPH_80Hz,                  /* 80Hz  refresh rate */
+	GRAPH_85Hz,                  /* 85Hz  refresh rate */
+	GRAPH_87Hzi,                 /* 87Hz  refresh rate interlaced */
+	GRAPH_90Hz,                  /* 90Hz  refresh rate */
+	GRAPH_120Hz,                 /* 120Hz refresh rate */
+	GRAPH_144HZ,                 /* 144Hz refresh rate */
+	GRAPH_165Hz,                 /* 165Hz refresh rate */
+	GRAPH_240Hz,                 /* 240Hz refresh rate */
+	GRAPH_300Hz,                 /* 300Hz refresh rate */
+	GRAPH_360Hz                  /* 360Hz refresh rate */
 } graph_freq_t;
 
 
 /* Graph queues */
 typedef enum {
-	GRAPH_QUEUE_HIGH,
-	GRAPH_QUEUE_LOW,
-	GRAPH_QUEUE_BOTH,
+	GRAPH_QUEUE_HIGH,            /* High priority queue */
+	GRAPH_QUEUE_LOW,             /* Low priority queue */
+	GRAPH_QUEUE_BOTH,            /* Both queues */
 	GRAPH_QUEUE_DEFAULT = GRAPH_QUEUE_LOW
 } graph_queue_t;
 
 
-/* Graph fill type */
+/* Graph polygon fill type */
 typedef enum {
-	GRAPH_FILL_FLOOD,
-	GRAPH_FILL_BOUND
+	GRAPH_FILL_FLOOD,            /* Bucket flood fill */
+	GRAPH_FILL_BOUND             /* Boundary fill */
 } graph_fill_t;
 
 
 typedef struct {
-	unsigned char width;       /* Glyph width in pixels */
-	unsigned char height;      /* Glyph height in pixels */
-	unsigned char span;        /* Glyph row span in bytes */
-	unsigned char offs;        /* First character (ASCII offset) */
-	const unsigned char *data; /* Font bitmap */
+	unsigned char width;         /* Glyph width in pixels */
+	unsigned char height;        /* Glyph height in pixels */
+	unsigned char span;          /* Glyph row span in bytes */
+	unsigned char offs;          /* First character (ASCII offset) */
+	const unsigned char *data;   /* Font data */
 } graph_font_t;
 
 
 typedef struct {
-	unsigned int stop;         /* Stop counter */
-	unsigned int tasks;        /* Number of tasks to process */
-	unsigned char *fifo;       /* Task buffer start address */
-	unsigned char *end;        /* Task buffer end address */
-	unsigned char *free;       /* Free position */
-	unsigned char *used;       /* Used position */
+	unsigned int stop;           /* Stop counter */
+	unsigned int tasks;          /* Number of tasks to process */
+	unsigned char *fifo;         /* Task buffer start address */
+	unsigned char *end;          /* Task buffer end address */
+	unsigned char *free;         /* Free position */
+	unsigned char *used;         /* Used position */
 } graph_taskq_t;
 
 
@@ -157,20 +177,18 @@ typedef struct _graph_t graph_t;
 
 struct _graph_t {
 	/* Graph info */
-	void *adapter;             /* Graphics adapter */
-
-	/* Screen info */
-	void *data;                /* Framebuffer */
-	unsigned int width;        /* Screen width */
-	unsigned int height;       /* Screen height */
-	unsigned char depth;       /* Screen color depth */
+	void *adapter;               /* Graphics adapter */
+	void *data;                  /* Framebuffer */
+	unsigned int width;          /* Horizontal resolution */
+	unsigned int height;         /* Vertical resolution */
+	unsigned char depth;         /* Color depth */
 
 	/* Task queues */
-	graph_taskq_t hi;          /* High priority tasks queue */
-	graph_taskq_t lo;          /* Low priority tasks queue */
+	graph_taskq_t hi;            /* High priority tasks queue */
+	graph_taskq_t lo;            /* Low priority tasks queue */
 
 	/* Synchronization */
-	handle_t lock;             /* Graph synchronization mutex */
+	handle_t lock;               /* Graph mutex */
 
 	/* Control functions */
 	void (*close)(graph_t *);
@@ -191,8 +209,8 @@ struct _graph_t {
 	int (*copy)(graph_t *, const void *, void *, unsigned int, unsigned int, unsigned int, unsigned int);
 
 	/* Color palette functions */
-	int (*colorset)(graph_t *, const unsigned char *, unsigned int, unsigned int);
-	int (*colorget)(graph_t *, unsigned char *, unsigned int, unsigned int);
+	int (*colorset)(graph_t *, const unsigned char *, unsigned char, unsigned char);
+	int (*colorget)(graph_t *, unsigned char *, unsigned char, unsigned char);
 
 	/* Cursor functions */
 	int (*cursorset)(graph_t *, const unsigned char *, const unsigned char *, unsigned int, unsigned int);
@@ -227,11 +245,11 @@ extern int graph_copy(graph_t *graph, const void *src, void *dst, unsigned int d
 
 
 /* Sets color palette */
-extern int graph_colorset(graph_t *graph, const unsigned char *colors, unsigned int first, unsigned int last);
+extern int graph_colorset(graph_t *graph, const unsigned char *colors, unsigned char first, unsigned char last);
 
 
 /* Retrieves color palette */
-extern int graph_colorget(graph_t *graph, unsigned char *colors, unsigned int first, unsigned int last);
+extern int graph_colorget(graph_t *graph, unsigned char *colors, unsigned char first, unsigned char last);
 
 
 /* Sets cursor icon */
@@ -250,7 +268,7 @@ extern int graph_cursorshow(graph_t *graph);
 extern int graph_cursorhide(graph_t *graph);
 
 
-/* Commits framebuffer changes (flushes framebuffer to screen) */
+/* Commits framebuffer changes (flushes framebuffer) */
 extern int graph_commit(graph_t *graph);
 
 

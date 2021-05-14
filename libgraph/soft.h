@@ -1,7 +1,7 @@
 /*
  * Phoenix-RTOS
  *
- * Software operations
+ * Software graphics operations
  *
  * Copyright 2009, 2021 Phoenix Systems
  * Copyright 2002-2007 IMMOS

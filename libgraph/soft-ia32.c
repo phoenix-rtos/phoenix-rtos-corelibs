@@ -1,7 +1,7 @@
 /*
  * Phoenix-RTOS
  *
- * Software operations (IA32)
+ * Software graphics operations (IA32)
  *
  * Copyright 2009, 2021 Phoenix Systems
  * Copyright 2002-2007 IMMOS

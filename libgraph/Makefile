@@ -1,5 +1,5 @@
 #
-# Makefile for graph library
+# Makefile for graphics library
 #
 # Copyright 2021 Phoenix Systems
 # Author: Lukasz Kosinski
@@ -14,12 +14,12 @@ NAME := libgraph
 LOCAL_HEADERS := libgraph.h
 DEPS := libvga libvirtio
 
-LOCAL_SRCS := graph.c vgadev.c virtio-gpu.c
+LOCAL_SRCS := graph.c vga.c virtio-gpu.c
 
 ifeq ($(TARGET_FAMILY), ia32)
-  LOCAL_SRCS += soft-ia32.c
+	LOCAL_SRCS += soft-ia32.c
 else
-  LOCAL_SRCS += soft.c
+	LOCAL_SRCS += soft.c
 endif
 
 include $(static-lib.mk)

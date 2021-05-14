@@ -1,7 +1,7 @@
 /*
  * Phoenix-RTOS
  *
- * Software operations
+ * Software graphics operations
  *
  * Copyright 2009, 2021 Phoenix Systems
  * Copyright 2002-2007 IMMOS
@@ -56,6 +56,12 @@ static inline int soft_set(graph_t *graph, uintptr_t data, unsigned int color)
 
 	case 2:
 		*(uint16_t *)data = color;
+		break;
+
+	case 3:
+		*(uint8_t *)data = color;
+		*(uint8_t *)(data + 1) = color >> 8;
+		*(uint8_t *)(data + 2) = color >> 16;
 		break;
 
 	case 4:

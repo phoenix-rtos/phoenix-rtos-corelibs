@@ -1,7 +1,7 @@
 /*
  * Phoenix-RTOS
  *
- * Graph library
+ * Graphics library
  *
  * Copyright 2009, 2021 Phoenix Systems
  * Copyright 2002-2007 IMMOS
@@ -95,27 +95,6 @@ typedef struct {
 } __attribute__((packed)) graph_task_t;
 
 
-#ifdef GRAPH_CT69000
-extern int ct69000_open(graph_t *);
-extern void ct69000_done(void);
-extern int ct69000_init(void);
-#endif
-
-
-#ifdef GRAPH_SAVAGE4
-extern int savage4_open(graph_t *);
-extern void savage4_done(void);
-extern int savage4_init(void);
-#endif
-
-
-#ifdef GRAPH_GEODELX
-extern int geode_open(graph_t *);
-extern void geode_done(void);
-extern int geode_init(void);
-#endif
-
-
 #ifdef GRAPH_CIRRUS
 extern int cirrus_open(graph_t *);
 extern void cirrus_done(void);
@@ -130,10 +109,10 @@ extern int virtiogpu_init(void);
 #endif
 
 
-#ifdef GRAPH_VGADEV
-extern int vgadev_open(graph_t *);
-extern void vgadev_done(void);
-extern int vgadev_init(void);
+#ifdef GRAPH_VGA
+extern int vga_open(graph_t *);
+extern void vga_done(void);
+extern int vga_init(void);
 #endif
 
 
@@ -346,13 +325,13 @@ int graph_copy(graph_t *graph, const void *src, void *dst, unsigned int dx, unsi
 }
 
 
-int graph_colorset(graph_t *graph, const unsigned char *colors, unsigned int first, unsigned int last)
+int graph_colorset(graph_t *graph, const unsigned char *colors, unsigned char first, unsigned char last)
 {
 	return graph->colorset(graph, colors, first, last);
 }
 
 
-int graph_colorget(graph_t *graph, unsigned char *colors, unsigned int first, unsigned int last)
+int graph_colorget(graph_t *graph, unsigned char *colors, unsigned char first, unsigned char last)
 {
 	return graph->colorget(graph, colors, first, last);
 }
@@ -525,21 +504,6 @@ int graph_open(graph_t *graph, unsigned int mem, unsigned int adapter)
 
 	/* Initialize graphics adapter context */
 	do {
-#ifdef GRAPH_CT69000
-		if ((adapter & GRAPH_CT69000) && ((err = ct69000_open(graph)) != -ENODEV))
-			break;
-#endif
-
-#ifdef GRAPH_SAVAGE4
-		if ((adapter & GRAPH_SAVAGE4) && ((err = savage4_open(graph)) != -ENODEV))
-			break;
-#endif
-
-#ifdef GRAPH_GEODELX
-		if ((adapter & GRAPH_GEODELX) && ((err = geode_open(graph)) != -ENODEV))
-			break;
-#endif
-
 #ifdef GRAPH_CIRRUS
 		if ((adapter & GRAPH_CIRRUS) && ((err = cirrus_open(graph)) != -ENODEV))
 			break;
@@ -550,8 +514,8 @@ int graph_open(graph_t *graph, unsigned int mem, unsigned int adapter)
 			break;
 #endif
 
-#ifdef GRAPH_VGADEV
-		if ((adapter & GRAPH_VGADEV) && ((err = vgadev_open(graph)) != -ENODEV))
+#ifdef GRAPH_VGA
+		if ((adapter & GRAPH_VGA) && ((err = vga_open(graph)) != -ENODEV))
 			break;
 #endif
 		err = -ENODEV;
@@ -568,18 +532,6 @@ int graph_open(graph_t *graph, unsigned int mem, unsigned int adapter)
 
 void graph_done(void)
 {
-#ifdef GRAPH_CT69000
-	ct69000_done();
-#endif
-
-#ifdef GRAPH_SAVAGE4
-	savage4_done();
-#endif
-
-#ifdef GRAPH_GEODELX
-	geode_done();
-#endif
-
 #ifdef GRAPH_CIRRUS
 	cirrus_done();
 #endif
@@ -588,8 +540,8 @@ void graph_done(void)
 	virtiogpu_done();
 #endif
 
-#ifdef GRAPH_VGADEV
-	vgadev_done();
+#ifdef GRAPH_VGA
+	vga_done();
 #endif
 }
 
@@ -597,21 +549,6 @@ void graph_done(void)
 int graph_init(void)
 {
 	int err;
-
-#ifdef GRAPH_CT69000
-	if ((err = ct69000_init()) < 0)
-		return err;
-#endif
-
-#ifdef GRAPH_SAVAGE4
-	if ((err = savage4_init()) < 0)
-		return err;
-#endif
-
-#ifdef GRAPH_GEODELX
-	if ((err = geode_init()) < 0)
-		return err;
-#endif
 
 #ifdef GRAPH_CIRRUS
 	if ((err = cirrus_init()) < 0)
@@ -623,8 +560,8 @@ int graph_init(void)
 		return err;
 #endif
 
-#ifdef GRAPH_VGADEV
-	if ((err = vgadev_init()) < 0)
+#ifdef GRAPH_VGA
+	if ((err = vga_init()) < 0)
 		return err;
 #endif
 
