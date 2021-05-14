@@ -1,7 +1,7 @@
 /*
  * Phoenix-RTOS
  *
- * Graph library test cursor icon
+ * Graphics library test cursor icon
  *
  * Copyright 2021 Phoenix Systems
  * Copyright 2002-2007 IMMOS

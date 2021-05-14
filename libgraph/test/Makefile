@@ -1,5 +1,5 @@
 #
-# Makefile for graph library test
+# Makefile for graphics library test
 #
 # Copyright 2021 Phoenix Systems
 # Author: Lukasz Kosinski

@@ -1,7 +1,7 @@
 /*
  * Phoenix-RTOS
  *
- * Graph library test font
+ * Graphics library test font
  *
  * Copyright 2021 Phoenix Systems
  * Copyright 2002-2007 IMMOS
