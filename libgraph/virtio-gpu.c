@@ -32,6 +32,9 @@
 #define USE_POLLING
 #endif
 
+/* Default graphics mode index */
+#define DEFMODE 15                  /* 1024x768x32 */
+
 
 typedef struct {
 	uint32_t x;                     /* Horizontal coordinate */
@@ -213,71 +216,67 @@ static const virtio_devinfo_t info[] = {
 
 /* Graphics modes table (32-bit color only) */
 static const virtiogpu_mode_t modes[] = {
-	{ GRAPH_640x480x32,   640,  480,  4 },
-	{ GRAPH_720x480x32,   720,  480,  4 },
-	{ GRAPH_720x576x32,   720,  576,  4 },
-	{ GRAPH_800x600x32,   800,  600,  4 },
-	{ GRAPH_832x624x32,   832,  624,  4 },
-	{ GRAPH_896x672x32,   896,  672,  4 },
-	{ GRAPH_928x696x32,   928,  696,  4 },
-	{ GRAPH_960x540x32,   960,  540,  4 },
-	{ GRAPH_960x600x32,   960,  600,  4 },
-	{ GRAPH_960x720x32,   960,  720,  4 },
-	{ GRAPH_1024x576x32,  1024, 576,  4 },
-	{ GRAPH_1024x768x32,  1024, 768,  4 },
-	{ GRAPH_1152x864x32,  1152, 864,  4 },
-	{ GRAPH_1280x720x32,  1280, 720,  4 },
-	{ GRAPH_1280x800x32,  1280, 800,  4 },
-	{ GRAPH_1280x960x32,  1280, 960,  4 },
-	{ GRAPH_1280x1024x32, 1280, 1024, 4 },
-	{ GRAPH_1360x768x32,  1360, 768,  4 },
-	{ GRAPH_1368x768x32,  1368, 768,  4 },
-	{ GRAPH_1400x900x32,  1400, 900,  4 },
-	{ GRAPH_1400x1050x32, 1400, 1050, 4 },
-	{ GRAPH_1440x240x32,  1440, 240,  4 },
-	{ GRAPH_1440x288x32,  1440, 288,  4 },
-	{ GRAPH_1440x576x32,  1440, 576,  4 },
-	{ GRAPH_1440x810x32,  1440, 810,  4 },
-	{ GRAPH_1440x900x32,  1440, 900,  4 },
-	{ GRAPH_1600x900x32,  1600, 900,  4 },
-	{ GRAPH_1600x1024x32, 1600, 1024, 4 },
-	{ GRAPH_1650x750x32,  1650, 750,  4 },
-	{ GRAPH_1680x720x32,  1680, 720,  4 },
-	{ GRAPH_1680x1050x32, 1680, 1050, 4 },
-	{ GRAPH_1920x540x32,  1920, 540,  4 },
-	{ GRAPH_1920x1080x32, 1920, 1080, 4 },
-	{ GRAPH_NOMODE }
+	/* Power management modes */
+	{ GRAPH_ON },                          /*  0 */
+	{ GRAPH_OFF },                         /*  1 */
+	{ GRAPH_STANDBY },                     /*  2 */
+	{ GRAPH_SUSPEND },                     /*  3 */
+	/* 32-bit color (8:8:8:8) */
+	{ GRAPH_640x480x32,   640,  480,  4 }, /*  4 */
+	{ GRAPH_720x480x32,   720,  480,  4 }, /*  5 */
+	{ GRAPH_720x576x32,   720,  576,  4 }, /*  6 */
+	{ GRAPH_800x600x32,   800,  600,  4 }, /*  7 */
+	{ GRAPH_832x624x32,   832,  624,  4 }, /*  8 */
+	{ GRAPH_896x672x32,   896,  672,  4 }, /*  9 */
+	{ GRAPH_928x696x32,   928,  696,  4 }, /* 10 */
+	{ GRAPH_960x540x32,   960,  540,  4 }, /* 11 */
+	{ GRAPH_960x600x32,   960,  600,  4 }, /* 12 */
+	{ GRAPH_960x720x32,   960,  720,  4 }, /* 13 */
+	{ GRAPH_1024x576x32,  1024, 576,  4 }, /* 14 */
+	{ GRAPH_1024x768x32,  1024, 768,  4 }, /* 15 */
+	{ GRAPH_1152x864x32,  1152, 864,  4 }, /* 16 */
+	{ GRAPH_1280x720x32,  1280, 720,  4 }, /* 17 */
+	{ GRAPH_1280x800x32,  1280, 800,  4 }, /* 18 */
+	{ GRAPH_1280x960x32,  1280, 960,  4 }, /* 19 */
+	{ GRAPH_1280x1024x32, 1280, 1024, 4 }, /* 20 */
+	{ GRAPH_1360x768x32,  1360, 768,  4 }, /* 21 */
+	{ GRAPH_1368x768x32,  1368, 768,  4 }, /* 22 */
+	{ GRAPH_1400x900x32,  1400, 900,  4 }, /* 23 */
+	{ GRAPH_1400x1050x32, 1400, 1050, 4 }, /* 24 */
+	{ GRAPH_1440x240x32,  1440, 240,  4 }, /* 25 */
+	{ GRAPH_1440x288x32,  1440, 288,  4 }, /* 26 */
+	{ GRAPH_1440x576x32,  1440, 576,  4 }, /* 27 */
+	{ GRAPH_1440x810x32,  1440, 810,  4 }, /* 28 */
+	{ GRAPH_1440x900x32,  1440, 900,  4 }, /* 29 */
+	{ GRAPH_1600x900x32,  1600, 900,  4 }, /* 30 */
+	{ GRAPH_1600x1024x32, 1600, 1024, 4 }, /* 31 */
+	{ GRAPH_1650x750x32,  1650, 750,  4 }, /* 32 */
+	{ GRAPH_1680x720x32,  1680, 720,  4 }, /* 33 */
+	{ GRAPH_1680x1050x32, 1680, 1050, 4 }, /* 34 */
+	{ GRAPH_1920x540x32,  1920, 540,  4 }, /* 35 */
+	{ GRAPH_1920x1080x32, 1920, 1080, 4 }, /* 36 */
+	/* No mode */
+	{ 0 }
 };
 
 
 struct {
-	virtio_ctx_t vctx;              /* Device detection context */
-	unsigned int desc;              /* Processed descriptors */
+	virtio_ctx_t vctx; /* Device detection context */
+	unsigned int desc; /* Processed descriptors */
 } virtiogpu_common;
 
 
-/* Schedules and executes new task */
+/* Schedules and executes tasks */
 extern int graph_schedule(graph_t *graph);
 
 
-/* Returns host framebuffer resource format (RGBA big endian, ABGR little endian) */
-static inline int virtiogpu_rgba(void)
+/* Returns host resource format (XRGB) */
+static inline int virtiogpu_xrgb(void)
 {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
-	return 121;
+	return 2;
 #else
-	return 67;
-#endif
-}
-
-
-/* Returns host cursor icon resource format (ARGB big endian, BGRA little endian) */
-static inline int virtiogpu_argb(void)
-{
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-	return 1;
-#else
-	return 3;
+	return 4;
 #endif
 }
 
@@ -888,13 +887,13 @@ int virtiogpu_cursorshow(graph_t *graph)
 }
 
 
-int virtiogpu_colorset(graph_t *graph, const unsigned char *colors, unsigned int first, unsigned int last)
+int virtiogpu_colorset(graph_t *graph, const unsigned char *colors, unsigned char first, unsigned char last)
 {
 	return -ENOTSUP;
 }
 
 
-int virtiogpu_colorget(graph_t *graph, unsigned char *colors, unsigned int first, unsigned int last)
+int virtiogpu_colorget(graph_t *graph, unsigned char *colors, unsigned char first, unsigned char last)
 {
 	return -ENOTSUP;
 }
@@ -968,15 +967,31 @@ int virtiogpu_mode(graph_t *graph, graph_mode_t mode, graph_freq_t freq)
 {
 	virtiogpu_dev_t *vgpu = (virtiogpu_dev_t *)graph->adapter;
 	virtiogpu_resource_t res;
-	unsigned int i;
+	unsigned int i = DEFMODE;
 	int err;
 
-	for (i = 0; modes[i].mode != mode; i++)
-		if (modes[i].mode == GRAPH_NOMODE)
-			return -ENOTSUP;
+	if (mode != GRAPH_DEFMODE) {
+		for (i = 0; modes[i].mode != mode; i++)
+			if (!modes[i].mode)
+				return -ENOTSUP;
+	}
+
+	/* Power management modes */
+	switch (modes[i].mode) {
+	case GRAPH_ON:
+		return virtiogpu_scanout(vgpu, vgpu->req, 0, 0, graph->width, graph->height, 0, vgpu->fb.rid);
+
+	case GRAPH_OFF:
+	case GRAPH_STANDBY:
+	case GRAPH_SUSPEND:
+		return virtiogpu_scanout(vgpu, vgpu->req, 0, 0, 0, 0, 0, 0);
+
+	default:
+		break;
+	}
 
 	/* Create new framebuffer resource and set it as scanout for the display */
-	if ((err = virtiogpu_create(vgpu, vgpu->req, virtiogpu_rgba(), modes[i].width, modes[i].height, &res)) < 0)
+	if ((err = virtiogpu_create(vgpu, vgpu->req, virtiogpu_xrgb(), modes[i].width, modes[i].height, &res)) < 0)
 		return err;
 
 	if ((err = virtiogpu_scanout(vgpu, vgpu->req, 0, 0, modes[i].width, modes[i].height, 0, res.rid)) < 0) {
@@ -1166,13 +1181,13 @@ int virtiogpu_open(graph_t *graph)
 				}
 
 				/* Create framebuffer */
-				if ((err = virtiogpu_create(vgpu, vgpu->req, virtiogpu_rgba(), vinfo.pmodes[0].r.w, vinfo.pmodes[0].r.h, &vgpu->fb)) < 0) {
+				if ((err = virtiogpu_create(vgpu, vgpu->req, virtiogpu_xrgb(), vinfo.pmodes[0].r.w, vinfo.pmodes[0].r.h, &vgpu->fb)) < 0) {
 					virtiogpu_put(vgpu->req);
 					break;
 				}
 
 				/* Create cursor */
-				if ((err = virtiogpu_create(vgpu, vgpu->req, virtiogpu_argb(), 64, 64, &vgpu->cur)) < 0) {
+				if ((err = virtiogpu_create(vgpu, vgpu->req, virtiogpu_xrgb(), 64, 64, &vgpu->cur)) < 0) {
 					virtiogpu_destroy(vgpu, vgpu->req, &vgpu->fb);
 					virtiogpu_put(vgpu->req);
 					break;
