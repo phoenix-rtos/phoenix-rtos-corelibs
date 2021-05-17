@@ -7,15 +7,8 @@
 #
 
 include ../phoenix-rtos-build/Makefile.common
-# FIXME: this include should be done by Makefile.common
-include ../phoenix-rtos-build/Makefile.$(TARGET_SUFF)
 
 .DEFAULT_GOAL := all
-
-ifneq ($(filter %clean,$(MAKECMDGOALS)),)
-$(info cleaning targets, make parallelism disabled)
-.NOTPARALLEL:
-endif
 
 # DEFAULT_COMPONENTS are shared between all targets
 DEFAULT_COMPONENTS := libcgi libvirtio libvga libgraph test-libgraph
@@ -28,4 +21,4 @@ include $(ALL_MAKES)
 .PHONY: all install clean
 all: $(DEFAULT_COMPONENTS)
 install: $(patsubst %,%-install,$(DEFAULT_COMPONENTS))
-clean: $(patsubst %,%-clean,$(DEFAULT_COMPONENTS))
+clean: $(patsubst %,%-clean,$(ALL_COMPONENTS))
