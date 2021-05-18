@@ -17,10 +17,9 @@ DEPS := libvga libvirtio
 LOCAL_SRCS := graph.c vga.c virtio-gpu.c
 
 ifeq ($(TARGET_FAMILY), ia32)
-	CFLAGS += -DTARGET_IA32
-	LOCAL_SRCS += cirrus.c soft-ia32.c
+  LOCAL_SRCS += cirrus.c soft-ia32.c
 else
-	LOCAL_SRCS += soft.c
+  LOCAL_SRCS += soft.c
 endif
 
 include $(static-lib.mk)

@@ -62,6 +62,7 @@
 
 #include <sys/mman.h>
 #include <sys/platform.h>
+#include <sys/threads.h>
 
 #include <phoenix/arch/ia32.h>
 
@@ -71,49 +72,49 @@
 
 
 /* Default graphics mode index */
-#define DEFMODE 54                   /* 1024x768x24 @ 60Hz */
+#define DEFMODE 54 /* 800x600x32 @ 60Hz */
 
 
 typedef struct {
-	unsigned int freq;               /* VCLK frequency (kHz) */
-	unsigned char num;               /* VCLK numerator */
-	unsigned char den;               /* VCLK denominator */
+	unsigned int freq; /* VCLK frequency (kHz) */
+	unsigned char num; /* VCLK numerator */
+	unsigned char den; /* VCLK denominator */
 } cirrus_vclk_t;
 
 
 typedef struct {
-	graph_mode_t mode;               /* Graphics mode */
-	unsigned char depth;             /* Color depth */
+	graph_mode_t mode;   /* Graphics mode */
+	unsigned char depth; /* Color depth */
 	union {
 		/* Power management mode */
 		struct {
-			unsigned char sr01;      /* DPMS sr01 register configuration */
-			unsigned char gr0e;      /* DPMS gr0e register configuration */
+			unsigned char sr01; /* DPMS sr01 register configuration */
+			unsigned char gr0e; /* DPMS gr0e register configuration */
 		} pwm;
 		/* Graphics mode */
 		struct {
-			graph_freq_t freq;       /* Screen refresh rate */
-			const vga_cfg_t *cfg;    /* Mode configuration */
+			graph_freq_t freq;    /* Screen refresh rate */
+			const vga_cfg_t *cfg; /* Mode configuration */
 		} gfx;
 	};
 } cirrus_mode_t;
 
 
 typedef struct {
-	vga_state_t state;               /* Base VGA state */
+	vga_state_t state; /* Base VGA state */
 	/* Extended CRT controller registers */
-	unsigned char cr19;              /* CRT controller 0x19 register */
-	unsigned char cr1a;              /* CRT controller 0x1a register */
-	unsigned char cr1b;              /* CRT controller 0x1b register */
-	unsigned char cr1d;              /* CRT controller 0x1d register */
+	unsigned char cr19; /* CRT controller 0x19 register */
+	unsigned char cr1a; /* CRT controller 0x1a register */
+	unsigned char cr1b; /* CRT controller 0x1b register */
+	unsigned char cr1d; /* CRT controller 0x1d register */
 	/* Extended sequencer registers */
-	unsigned char sr07;              /* Sequencer 0x07 register */
-	unsigned char sr0e;              /* Sequencer 0x0e register */
-	unsigned char sr12;              /* Sequencer 0x12 register */
-	unsigned char sr13;              /* Sequencer 0x13 register */
-	unsigned char sr1e;              /* Sequencer 0x1e register */
+	unsigned char sr07; /* Sequencer 0x07 register */
+	unsigned char sr0e; /* Sequencer 0x0e register */
+	unsigned char sr12; /* Sequencer 0x12 register */
+	unsigned char sr13; /* Sequencer 0x13 register */
+	unsigned char sr1e; /* Sequencer 0x1e register */
 	/* Extended DAC registers */
-	unsigned char hdr;               /* Hidden DAC Register */
+	unsigned char hdr; /* Hidden DAC Register */
 } cirrus_state_t;
 
 
@@ -128,7 +129,7 @@ typedef struct {
 	cirrus_state_t state;            /* Saved video state */
 } cirrus_dev_t;
 
-
+/* clang-format off */
 /* Graphics modes configuration table */
 static const vga_cfg_t cfgs[] = {
 	{ 3, 25175,   640,  656,  752,  800,  400,  412,  414,  449, VGA_VSYNCP },                              /* 640x400   @ 70Hz */
@@ -266,15 +267,10 @@ static const cirrus_vclk_t vclks[] = {
 
 /* Max VCLK for given color depth */
 static const unsigned int maxvclks[] = { 0, 135300, 86000, 86000, 60000 };
-
+/* clang-format on */
 
 /* Schedules and executes tasks */
 extern int graph_schedule(graph_t *graph);
-
-
-struct {
-	unsigned char init;
-} cirrus_common;
 
 
 int cirrus_vsync(graph_t *graph)
@@ -283,9 +279,11 @@ int cirrus_vsync(graph_t *graph)
 	void *ctx = cdev->ctx;
 
 	/* Wait for current vertical retrace end */
-	while (vgahw_status(ctx) & 0x08);
+	while (vgahw_status(ctx) & 0x08)
+		;
 	/* Wait for next vertical retrace start */
-	while (!(vgahw_status(ctx) & 0x08));
+	while (!(vgahw_status(ctx) & 0x08))
+		;
 
 	return 1;
 }
@@ -365,7 +363,7 @@ int cirrus_colorget(graph_t *graph, unsigned char *colors, unsigned char first, 
 }
 
 
-int cirrus_cursorset(graph_t *graph, const unsigned char *and, const unsigned char *xor, unsigned int bg, unsigned int fg)
+int cirrus_cursorset(graph_t *graph, const unsigned char *amask, const unsigned char *xmask, unsigned int bg, unsigned int fg)
 {
 	cirrus_dev_t *cdev = (cirrus_dev_t *)graph->adapter;
 	void *ctx = cdev->ctx;
@@ -378,9 +376,9 @@ int cirrus_cursorset(graph_t *graph, const unsigned char *and, const unsigned ch
 	cur = (unsigned char *)cdev->vmem + cdev->vmemsz - 0x1000;
 	for (i = 0; i < 64; i++) {
 		for (j = 0; j < 8; j++)
-			*cur++ = *xor++;
+			*cur++ = *xmask++;
 		for (j = 0; j < 8; j++)
-			*cur++ = ~(*and++);
+			*cur++ = ~(*amask++);
 	}
 	vgahw_writeseq(ctx, 0x13, 0x30);
 
@@ -522,7 +520,7 @@ int cirrus_move(graph_t *graph, unsigned int x, unsigned int y, unsigned int dx,
 	unsigned char mode;
 
 #ifdef GRAPH_VERIFY_ARGS
-	if ((x + dx > graph->width) || (y + dy > graph->height)||
+	if ((x + dx > graph->width) || (y + dy > graph->height) ||
 		((int)x + mx < 0) || ((int)y + my < 0) ||
 		((int)x + mx > graph->width) || ((int)y + my > graph->height) ||
 		(x + dx + mx > graph->width) || (y + dy + my > graph->height))
@@ -583,7 +581,7 @@ static int cirrus_vclk(unsigned int maxvclk, cirrus_vclk_t *vclk)
 		}
 	}
 
-	return (vclk->freq) ? EOK : -EINVAL; 
+	return (vclk->freq) ? EOK : -EINVAL;
 }
 
 
@@ -651,9 +649,10 @@ int cirrus_mode(graph_t *graph, graph_mode_t mode, graph_freq_t freq)
 	vga_cfg_t cfg;
 
 	if (mode != GRAPH_DEFMODE) {
-		for (i = 0; (modes[i].mode != mode) || (modes[i].depth && (freq != GRAPH_DEFFREQ) && (modes[i].gfx.freq != freq)); i++)
+		for (i = 0; (modes[i].mode != mode) || (modes[i].depth && (freq != GRAPH_DEFFREQ) && (modes[i].gfx.freq != freq)); i++) {
 			if (!modes[i].mode)
 				return -ENOTSUP;
+		}
 	}
 
 	/* Power management mode (DPMS) */
@@ -717,28 +716,28 @@ int cirrus_mode(graph_t *graph, graph_mode_t mode, graph_freq_t freq)
 	}
 
 	switch (modes[i].depth) {
-	case 1:
-		state.sr07 |= (hdiv) ? 0x17 : 0x11;
-		state.hdr = (hdiv) ? 0x4a : 0x00;
-		break;
+		case 1:
+			state.sr07 |= (hdiv) ? 0x17 : 0x11;
+			state.hdr = (hdiv) ? 0x4a : 0x00;
+			break;
 
-	case 2:
-		state.sr07 |= (hdiv) ? 0x19 : 0x17;
-		state.hdr = 0xc1;
-		break;
+		case 2:
+			state.sr07 |= (hdiv) ? 0x19 : 0x17;
+			state.hdr = 0xc1;
+			break;
 
-	case 3:
-		state.sr07 |= 0x15;
-		state.hdr = 0xc5;
-		break;
+		case 3:
+			state.sr07 |= 0x15;
+			state.hdr = 0xc5;
+			break;
 
-	case 4:
-		state.sr07 |= 0x19;
-		state.hdr = 0xc5;
-		break;
+		case 4:
+			state.sr07 |= 0x19;
+			state.hdr = 0xc5;
+			break;
 
-	default:
-		return -EINVAL;
+		default:
+			return -EINVAL;
 	}
 
 	/* Program mode */
@@ -746,11 +745,14 @@ int cirrus_mode(graph_t *graph, graph_mode_t mode, graph_freq_t freq)
 	cirrus_restore(cdev, &state);
 	vga_munlock(ctx);
 
-	/* Update graph data and clear screen */
+	/* Update graph info */
+	mutexLock(graph->lock);
+
 	graph->depth = modes[i].depth;
 	graph->width = modes[i].gfx.cfg->hres;
 	graph->height = modes[i].gfx.cfg->vres;
-	memset(cdev->vmem, 0, graph->width * graph->height * graph->depth);
+
+	mutexUnlock(graph->lock);
 
 	return EOK;
 }
@@ -808,10 +810,6 @@ int cirrus_open(graph_t *graph)
 	cirrus_dev_t *cdev;
 	void *ctx;
 	int err;
-
-	/* No support for multiple GPUs */
-	if (cirrus_common.init)
-		return -ENODEV;
 
 	pctl.pci.id.vendor = 0x1013;
 	pctl.pci.id.device = 0x00b8;
@@ -888,7 +886,6 @@ int cirrus_open(graph_t *graph)
 	/* Accelerated graphics operations */
 	graph->rect = cirrus_rect;
 	graph->move = cirrus_move;
-	cirrus_common.init = 1;
 
 	return EOK;
 }

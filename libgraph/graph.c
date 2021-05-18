@@ -22,7 +22,7 @@
 #include "soft.h"
 
 
-/* Graph tasks */
+/* Graphics tasks */
 enum {
 	GRAPH_LINE,
 	GRAPH_RECT,
@@ -95,51 +95,84 @@ typedef struct {
 } __attribute__((packed)) graph_task_t;
 
 
-#ifdef GRAPH_CIRRUS
-extern int cirrus_open(graph_t *);
-extern void cirrus_done(void);
-extern int cirrus_init(void);
-#endif
+int __attribute__((weak)) cirrus_open(graph_t *graph)
+{
+	return -ENODEV;
+}
 
 
-#ifdef GRAPH_VIRTIOGPU
-extern int virtiogpu_open(graph_t *);
-extern void virtiogpu_done(void);
-extern int virtiogpu_init(void);
-#endif
+void __attribute__((weak)) cirrus_done(void)
+{
+	return;
+}
 
 
-#ifdef GRAPH_VGA
-extern int vga_open(graph_t *);
-extern void vga_done(void);
-extern int vga_init(void);
-#endif
+int __attribute__((weak)) cirrus_init(void)
+{
+	return EOK;
+}
 
 
-/* Executes task */
+int __attribute__((weak)) virtiogpu_open(graph_t *graph)
+{
+	return -ENODEV;
+}
+
+
+void __attribute__((weak)) virtiogpu_done(void)
+{
+	return;
+}
+
+
+int __attribute__((weak)) virtiogpu_init(void)
+{
+	return EOK;
+}
+
+
+int __attribute__((weak)) vga_open(graph_t *graph)
+{
+	return -ENODEV;
+}
+
+
+void __attribute__((weak)) vga_done(void)
+{
+	return;
+}
+
+
+int __attribute__((weak)) vga_init(void)
+{
+	return EOK;
+}
+
+
+/* Executes graphics task */
 static int _graph_exec(graph_t *graph, graph_task_t *task)
 {
 	switch (task->type) {
-	case GRAPH_LINE:
-		return graph->line(graph, task->line.x, task->line.y, task->line.dx, task->line.dy, task->line.stroke, task->line.color);
+		case GRAPH_LINE:
+			return graph->line(graph, task->line.x, task->line.y, task->line.dx, task->line.dy, task->line.stroke, task->line.color);
 
-	case GRAPH_RECT:
-		return graph->rect(graph, task->rect.x, task->rect.y, task->rect.dx, task->rect.dy, task->rect.color);
+		case GRAPH_RECT:
+			return graph->rect(graph, task->rect.x, task->rect.y, task->rect.dx, task->rect.dy, task->rect.color);
 
-	case GRAPH_FILL:
-		return graph->fill(graph, task->fill.x, task->fill.y, task->fill.color, task->fill.type);
+		case GRAPH_FILL:
+			return graph->fill(graph, task->fill.x, task->fill.y, task->fill.color, task->fill.type);
 
-	case GRAPH_PRINT:
-		return graph->print(graph, task->print.x, task->print.y, task->print.dx, task->print.dy, task->print.bmp, task->print.width, task->print.height, task->print.span, task->print.color);
+		case GRAPH_PRINT:
+			return graph->print(graph, task->print.x, task->print.y, task->print.dx, task->print.dy, task->print.bmp, task->print.width, task->print.height, task->print.span, task->print.color);
 
-	case GRAPH_MOVE:
-		return graph->move(graph, task->move.x, task->move.y, task->move.dx, task->move.dy, task->move.mx, task->move.my);
+		case GRAPH_MOVE:
+			return graph->move(graph, task->move.x, task->move.y, task->move.dx, task->move.dy, task->move.mx, task->move.my);
 
-	case GRAPH_COPY:
-		return graph->copy(graph, task->copy.src, task->copy.dst, task->copy.dx, task->copy.dy, task->copy.srcspan, task->copy.dstspan);
+		case GRAPH_COPY:
+			return graph->copy(graph, task->copy.src, task->copy.dst, task->copy.dx, task->copy.dy, task->copy.srcspan, task->copy.dstspan);
 
-	default:
-		return -EINVAL;
+		default:
+			return -EINVAL;
 	}
 }
 
@@ -223,16 +256,16 @@ static int graph_queue(graph_t *graph, graph_task_t *task, graph_queue_t queue)
 	int ret;
 
 	switch (queue) {
-	case GRAPH_QUEUE_LOW:
-		q = &graph->lo;
-		break;
+		case GRAPH_QUEUE_LOW:
+			q = &graph->lo;
+			break;
 
-	case GRAPH_QUEUE_HIGH:
-		q = &graph->hi;
-		break;
+		case GRAPH_QUEUE_HIGH:
+			q = &graph->hi;
+			break;
 
-	default:
-		return -EINVAL;
+		default:
+			return -EINVAL;
 	}
 
 	mutexLock(graph->lock);
@@ -337,9 +370,9 @@ int graph_colorget(graph_t *graph, unsigned char *colors, unsigned char first, u
 }
 
 
-int graph_cursorset(graph_t *graph, const unsigned char *and, const unsigned char *xor, unsigned int bg, unsigned int fg)
+int graph_cursorset(graph_t *graph, const unsigned char *amask, const unsigned char *xmask, unsigned int bg, unsigned int fg)
 {
-	return graph->cursorset(graph, and, xor, bg, fg);
+	return graph->cursorset(graph, amask, xmask, bg, fg);
 }
 
 
@@ -448,7 +481,8 @@ int graph_vsync(graph_t *graph)
 int graph_mode(graph_t *graph, graph_mode_t mode, graph_freq_t freq)
 {
 	graph_reset(graph, GRAPH_QUEUE_BOTH);
-	while (graph->isbusy(graph));
+	while (graph->isbusy(graph))
+		;
 
 	return graph->mode(graph, mode, freq);
 }
@@ -462,7 +496,7 @@ void graph_close(graph_t *graph)
 }
 
 
-int graph_open(graph_t *graph, unsigned int mem, unsigned int adapter)
+int graph_open(graph_t *graph, graph_adapter_t adapter, unsigned int mem)
 {
 	unsigned int himem, lomem;
 	int err;
@@ -486,7 +520,7 @@ int graph_open(graph_t *graph, unsigned int mem, unsigned int adapter)
 	graph->hi.tasks = 0;
 	graph->hi.stop = 0;
 
-	/* Initialize low priority task queue */
+	/* Initialize low priority tasks queue */
 	graph->lo.fifo = graph->hi.end;
 	graph->lo.end = graph->lo.fifo + lomem;
 	graph->lo.free = graph->lo.fifo;
@@ -504,20 +538,15 @@ int graph_open(graph_t *graph, unsigned int mem, unsigned int adapter)
 
 	/* Initialize graphics adapter context */
 	do {
-#ifdef GRAPH_CIRRUS
 		if ((adapter & GRAPH_CIRRUS) && ((err = cirrus_open(graph)) != -ENODEV))
 			break;
-#endif
 
-#ifdef GRAPH_VIRTIOGPU
 		if ((adapter & GRAPH_VIRTIOGPU) && ((err = virtiogpu_open(graph)) != -ENODEV))
 			break;
-#endif
 
-#ifdef GRAPH_VGA
 		if ((adapter & GRAPH_VGA) && ((err = vga_open(graph)) != -ENODEV))
 			break;
-#endif
+
 		err = -ENODEV;
 	} while (0);
 
@@ -532,17 +561,9 @@ int graph_open(graph_t *graph, unsigned int mem, unsigned int adapter)
 
 void graph_done(void)
 {
-#ifdef GRAPH_CIRRUS
 	cirrus_done();
-#endif
-
-#ifdef GRAPH_VIRTIOGPU
 	virtiogpu_done();
-#endif
-
-#ifdef GRAPH_VGA
 	vga_done();
-#endif
 }
 
 
@@ -550,20 +571,14 @@ int graph_init(void)
 {
 	int err;
 
-#ifdef GRAPH_CIRRUS
 	if ((err = cirrus_init()) < 0)
 		return err;
-#endif
 
-#ifdef GRAPH_VIRTIOGPU
 	if ((err = virtiogpu_init()) < 0)
 		return err;
-#endif
 
-#ifdef GRAPH_VGA
 	if ((err = vga_init()) < 0)
 		return err;
-#endif
 
 	return EOK;
 }

@@ -61,28 +61,30 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <sys/threads.h>
+
 #include <libvga.h>
 
 #include "libgraph.h"
 
 
 /* Default graphics mode index */
-#define DEFMODE 4                    /* 320x200x8 @ 70Hz */
+#define DEFMODE 4 /* 320x200x8 @ 70Hz */
 
 
 typedef struct {
-	graph_mode_t mode;               /* Graphics mode */
-	unsigned char depth;             /* Color depth */
+	graph_mode_t mode;   /* Graphics mode */
+	unsigned char depth; /* Color depth */
 	union {
 		/* Power management mode */
 		struct {
-			unsigned char sr01;      /* DPMS sr01 register configuration */
-			unsigned char cr17;      /* DPMS gr0e register configuration */
+			unsigned char sr01; /* DPMS sr01 register configuration */
+			unsigned char cr17; /* DPMS gr0e register configuration */
 		} pwm;
 		/* Graphics mode */
 		struct {
-			graph_freq_t freq;       /* Screen refresh rate */
-			const vga_cfg_t *cfg;    /* Mode configuration */
+			graph_freq_t freq;    /* Screen refresh rate */
+			const vga_cfg_t *cfg; /* Mode configuration */
 		} gfx;
 	};
 } vga_mode_t;
@@ -97,7 +99,7 @@ typedef struct {
 	vga_state_t state;               /* Saved video state */
 } vga_dev_t;
 
-
+/* clang-format off */
 /* Graphics modes configuration table */
 static const vga_cfg_t cfgs[] = {
 	{ 0, 12588, 320, 328, 376, 400, 200, 206, 207, 225, VGA_VSYNCP | VGA_CLKDIV | VGA_DBLSCAN }, /* 320x200 @ 70Hz */
@@ -118,15 +120,10 @@ static const vga_mode_t modes[] = {
 	/* No mode */
 	{ 0 }
 };
-
+/* clang-format on */
 
 /* Schedules and executes tasks */
 extern int graph_schedule(graph_t *graph);
-
-
-struct {
-	unsigned char init;
-} vga_common;
 
 
 int vga_vsync(graph_t *graph)
@@ -135,9 +132,11 @@ int vga_vsync(graph_t *graph)
 	void *ctx = vga->ctx;
 
 	/* Wait for current vertical retrace end */
-	while (vgahw_status(ctx) & 0x08);
+	while (vgahw_status(ctx) & 0x08)
+		;
 	/* Wait for next vertical retrace start */
-	while (!(vgahw_status(ctx) & 0x08));
+	while (!(vgahw_status(ctx) & 0x08))
+		;
 
 	return 1;
 }
@@ -214,7 +213,7 @@ int vga_colorget(graph_t *graph, unsigned char *colors, unsigned char first, uns
 }
 
 
-int vga_cursorset(graph_t *graph, const unsigned char *and, const unsigned char *xor, unsigned int bg, unsigned int fg)
+int vga_cursorset(graph_t *graph, const unsigned char *amask, const unsigned char *xmask, unsigned int bg, unsigned int fg)
 {
 	return -ENOTSUP;
 }
@@ -247,9 +246,10 @@ int vga_mode(graph_t *graph, graph_mode_t mode, graph_freq_t freq)
 	vga_cfg_t cfg;
 
 	if (mode != GRAPH_DEFMODE) {
-		for (i = 0; (modes[i].mode != mode) || (modes[i].depth && (freq != GRAPH_DEFFREQ) && (modes[i].gfx.freq != freq)); i++)
+		for (i = 0; (modes[i].mode != mode) || (modes[i].depth && (freq != GRAPH_DEFFREQ) && (modes[i].gfx.freq != freq)); i++) {
 			if (!modes[i].mode)
 				return -ENOTSUP;
+		}
 	}
 
 	/* Power management mode (DPMS) */
@@ -288,11 +288,14 @@ int vga_mode(graph_t *graph, graph_mode_t mode, graph_freq_t freq)
 	vga_restoremode(ctx, &state);
 	vga_munlock(ctx);
 
-	/* Update graph data and clear screen */
+	/* Update graph info */
+	mutexLock(graph->lock);
+
 	graph->width = modes[i].gfx.cfg->hres;
 	graph->height = modes[i].gfx.cfg->vres;
 	graph->depth = modes[i].depth;
-	memset(vgahw_mem(ctx), 0, graph->width * graph->height * graph->depth);
+
+	mutexUnlock(graph->lock);
 
 	return EOK;
 }
@@ -320,10 +323,6 @@ int vga_open(graph_t *graph)
 	vga_dev_t *vga;
 	void *ctx;
 	int err;
-
-	/* No support for multiple GPUs */
-	if (vga_common.init)
-		return -ENODEV;
 
 	if ((vga = malloc(sizeof(vga_dev_t))) == NULL)
 		return -ENOMEM;
@@ -369,7 +368,6 @@ int vga_open(graph_t *graph)
 	graph->cursorpos = vga_cursorpos;
 	graph->cursorshow = vga_cursorshow;
 	graph->cursorhide = vga_cursorhide;
-	vga_common.init = 1;
 
 	return EOK;
 }
