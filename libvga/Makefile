@@ -15,9 +15,9 @@ LOCAL_HEADERS := libvga.h
 LOCAL_SRCS := vga.c
 
 ifeq ($(TARGET_FAMILY), ia32)
-	LOCAL_SRCS += vgahw-pc.c
+  LOCAL_SRCS += vgahw-pc.c
 else
-	LOCAL_SRCS += vgahw-empty.c
+  LOCAL_SRCS += vgahw-empty.c
 endif
 
 include $(static-lib.mk)

@@ -60,8 +60,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <sys/minmax.h>
-
 #include "libvga.h"
 
 

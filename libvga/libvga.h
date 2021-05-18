@@ -22,45 +22,46 @@
 #define VGA_TEXTSZ (VGA_MEMSZ >> 1) /* VGA text size */
 #define VGA_FONTSZ VGA_MEMSZ        /* VGA font size */
 
-
+/* clang-format off */
 /* VGA mode adjustment flags */
 enum {
-	VGA_HSYNCP    = (1 << 0),       /* HSync positive polarity */
-	VGA_VSYNCP    = (1 << 1),       /* VSync positive polarity */
-	VGA_CLKDIV    = (1 << 2),       /* Pixel clock is divided by 2 */
-	VGA_DBLSCAN   = (1 << 3),       /* Double scan */
-	VGA_INTERLACE = (1 << 4)        /* Interlace mode */
+	VGA_HSYNCP    = (1 << 0), /* HSync positive polarity */
+	VGA_VSYNCP    = (1 << 1), /* VSync positive polarity */
+	VGA_CLKDIV    = (1 << 2), /* Pixel clock is divided by 2 */
+	VGA_DBLSCAN   = (1 << 3), /* Double scan */
+	VGA_INTERLACE = (1 << 4)  /* Interlace mode */
 };
-
+/* clang-format on */
 
 typedef struct {
-	unsigned int clkidx;            /* Pixel clock source index */
-	unsigned int clk;               /* Pixel clock frequency (kHz) */
+	/* Pixel clock */
+	unsigned int clkidx; /* Pixel clock source index */
+	unsigned int clk;    /* Pixel clock frequency (kHz) */
 	/* Horizontal timings */
-	unsigned int hres;              /* Horizontal resolution */
-	unsigned int hsyncs;            /* Horizontal sync start */
-	unsigned int hsynce;            /* Horizontal sync end */
-	unsigned int htotal;            /* Horizontal total pixels */
+	unsigned int hres;   /* Horizontal resolution */
+	unsigned int hsyncs; /* Horizontal sync start */
+	unsigned int hsynce; /* Horizontal sync end */
+	unsigned int htotal; /* Horizontal total pixels */
 	/* Vertical timings */
-	unsigned int vres;              /* Vertical resolution */
-	unsigned int vsyncs;            /* Vertical sync start */
-	unsigned int vsynce;            /* Vertical sync end */
-	unsigned int vtotal;            /* Vertical total lines */
+	unsigned int vres;   /* Vertical resolution */
+	unsigned int vsyncs; /* Vertical sync start */
+	unsigned int vsynce; /* Vertical sync end */
+	unsigned int vtotal; /* Vertical total lines */
 	/* Mode adjustments */
-	unsigned char flags;            /* Mode adjustment flags */
+	unsigned char flags; /* Mode adjustment flags */
 } vga_cfg_t;
 
 
 typedef struct {
-	unsigned char mr;               /* Miscellaneous register */
-	unsigned char cr[25];           /* CRT controller registers */
-	unsigned char sr[5];            /* Sequencer registers */
-	unsigned char gr[9];            /* Graphics controller registers */
-	unsigned char ar[21];           /* Attribute controller registers */
-	unsigned char *cmap;            /* Color map */
-	unsigned char *text;            /* Plane 0 and 1 text */
-	unsigned char *font1;           /* Plane 2 font */
-	unsigned char *font2;           /* Plane 3 font */
+	unsigned char mr;     /* Miscellaneous register */
+	unsigned char cr[25]; /* CRT controller registers */
+	unsigned char sr[5];  /* Sequencer registers */
+	unsigned char gr[9];  /* Graphics controller registers */
+	unsigned char ar[21]; /* Attribute controller registers */
+	unsigned char *cmap;  /* Color map */
+	unsigned char *text;  /* Plane 0 and 1 text */
+	unsigned char *font1; /* Plane 2 font */
+	unsigned char *font2; /* Plane 3 font */
 } vga_state_t;
 
 
@@ -70,7 +71,7 @@ typedef struct {
 
 
 /* Returns mapped VGA memory address */
-extern void *vgahw_mem(void *hwctx); 
+extern void *vgahw_mem(void *hwctx);
 
 
 /* Reads from input status register */
