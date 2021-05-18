@@ -12,107 +12,126 @@
  */
 
 #include <errno.h>
+#include <stddef.h>
 
 #include "libvga.h"
 
 
-unsigned char vga_status(vga_t *vga)
+void *vgahw_mem(void *hwctx)
+{
+	return NULL;
+}
+
+
+unsigned char vgahw_status(void *hwctx)
 {
 	return 0;
 }
 
 
-unsigned char vga_readmisc(vga_t *vga)
+unsigned char vgahw_readfcr(void *hwctx)
 {
 	return 0;
 }
 
 
-void vga_writemisc(vga_t *vga, unsigned char val)
+void vgahw_writefcr(void *hwctx, unsigned char val)
 {
 	return;
 }
 
 
-unsigned char vga_readcrtc(vga_t *vga, unsigned char reg)
+unsigned char vgahw_readmisc(void *hwctx)
 {
 	return 0;
 }
 
 
-void vga_writecrtc(vga_t *vga, unsigned char reg, unsigned char val)
+void vgahw_writemisc(void *hwctx, unsigned char val)
 {
 	return;
 }
 
 
-unsigned char vga_readseq(vga_t *vga, unsigned char reg)
+unsigned char vgahw_readcrtc(void *hwctx, unsigned char reg)
 {
 	return 0;
 }
 
 
-void vga_writeseq(vga_t *vga, unsigned char reg, unsigned char val)
+void vgahw_writecrtc(void *hwctx, unsigned char reg, unsigned char val)
 {
 	return;
 }
 
 
-unsigned char vga_readgfx(vga_t *vga, unsigned char reg)
+unsigned char vgahw_readseq(void *hwctx, unsigned char reg)
 {
 	return 0;
 }
 
 
-void vga_writegfx(vga_t *vga, unsigned char reg, unsigned char val)
+void vgahw_writeseq(void *hwctx, unsigned char reg, unsigned char val)
 {
 	return;
 }
 
 
-unsigned char vga_readattr(vga_t *vga, unsigned char reg)
+unsigned char vgahw_readgfx(void *hwctx, unsigned char reg)
 {
 	return 0;
 }
 
 
-void vga_writeattr(vga_t *vga, unsigned char reg, unsigned char val)
+void vgahw_writegfx(void *hwctx, unsigned char reg, unsigned char val)
 {
 	return;
 }
 
 
-unsigned char vga_readdac(vga_t *vga, unsigned char reg)
+unsigned char vgahw_readattr(void *hwctx, unsigned char reg)
 {
 	return 0;
 }
 
 
-void vga_writedac(vga_t *vga, unsigned char reg, unsigned char val)
+void vgahw_writeattr(void *hwctx, unsigned char reg, unsigned char val)
 {
 	return;
 }
 
 
-void vga_disablecmap(vga_t *vga)
+unsigned char vgahw_readdac(void *hwctx, unsigned char reg)
+{
+	return 0;
+}
+
+
+void vgahw_writedac(void *hwctx, unsigned char reg, unsigned char val)
 {
 	return;
 }
 
 
-void vga_enablecmap(vga_t *vga)
+void vgahw_disablecmap(void *hwctx)
 {
 	return;
 }
 
 
-void vga_done(vga_t *vga)
+void vgahw_enablecmap(void *hwctx)
 {
 	return;
 }
 
 
-int vga_init(vga_t *vga)
+void vgahw_done(void *hwctx)
+{
+	return;
+}
+
+
+int vgahw_init(void *hwctx)
 {
 	return -ENODEV;
 }

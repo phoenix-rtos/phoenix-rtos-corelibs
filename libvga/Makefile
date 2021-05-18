@@ -1,5 +1,5 @@
 #
-# Makefile for VGA library
+# Makefile for generic VGA library
 #
 # Copyright 2021 Phoenix Systems
 # Author: Lukasz Kosinski

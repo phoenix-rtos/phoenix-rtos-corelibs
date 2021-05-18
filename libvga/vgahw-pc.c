@@ -12,7 +12,7 @@
  */
 
 #include <errno.h>
-#include <stdlib.h>
+#include <stddef.h>
 
 #include <sys/io.h>
 #include <sys/mman.h>
@@ -20,128 +20,200 @@
 #include "libvga.h"
 
 
-unsigned char vga_status(vga_t *vga)
+typedef struct {
+	void *fcr;          /* Feature control register base address */
+	void *misc;         /* Miscellaneous register base address */
+	void *crtc;         /* CRT controller registers base address */
+	void *seq;          /* Sequencer registers base address */
+	void *gfx;          /* Graphics controller registers base address */
+	void *attr;         /* Attribute controller registers base address */
+	void *dac;          /* Digital to Analog Converter registers base address */
+	void *mem;          /* Mapped VGA memory base address */
+	unsigned int memsz; /* Mapped VGA memory size */
+} vgahw_ctx_t;
+
+
+void *vgahw_mem(void *hwctx)
 {
-	return inb(vga->crtc + 6);
+	vgahw_ctx_t *ctx = (vgahw_ctx_t *)hwctx;
+
+	return ctx->mem;
 }
 
 
-unsigned char vga_readmisc(vga_t *vga)
+unsigned char vgahw_status(void *hwctx)
 {
-	return inb(vga->misc + 10);
+	vgahw_ctx_t *ctx = (vgahw_ctx_t *)hwctx;
+
+	return inb(ctx->crtc + 6);
 }
 
 
-void vga_writemisc(vga_t *vga, unsigned char val)
+unsigned char vgahw_readfcr(void *hwctx)
 {
-	outb(vga->misc, val);
+	vgahw_ctx_t *ctx = (vgahw_ctx_t *)hwctx;
+
+	return inb(ctx->fcr);
 }
 
 
-unsigned char vga_readcrtc(vga_t *vga, unsigned char reg)
+void vgahw_writefcr(void *hwctx, unsigned char val)
 {
-	outb(vga->crtc, reg);
-	return inb(vga->crtc + 1);
+	vgahw_ctx_t *ctx = (vgahw_ctx_t *)hwctx;
+
+	outb(ctx->crtc + 6, val);
 }
 
 
-void vga_writecrtc(vga_t *vga, unsigned char reg, unsigned char val)
+unsigned char vgahw_readmisc(void *hwctx)
 {
-	outb(vga->crtc, reg);
-	outb(vga->crtc + 1, val);
+	vgahw_ctx_t *ctx = (vgahw_ctx_t *)hwctx;
+
+	return inb(ctx->misc + 10);
 }
 
 
-unsigned char vga_readseq(vga_t *vga, unsigned char reg)
+void vgahw_writemisc(void *hwctx, unsigned char val)
 {
-	outb(vga->seq, reg);
-	return inb(vga->seq + 1);
+	vgahw_ctx_t *ctx = (vgahw_ctx_t *)hwctx;
+
+	outb(ctx->misc, val);
 }
 
 
-void vga_writeseq(vga_t *vga, unsigned char reg, unsigned char val)
+unsigned char vgahw_readcrtc(void *hwctx, unsigned char reg)
 {
-	outb(vga->seq, reg);
-	outb(vga->seq + 1, val);
+	vgahw_ctx_t *ctx = (vgahw_ctx_t *)hwctx;
+
+	outb(ctx->crtc, reg);
+	return inb(ctx->crtc + 1);
 }
 
 
-unsigned char vga_readgfx(vga_t *vga, unsigned char reg)
+void vgahw_writecrtc(void *hwctx, unsigned char reg, unsigned char val)
 {
-	outb(vga->gfx, reg);
-	return inb(vga->gfx + 1);
+	vgahw_ctx_t *ctx = (vgahw_ctx_t *)hwctx;
+
+	outb(ctx->crtc, reg);
+	outb(ctx->crtc + 1, val);
 }
 
 
-void vga_writegfx(vga_t *vga, unsigned char reg, unsigned char val)
+unsigned char vgahw_readseq(void *hwctx, unsigned char reg)
 {
-	outb(vga->gfx, reg);
-	outb(vga->gfx + 1, val);
+	vgahw_ctx_t *ctx = (vgahw_ctx_t *)hwctx;
+
+	outb(ctx->seq, reg);
+	return inb(ctx->seq + 1);
 }
 
 
-unsigned char vga_readattr(vga_t *vga, unsigned char reg)
+void vgahw_writeseq(void *hwctx, unsigned char reg, unsigned char val)
 {
-	vga_status(vga);
-	outb(vga->attr, reg);
-	return inb(vga->attr + 1);
+	vgahw_ctx_t *ctx = (vgahw_ctx_t *)hwctx;
+
+	outb(ctx->seq, reg);
+	outb(ctx->seq + 1, val);
 }
 
 
-void vga_writeattr(vga_t *vga, unsigned char reg, unsigned char val)
+unsigned char vgahw_readgfx(void *hwctx, unsigned char reg)
 {
-	vga_status(vga);
-	outb(vga->attr, reg);
-	outb(vga->attr, val);
+	vgahw_ctx_t *ctx = (vgahw_ctx_t *)hwctx;
+
+	outb(ctx->gfx, reg);
+	return inb(ctx->gfx + 1);
 }
 
 
-unsigned char vga_readdac(vga_t *vga, unsigned char reg)
+void vgahw_writegfx(void *hwctx, unsigned char reg, unsigned char val)
 {
-	return inb(vga->dac + reg);
+	vgahw_ctx_t *ctx = (vgahw_ctx_t *)hwctx;
+
+	outb(ctx->gfx, reg);
+	outb(ctx->gfx + 1, val);
 }
 
 
-void vga_writedac(vga_t *vga, unsigned char reg, unsigned char val)
+unsigned char vgahw_readattr(void *hwctx, unsigned char reg)
 {
-	outb(vga->dac + reg, val);
+	vgahw_ctx_t *ctx = (vgahw_ctx_t *)hwctx;
+
+	vgahw_status(hwctx);
+	outb(ctx->attr, reg);
+	return inb(ctx->attr + 1);
 }
 
 
-void vga_disablecmap(vga_t *vga)
+void vgahw_writeattr(void *hwctx, unsigned char reg, unsigned char val)
 {
-	vga_status(vga);
-	outb(vga->attr, 0x20);
+	vgahw_ctx_t *ctx = (vgahw_ctx_t *)hwctx;
+
+	vgahw_status(hwctx);
+	outb(ctx->attr, reg);
+	outb(ctx->attr, val);
 }
 
 
-void vga_enablecmap(vga_t *vga)
+unsigned char vgahw_readdac(void *hwctx, unsigned char reg)
 {
-	vga_status(vga);
-	outb(vga->attr, 0x00);
+	vgahw_ctx_t *ctx = (vgahw_ctx_t *)hwctx;
+
+	return inb(ctx->dac + reg);
 }
 
 
-void vga_done(vga_t *vga)
+void vgahw_writedac(void *hwctx, unsigned char reg, unsigned char val)
 {
-	munmap(vga->mem, vga->memsz);
+	vgahw_ctx_t *ctx = (vgahw_ctx_t *)hwctx;
+
+	outb(ctx->dac + reg, val);
 }
 
 
-int vga_init(vga_t *vga)
+void vgahw_enablecmap(void *hwctx)
 {
-	/* Set VGA ports */
-	vga->attr = (void *)0x3c0;
-	vga->misc = (void *)0x3c2;
-	vga->seq = (void *)0x3c4;
-	vga->dac = (void *)0x3c6;
-	vga->gfx = (void *)0x3ce;
-	vga->crtc = (vga_readmisc(vga) & 0x01) ? (void *)0x3d4 : (void *)0x3b4;
+	vgahw_ctx_t *ctx = (vgahw_ctx_t *)hwctx;
+
+	vgahw_status(hwctx);
+	outb(ctx->attr, 0x00);
+}
+
+
+void vgahw_disablecmap(void *hwctx)
+{
+	vgahw_ctx_t *ctx = (vgahw_ctx_t *)hwctx;
+
+	vgahw_status(hwctx);
+	outb(ctx->attr, 0x20);
+}
+
+
+void vgahw_done(void *hwctx)
+{
+	vgahw_ctx_t *ctx = (vgahw_ctx_t *)hwctx;
+
+	munmap(ctx->mem, ctx->memsz);
+}
+
+
+int vgahw_init(void *hwctx)
+{
+	vgahw_ctx_t *ctx = (vgahw_ctx_t *)hwctx;
 
 	/* Map VGA memory (64KB) */
-	vga->memsz = (VGA_MEMSZ + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1);
-	if ((vga->mem = mmap(NULL, vga->memsz, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_UNCACHED | MAP_DEVICE, OID_PHYSMEM, 0xa0000)) == MAP_FAILED)
+	ctx->memsz = (VGA_MEMSZ + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1);
+	if ((ctx->mem = mmap(NULL, ctx->memsz, PROT_READ | PROT_WRITE, MAP_DEVICE | MAP_SHARED | MAP_UNCACHED | MAP_ANONYMOUS, OID_PHYSMEM, 0xa0000)) == MAP_FAILED)
 		return -ENOMEM;
+
+	/* Set VGA ports */
+	ctx->attr = (void *)0x3c0;
+	ctx->misc = (void *)0x3c2;
+	ctx->seq = (void *)0x3c4;
+	ctx->dac = (void *)0x3c6;
+	ctx->fcr = (void *)0x3ca;
+	ctx->gfx = (void *)0x3ce;
+	ctx->crtc = (vgahw_readmisc(hwctx) & 0x01) ? (void *)0x3d4 : (void *)0x3b4;
 
 	return EOK;
 }
