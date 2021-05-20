@@ -98,10 +98,10 @@ void libcgi_freeUrlParams(libcgi_param_t *params_head)
 }
 
 
-static char *libcgi_getMultipartBoundry(void)
+static char *libcgi_getMultipartBoundary(void)
 {
 	char *content = getenv("CONTENT_TYPE");
-	char *boundry, *str;
+	char *boundary, *str;
 
 	if (content == NULL)
 		return NULL;
@@ -111,12 +111,12 @@ static char *libcgi_getMultipartBoundry(void)
 		return NULL;
 
 	str++;
-	boundry = calloc(1, strlen(str) + 3);
-	boundry[0] = '-';
-	boundry[1] = '-';
-	strcpy(&boundry[2], str);
+	boundary = calloc(1, strlen(str) + 3);
+	boundary[0] = '-';
+	boundary[1] = '-';
+	strcpy(&boundary[2], str);
 
-	return boundry;
+	return boundary;
 }
 
 #define CGI_BUF_SIZE (4096 * 16)
@@ -128,8 +128,8 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 	char file_path[256];
 	char *mp, *key;
 
-	char *boundry = libcgi_getMultipartBoundry();
-	int klen, blen = strlen(boundry);
+	char *boundary = libcgi_getMultipartBoundary();
+	int klen, blen = strlen(boundary);
 
 	char *bbuf;
 	int i = 0, bbuf_len, nitems, nlast = 0;
@@ -137,7 +137,7 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 #define RET_ERR \
 	do { \
 		libcgi_freeMultipartParams(head); \
-		free(boundry); \
+		free(boundary); \
 		free(bbuf); \
 		free(mp_buf); \
 		return NULL; \
@@ -148,7 +148,7 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 	bbuf = calloc(1, blen + 3);
 	bbuf[0] = '\r';
 	bbuf[1] = '\n';
-	memcpy(&bbuf[2], boundry, blen);
+	memcpy(&bbuf[2], boundary, blen);
 	bbuf_len = blen + 2;
 
 	if (mp_buf == NULL)
@@ -157,9 +157,9 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 	mp = fgets(mp_buf, CGI_BUF_SIZE, stdin);
 	while (mp != NULL) {
 
-		if (!strncmp(boundry, mp, blen)) {
+		if (!strncmp(boundary, mp, blen)) {
 			klen = strcspn(mp, "\r\n");
-			/* check multipart end boundry */
+			/* check multipart end boundary */
 			if (klen - 2 == blen && !strncmp(&mp[blen], "--", 2))
 				break;
 
@@ -219,7 +219,7 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 			mp = mp_buf;
 			nitems = 0;
 			i = 0;
-			/* read byte by byte from stdin to detect cgi boundry */
+			/* read byte by byte from stdin to detect cgi boundary */
 			while ((nitems += fread(mp, 1, CGI_BUF_SIZE - nitems, stdin)) > 0) {
 
 				if (errno == EINTR)
@@ -266,7 +266,7 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 		}
 	}
 
-	free(boundry);
+	free(boundary);
 	free(bbuf);
 	free(mp_buf);
 	return head;
