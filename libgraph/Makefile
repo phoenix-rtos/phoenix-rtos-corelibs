@@ -11,7 +11,7 @@
 
 NAME := libgraph
 
-LOCAL_HEADERS := libgraph.h
+LOCAL_HEADERS := graph.h
 DEPS := libvga libvirtio
 
 LOCAL_SRCS := graph.c vga.c virtio-gpu.c

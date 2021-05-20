@@ -17,7 +17,7 @@
 #include <sys/io.h>
 #include <sys/mman.h>
 
-#include "libvga.h"
+#include "vga.h"
 
 
 typedef struct {

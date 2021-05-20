@@ -10,7 +10,7 @@
 #
 
 NAME := libvirtio
-LOCAL_HEADERS := libvirtio.h
+LOCAL_HEADERS := virtio.h
 
 LOCAL_SRCS := virtio.c virtiopci.c virtqueue.c
 

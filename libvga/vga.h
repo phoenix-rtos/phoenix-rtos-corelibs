@@ -11,8 +11,8 @@
  * %LICENSE%
  */
 
-#ifndef _LIBVGA_H_
-#define _LIBVGA_H_
+#ifndef _VGA_H_
+#define _VGA_H_
 
 
 /* VGA common defines */

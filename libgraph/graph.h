@@ -12,8 +12,8 @@
  * %LICENSE%
  */
 
-#ifndef _LIBGRAPH_H_
-#define _LIBGRAPH_H_
+#ifndef _GRAPH_H_
+#define _GRAPH_H_
 
 #include <sys/types.h>
 

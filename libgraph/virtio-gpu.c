@@ -22,9 +22,9 @@
 #include <sys/threads.h>
 #include <sys/types.h>
 
-#include <libvirtio.h>
+#include <virtio.h>
 
-#include "libgraph.h"
+#include "graph.h"
 
 
 /* Use polling on RISCV64 (interrupts trigger memory protection exception) */

@@ -19,7 +19,7 @@
 #include <stdio.h>
 #include <errno.h>
 
-#include "libcgi.h"
+#include "cgi.h"
 
 
 char *libcgi_getQueryString(void)
@@ -119,7 +119,7 @@ static char *libcgi_getMultipartBoundry(void)
 	return boundry;
 }
 
-#define CGI_BUF_SIZE (4096*16)
+#define CGI_BUF_SIZE (4096 * 16)
 
 libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 {
@@ -134,13 +134,14 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 	char *bbuf;
 	int i = 0, bbuf_len, nitems, nlast = 0;
 
-#define RET_ERR  	do { \
-						libcgi_freeMultipartParams(head); \
-						free(boundry); \
-						free(bbuf); \
-						free(mp_buf); \
-						return NULL; \
-					} while (0)
+#define RET_ERR \
+	do { \
+		libcgi_freeMultipartParams(head); \
+		free(boundry); \
+		free(bbuf); \
+		free(mp_buf); \
+		return NULL; \
+	} while (0)
 
 	mp_buf = calloc(1, CGI_BUF_SIZE);
 
@@ -206,8 +207,8 @@ libcgi_param_t *libcgi_getMultipartParams(char *store_path)
 
 			if (param->type != LIBCGI_PARAM_FILE || store_path == NULL) {
 				param->stream = tmpfile();
-			 }
-			 else {
+			}
+			else {
 				sprintf(file_path, "%s/%s", store_path, param->filename);
 				param->stream = fopen(file_path, "w+");
 			}

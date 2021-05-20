@@ -18,6 +18,7 @@
 #include <sys/mman.h>
 
 #include "virtio.h"
+#include "virtiolow.h"
 
 
 typedef union {

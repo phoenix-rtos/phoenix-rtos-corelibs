@@ -16,7 +16,7 @@
 
 #include <stdint.h>
 
-#include "libvirtio.h"
+#include "virtio.h"
 
 
 typedef struct {

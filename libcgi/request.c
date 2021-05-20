@@ -17,7 +17,7 @@
 #include <strings.h>
 #include <stdio.h>
 
-#include "libcgi.h"
+#include "cgi.h"
 
 #define LIBCGI_CONTENT_TYPE_MULTIPART "multipart/form-data"
 

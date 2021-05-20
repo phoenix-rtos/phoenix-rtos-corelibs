@@ -20,6 +20,7 @@
 #include <sys/platform.h>
 
 #include "virtio.h"
+#include "virtiolow.h"
 
 
 typedef union {
@@ -165,7 +166,7 @@ void virtiopci_write64(void *base, unsigned int reg, uint64_t val)
 		return;
 	}
 
-	*(volatile uint32_t *)(addr + reg + 4) = val >> 32; 
+	*(volatile uint32_t *)(addr + reg + 4) = val >> 32;
 	*(volatile uint32_t *)(addr + reg) = val;
 }
 

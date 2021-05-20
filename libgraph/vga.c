@@ -63,9 +63,9 @@
 
 #include <sys/threads.h>
 
-#include <libvga.h>
+#include <vga.h>
 
-#include "libgraph.h"
+#include "graph.h"
 
 
 /* Default graphics mode index */

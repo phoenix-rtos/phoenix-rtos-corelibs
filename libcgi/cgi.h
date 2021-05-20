@@ -13,8 +13,8 @@
  * %LICENSE%
  */
 
-#ifndef _LIBCGI_H_
-#define _LIBCGI_H_
+#ifndef _CGI_H_
+#define _CGI_H_
 
 #include <stdio.h>
 
@@ -49,7 +49,8 @@ void libcgi_printHeaders(char *content_type, char *content_disposition, char *fi
 /* parameter structure */
 typedef struct _libcgi_param {
 	struct _libcgi_param *next;
-	enum { LIBCGI_PARAM_DEFAULT, LIBCGI_PARAM_FILE } type;
+	enum { LIBCGI_PARAM_DEFAULT,
+		LIBCGI_PARAM_FILE } type;
 	union {
 		char *key;
 		char *filename;
@@ -74,4 +75,4 @@ void libcgi_freeUrlParams(libcgi_param_t *params_head);
 libcgi_param_t *libcgi_getMultipartParams(char *store_path);
 void libcgi_freeMultipartParams(libcgi_param_t *params_head);
 
-#endif /* _LIBCGI_H_ */
+#endif /* _CGI_H_ */
