@@ -88,7 +88,7 @@ typedef struct {
 	unsigned int size;  /* Virtqueue size */
 	unsigned int noffs; /* Virtqueue notification area offset (modern VirtIO PCI device only) */
 	unsigned int nfree; /* Number of free descriptors */
-	uint16_t free;      /* Next free desriptor index */
+	uint16_t free;      /* Next free descriptor index */
 	uint16_t last;      /* Last processed request index */
 
 	/* Synchronization */
