@@ -18,7 +18,7 @@
 
 #include <sys/threads.h>
 
-#include "libgraph.h"
+#include "graph.h"
 #include "soft.h"
 
 

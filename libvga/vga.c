@@ -60,7 +60,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "libvga.h"
+#include "vga.h"
 
 
 void vga_lock(void *hwctx)

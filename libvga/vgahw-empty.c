@@ -14,7 +14,7 @@
 #include <errno.h>
 #include <stddef.h>
 
-#include "libvga.h"
+#include "vga.h"
 
 
 void *vgahw_mem(void *hwctx)

@@ -18,7 +18,7 @@
 #include <strings.h>
 #include <stdio.h>
 
-#include "libcgi.h"
+#include "cgi.h"
 
 
 void libcgi_printCode(unsigned code, char *status)

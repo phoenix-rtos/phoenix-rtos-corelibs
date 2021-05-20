@@ -19,11 +19,11 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#include "libcgi.h"
+#include "cgi.h"
 
 
 /* override me */
-int __attribute__((weak))libcgi_isLogged(int argc, ...)
+int __attribute__((weak)) libcgi_isLogged(int argc, ...)
 {
 	return 0;
 }

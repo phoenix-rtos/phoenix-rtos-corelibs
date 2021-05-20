@@ -10,7 +10,7 @@
 #
 
 NAME := libvga
-LOCAL_HEADERS := libvga.h
+LOCAL_HEADERS := vga.h
 
 LOCAL_SRCS := vga.c
 

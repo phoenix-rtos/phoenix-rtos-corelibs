@@ -17,6 +17,7 @@
 #include <sys/mman.h>
 
 #include "virtio.h"
+#include "virtiolow.h"
 
 
 static void virtiopci_unmapReg(virtio_reg_t *reg)

@@ -14,6 +14,7 @@
 #include <errno.h>
 
 #include "virtio.h"
+#include "virtiolow.h"
 
 
 uint8_t virtiopci_read8(void *base, unsigned int reg)

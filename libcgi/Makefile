@@ -7,6 +7,6 @@
 NAME := libcgi
 LOCAL_PATH := $(call my-dir)
 SRCS := $(wildcard $(LOCAL_PATH)*.c)
-LOCAL_HEADERS := libcgi.h
+LOCAL_HEADERS := cgi.h
 
 include $(static-lib.mk)

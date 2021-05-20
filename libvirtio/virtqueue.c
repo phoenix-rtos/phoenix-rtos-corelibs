@@ -21,6 +21,7 @@
 #include <sys/threads.h>
 
 #include "virtio.h"
+#include "virtiolow.h"
 
 
 static inline uint8_t virtqueue_read8(virtio_dev_t *vdev, volatile void *addr)
@@ -92,7 +93,7 @@ static void virtqueue_select(virtio_dev_t *vdev, unsigned int idx)
 
 
 /* Checks if virtqueue is available and validates its size */
-static int virtqueue_enable(virtio_dev_t * vdev, unsigned int *size)
+static int virtqueue_enable(virtio_dev_t *vdev, unsigned int *size)
 {
 	unsigned int maxsz;
 
@@ -107,7 +108,7 @@ static int virtqueue_enable(virtio_dev_t * vdev, unsigned int *size)
 
 		if (!(maxsz = virtio_read16(vdev, vdev->info.base.addr, 0x18)) || virtio_read16(vdev, vdev->info.base.addr, 0x1c))
 			return -ENOENT;
-		
+
 		if (*size > maxsz)
 			*size = maxsz;
 
