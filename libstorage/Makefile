@@ -8,8 +8,9 @@
 # %LICENSE%
 #
 
+
 NAME := libstorage
 LOCAL_SRCS := storage.c
-LOCAL_HEADERS := storage.h
-
+LOCAL_HEADERS_DIR := include
 include $(static-lib.mk)
+

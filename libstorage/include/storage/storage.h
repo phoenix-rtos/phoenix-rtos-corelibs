@@ -3,8 +3,8 @@
  *
  * Storage devices interface
  *
- * Copyright 2021 Phoenix Systems
- * Author: Lukasz Kosinski
+ * Copyright 2021-2022 Phoenix Systems
+ * Author: Lukasz Kosinski, Hubert Buczynski
  *
  * This file is part of Phoenix-RTOS.
  *
@@ -14,23 +14,20 @@
 #ifndef _STORAGE_H_
 #define _STORAGE_H_
 
+#include <storage/fs.h>
+#include <storage/dev.h>
+
 #include <sys/msg.h>
 #include <sys/types.h>
 
 #include <posix/idtree.h>
 
 
-/* Filesystem callbacks */
-typedef int (*mount_t)(void *ctx, void **fs, const char *data, unsigned long mode, oid_t *root);
-typedef int (*umount_t)(void *fs);
-typedef void (*handler_t)(void *fs, msg_t *msg);
-
-
 typedef struct _storage_t {
-	blkcnt_t start;                 /* Storage start */
-	blkcnt_t size;                  /* Storage size */
-	void *ctx;                      /* Storage device context */
-	void *fs;                       /* Mounted filesystem context */
+	off_t start;                    /* Storage start */
+	size_t size;                    /* Storage size */
+	storage_dev_t *dev;             /* Storage device */
+	storage_fs_t *fs;               /* Mounted filesystem */
 	struct _storage_t *parts;       /* Storage partitions */
 	struct _storage_t *parent;      /* Storage parent */
 	struct _storage_t *prev, *next; /* Doubly linked list */
@@ -43,7 +40,7 @@ extern storage_t *storage_get(int id);
 
 
 /* Registers new supported filesystem */
-extern int storage_registerfs(const char *name, mount_t mount, umount_t umount, handler_t handler);
+extern int storage_registerfs(const char *name, storage_mount_t mount, storage_umount_t umount);
 
 
 /* Unregisters supported filesystem */
@@ -51,19 +48,19 @@ extern int storage_unregisterfs(const char *name);
 
 
 /* Mounts filesystem */
-extern int storage_mountfs(storage_t *dev, const char *name, const char *data, unsigned long mode, oid_t *root);
+extern int storage_mountfs(storage_t *strg, const char *name, const char *data, unsigned long mode, oid_t *root);
 
 
 /* Unmounts filesystem */
-extern int storage_umountfs(storage_t *dev);
+extern int storage_umountfs(storage_t *strg);
 
 
-/* Registers new storage device */
-extern int storage_add(storage_t *dev);
+/* Registers a new storage. The oid's fields are completed by function. */
+extern int storage_add(storage_t *strg, oid_t *oid);
 
 
 /* Removes registered storage device */
-extern int storage_remove(storage_t *dev);
+extern int storage_remove(storage_t *strg);
 
 
 /* Starts storage requests handling */
@@ -71,7 +68,7 @@ extern int storage_run(unsigned int nthreads, unsigned int stacksz);
 
 
 /* Initializes storage handling */
-extern int storage_init(handler_t handler, unsigned int queuesz);
+extern int storage_init(void (*msgHandler)(void *data, msg_t *msg), unsigned int queuesz);
 
 
 #endif
