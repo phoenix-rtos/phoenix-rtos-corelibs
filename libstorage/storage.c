@@ -3,8 +3,8 @@
  *
  * Storage devices
  *
- * Copyright 2021 Phoenix Systems
- * Author: Lukasz Kosinski
+ * Copyright 2021-2022 Phoenix Systems
+ * Author: Lukasz Kosinski, Hubert Buczynski
  *
  * This file is part of Phoenix-RTOS.
  *
@@ -17,11 +17,12 @@
 
 #include <sys/list.h>
 #include <sys/rb.h>
+#include <sys/file.h>
 #include <sys/threads.h>
 
 #include <posix/idtree.h>
 
-#include "storage.h"
+#include <storage/storage.h>
 
 
 #define REQTHR_PRIORITY  1
@@ -32,34 +33,34 @@ enum { state_exit = -1, state_stop, state_run };
 
 
 typedef struct {
-	char name[16];     /* Filesystem name */
-	mount_t mount;     /* Filesystem mount */
-	umount_t umount;   /* Filesystem umount */
-	handler_t handler; /* Filesystem message handler */
-	rbnode_t node;     /* RB tree node */
-} filesystem_t;
+	char name[16];           /* Filesystem name */
+	storage_mount_t mount;   /* Filesystem mount */
+	storage_umount_t umount; /* Filesystem umount */
+	rbnode_t node;           /* RB tree node */
+} storage_fsHandler_t;
 
 
 typedef struct _request_t request_t;
+typedef struct _storage_fsctx_t storage_fsctx_t;
 
 
 typedef struct {
-	int state;          /* Context state */
-	unsigned int port;  /* Context port */
-	unsigned int nreqs; /* Number of actively processed requests */
-	handler_t handler;  /* Message handler */
-	void *ctx;          /* Message handling context */
-	request_t *stopped; /* Stopped requests */
-	handle_t scond;     /* Stopped requests condition variable */
-	handle_t lock;      /* Context mutex */
+	int state;                                  /* Context state */
+	unsigned int port;                          /* Context port */
+	unsigned int nreqs;                         /* Number of actively processed requests */
+	void (*msgHandler)(void *data, msg_t *msg); /* Message handler */
+	void *data;                                 /* Message handling data */
+	request_t *stopped;                         /* Stopped requests */
+	handle_t scond;                             /* Stopped requests condition variable */
+	handle_t lock;                              /* Context mutex */
 	char stack[512] __attribute__((aligned(8)));
 } request_ctx_t;
 
 
-typedef struct {
-	request_ctx_t ctx; /* Filesystem requests context */
-	filesystem_t *fs;  /* Filesystem data */
-} filesystem_ctx_t;
+struct _storage_fsctx_t {
+	request_ctx_t reqctx;         /* Filesystem requests context */
+	storage_fsHandler_t *handler; /* Filesystem data */
+};
 
 
 struct _request_t {
@@ -78,7 +79,7 @@ typedef struct {
 
 static struct {
 	int state;         /* Storage handling state */
-	idtree_t devs;     /* Storage devices */
+	idtree_t strgs;    /* Storages */
 	rbtree_t fss;      /* Registered filesystems */
 	queue_t free;      /* Free requests queue */
 	queue_t ready;     /* Ready requests queue */
@@ -222,7 +223,7 @@ static void storage_poolthr(void *arg)
 			mutexUnlock(ctx->lock);
 
 			priority(req->msg.priority);
-			ctx->handler(ctx->ctx, &req->msg);
+			ctx->msgHandler(ctx->data, &req->msg);
 			priority(POOLTHR_PRIORITY);
 
 			msgRespond(ctx->port, &req->msg, req->rid);
@@ -296,7 +297,82 @@ static void requestctx_done(request_ctx_t *ctx)
 }
 
 
-static int storagectx_init(request_ctx_t *ctx, handler_t handler, void *fs)
+static void storage_fsHandler(void *data, msg_t *msg)
+{
+	storage_fs_t *fs = (storage_fs_t *)data;
+
+	switch (msg->type) {
+		case mtOpen:
+			fs->ops->open(fs->info, &msg->i.openclose.oid);
+			break;
+
+		case mtClose:
+			fs->ops->close(fs->info, &msg->i.openclose.oid);
+			break;
+
+		case mtRead:
+			msg->o.io.err = fs->ops->read(fs->info, &msg->i.io.oid, msg->i.io.offs, msg->o.data, msg->o.size);
+			break;
+
+		case mtWrite:
+			msg->o.io.err = fs->ops->write(fs->info, &msg->i.io.oid, msg->i.io.offs, msg->i.data, msg->i.size);
+			break;
+
+		case mtTruncate:
+			msg->o.io.err = fs->ops->truncate(fs->info, &msg->i.io.oid, msg->i.io.len);
+			break;
+
+		case mtDevCtl:
+			msg->o.io.err = -EINVAL;
+			break;
+
+		case mtCreate:
+			msg->o.create.err = fs->ops->create(fs->info, &msg->i.create.dir, msg->i.data, &msg->o.create.oid, msg->i.create.mode, msg->i.create.type, &msg->i.create.dev);
+			break;
+
+		case mtDestroy:
+			msg->o.io.err = fs->ops->destroy(fs->info, &msg->i.destroy.oid);
+			break;
+
+		case mtSetAttr:
+			msg->o.attr.err = fs->ops->setattr(fs->info, &msg->i.attr.oid, msg->i.attr.type, msg->i.attr.val, msg->i.data, msg->i.size);
+			break;
+
+		case mtGetAttr:
+			msg->o.attr.err = fs->ops->getattr(fs->info, &msg->i.attr.oid, msg->i.attr.type, &msg->o.attr.val);
+			break;
+
+		case mtLookup:
+			msg->o.lookup.err = fs->ops->lookup(fs->info, &msg->i.lookup.dir, msg->i.data, &msg->o.lookup.fil, &msg->o.lookup.dev, msg->o.data, msg->o.size);
+			break;
+
+		case mtLink:
+			msg->o.io.err = fs->ops->link(fs->info, &msg->i.ln.dir, msg->i.data, &msg->i.ln.oid);
+			break;
+
+		case mtUnlink:
+			msg->o.io.err = fs->ops->unlink(fs->info, &msg->i.ln.dir, msg->i.data);
+			break;
+
+		case mtReaddir:
+			msg->o.io.err = fs->ops->readdir(fs->info, &msg->i.readdir.dir, msg->i.readdir.offs, msg->o.data, msg->o.size);
+			break;
+
+		case mtStat:
+			msg->o.io.err = fs->ops->statfs(fs->info, msg->o.data, msg->o.size);
+			break;
+
+		case mtSync:
+			fs->ops->sync(fs->info, &msg->i.io.oid);
+			break;
+
+		default:
+			break;
+	}
+}
+
+
+static int storagectx_init(request_ctx_t *ctx, void (*msgHandler)(void *data, msg_t *msg))
 {
 	int err;
 
@@ -314,8 +390,8 @@ static int storagectx_init(request_ctx_t *ctx, handler_t handler, void *fs)
 		return err;
 	}
 
-	ctx->handler = handler;
-	ctx->ctx = fs;
+	ctx->msgHandler = msgHandler;
+	ctx->data = NULL;
 	ctx->stopped = NULL;
 	ctx->nreqs = 0;
 	ctx->state = state_stop;
@@ -333,39 +409,38 @@ static int storagectx_init(request_ctx_t *ctx, handler_t handler, void *fs)
 
 storage_t *storage_get(int id)
 {
-	return lib_treeof(storage_t, node, idtree_find(&storage_common.devs, id));
+	return lib_treeof(storage_t, node, idtree_find(&storage_common.strgs, id));
 }
 
 
-static filesystem_t *storage_getfs(const char *name)
+static storage_fsHandler_t *storage_getfs(const char *name)
 {
-	filesystem_t fs;
+	storage_fsHandler_t fs;
 
 	strncpy(fs.name, name, sizeof(fs.name));
 	fs.name[sizeof(fs.name) - 1] = '\0';
 
-	return lib_treeof(filesystem_t, node, lib_rbFind(&storage_common.fss, &fs.node));
+	return lib_treeof(storage_fsHandler_t, node, lib_rbFind(&storage_common.fss, &fs.node));
 }
 
 
-int storage_registerfs(const char *name, mount_t mount, umount_t umount, handler_t handler)
+int storage_registerfs(const char *name, storage_mount_t mount, storage_umount_t umount)
 {
-	filesystem_t *fs;
+	storage_fsHandler_t *handler;
 
-	if ((name == NULL) || (mount == NULL) || (umount == NULL) || (handler == NULL))
+	if ((name == NULL) || (mount == NULL) || (umount == NULL))
 		return -EINVAL;
 
-	if ((fs = malloc(sizeof(filesystem_t))) == NULL)
+	if ((handler = malloc(sizeof(storage_fsHandler_t))) == NULL)
 		return -ENOMEM;
 
-	strncpy(fs->name, name, sizeof(fs->name));
-	fs->name[sizeof(fs->name) - 1] = '\0';
-	fs->mount = mount;
-	fs->umount = umount;
-	fs->handler = handler;
+	strncpy(handler->name, name, sizeof(handler->name));
+	handler->name[sizeof(handler->name) - 1] = '\0';
+	handler->mount = mount;
+	handler->umount = umount;
 
-	if (lib_rbInsert(&storage_common.fss, &fs->node) != NULL) {
-		free(fs);
+	if (lib_rbInsert(&storage_common.fss, &handler->node) != NULL) {
+		free(handler);
 		return -EEXIST;
 	}
 
@@ -373,9 +448,11 @@ int storage_registerfs(const char *name, mount_t mount, umount_t umount, handler
 }
 
 
+/* TODO: this function remove handler from storage_common.fss, pointer to the elements of fss is used by storage_fsHandler_t
+         The case when fs is unregistered before umount can cause undefined behaviour. */
 int storage_unregisterfs(const char *name)
 {
-	filesystem_t *fs = storage_getfs(name);
+	storage_fsHandler_t *fs = storage_getfs(name);
 
 	if (fs == NULL)
 		return -EINVAL;
@@ -387,110 +464,139 @@ int storage_unregisterfs(const char *name)
 }
 
 
-int storage_mountfs(storage_t *dev, const char *name, const char *data, unsigned long mode, oid_t *root)
+int storage_mountfs(storage_t *strg, const char *name, const char *data, unsigned long mode, oid_t *root)
 {
-	filesystem_t *fs = storage_getfs(name);
-	filesystem_ctx_t *ctx;
 	int err;
+	storage_fsctx_t *fsctx;
+	storage_fsHandler_t *handler = storage_getfs(name);
 
-	if ((dev == NULL) || (dev->ctx == NULL) || (dev->parts != NULL) || (fs == NULL) || (root == NULL))
+	if ((strg == NULL) || (strg->dev == NULL) || (strg->parts != NULL) || (handler == NULL) || (root == NULL))
 		return -EINVAL;
 
-	if (dev->fs != NULL)
+	if (strg->fs != NULL)
 		return -EBUSY;
 
-	if ((ctx = malloc(sizeof(filesystem_ctx_t))) == NULL)
+	fsctx = malloc(sizeof(storage_fsctx_t));
+	if (fsctx == NULL)
 		return -ENOMEM;
 
-	if ((err = storagectx_init(&ctx->ctx, fs->handler, NULL)) < 0) {
-		free(ctx);
-		return err;
-	}
-	root->port = ctx->ctx.port;
-
-	if ((err = fs->mount(dev->ctx, &ctx->ctx.ctx, data, mode, root)) < 0) {
-		requestctx_done(&ctx->ctx);
-		free(ctx);
-		return err;
+	strg->fs = malloc(sizeof(storage_fs_t));
+	if (strg->fs == NULL) {
+		free(fsctx);
+		return -ENOMEM;
 	}
 
-	requestctx_run(&ctx->ctx);
-	dev->fs = ctx;
+	err = storagectx_init(&fsctx->reqctx, storage_fsHandler);
+	if (err < 0) {
+		free(fsctx);
+		free(strg->fs);
+		strg->fs = NULL;
+		return err;
+	}
+
+	/* Assign the port to a filesystem from a newly created request context */
+	root->port = fsctx->reqctx.port;
+	/* Pointer to the storage_fs_t is hold by a request context and passed to a message handler */
+	fsctx->reqctx.data = strg->fs;
+	/* The filesystem context has to be assign to the storage_fs_t to make umount operation */
+	strg->fs->fsctx = fsctx;
+
+	err = handler->mount(strg, strg->fs, data, mode, root);
+	if (err < 0) {
+		requestctx_done(&fsctx->reqctx);
+		free(fsctx);
+		free(strg->fs);
+		strg->fs = NULL;
+		return err;
+	}
+
+	requestctx_run(&fsctx->reqctx);
 
 	return EOK;
 }
 
 
-int storage_umountfs(storage_t *dev)
+int storage_umountfs(storage_t *strg)
 {
-	filesystem_ctx_t *ctx;
 	int err;
+	storage_fsctx_t *fsctx;
 
-	if ((dev == NULL) || (dev->fs == NULL))
+	if ((strg == NULL) || (strg->fs == NULL) || (strg->fs->fsctx == NULL) || (strg->fs->fsctx->handler == NULL))
 		return -EINVAL;
 
-	ctx = (filesystem_ctx_t *)dev->fs;
-	requestctx_stop(&ctx->ctx);
+	fsctx = strg->fs->fsctx;
+	requestctx_stop(&fsctx->reqctx);
 
-	if ((err = ctx->fs->umount(ctx->ctx.ctx)) < 0) {
-		requestctx_run(&ctx->ctx);
+	err = fsctx->handler->umount(strg->fs);
+	if (err < 0) {
+		requestctx_run(&fsctx->reqctx);
 		return err;
 	}
 
-	requestctx_done(&ctx->ctx);
-	free(ctx);
-	dev->fs = NULL;
+	requestctx_done(&fsctx->reqctx);
+	free(fsctx);
+	free(strg->fs);
+
+	strg->fs = NULL;
 
 	return EOK;
 }
 
 
-int storage_add(storage_t *dev)
+int storage_add(storage_t *strg, oid_t *oid)
 {
-	storage_t *pdev, *part;
+	int res;
+	storage_t *pstrg, *part;
 
-	if ((dev == NULL) || (dev->ctx == NULL) || (dev->size == 0))
+	if ((strg == NULL) || (strg->dev == NULL) || (strg->size == 0))
 		return -EINVAL;
 
-	if ((pdev = dev->parent) != NULL) {
-		if ((dev->start < pdev->start) || (dev->start + dev->size > pdev->start + pdev->size))
+	if ((pstrg = strg->parent) != NULL) {
+		if ((strg->start < pstrg->start) || (strg->start + strg->size > pstrg->start + pstrg->size))
 			return -EINVAL;
 
-		if ((part = pdev->parts) != NULL) {
+		if ((part = pstrg->parts) != NULL) {
 			do {
-				if (dev->start + dev->size <= part->start)
+				if (strg->start + strg->size <= part->start)
 					break;
-				else if (dev->start >= part->start + part->size)
+				else if (strg->start >= part->start + part->size)
 					part = part->next;
 				else
 					return -EINVAL;
-			} while (part != pdev->parts);
+			} while (part != pstrg->parts);
 		}
 
-		if ((part == NULL) || ((part == pdev->parts) && (dev->start + dev->size <= part->start)))
-			pdev->parts = dev;
-		LIST_ADD(&part, dev);
+		if ((part == NULL) || ((part == pstrg->parts) && (strg->start + strg->size <= part->start)))
+			pstrg->parts = strg;
+		LIST_ADD(&part, strg);
 	}
 
-	dev->parts = NULL;
-	dev->fs = NULL;
+	strg->fs = NULL;
+	strg->parts = NULL;
 
-	return idtree_alloc(&storage_common.devs, &dev->node);
+	res = idtree_alloc(&storage_common.strgs, &strg->node);
+	if (res < 0)
+		return res;
+
+	oid->id = res;
+	oid->port = storage_common.ctx.port;
+
+	return EOK;
 }
 
 
-int storage_remove(storage_t *dev)
+int storage_remove(storage_t *strg)
 {
-	if ((dev == NULL) || (dev->parts != NULL))
+	if ((strg == NULL) || (strg->parts != NULL))
 		return -EINVAL;
 
-	if (dev->fs != NULL)
+	if (strg->fs != NULL)
 		return -EBUSY;
 
-	if (dev->parent != NULL)
-		LIST_REMOVE(&dev->parent->parts, dev);
+	if (strg->parent != NULL)
+		LIST_REMOVE(&strg->parent->parts, strg);
 
-	idtree_remove(&storage_common.devs, &dev->node);
+	idtree_remove(&storage_common.strgs, &strg->node);
 
 	return EOK;
 }
@@ -534,14 +640,14 @@ int storage_run(unsigned int nthreads, unsigned int stacksz)
 
 static int storage_cmpfs(rbnode_t *n1, rbnode_t *n2)
 {
-	filesystem_t *fs1 = lib_treeof(filesystem_t, node, n1);
-	filesystem_t *fs2 = lib_treeof(filesystem_t, node, n2);
+	storage_fsHandler_t *fs1 = lib_treeof(storage_fsHandler_t, node, n1);
+	storage_fsHandler_t *fs2 = lib_treeof(storage_fsHandler_t, node, n2);
 
 	return strncmp(fs1->name, fs2->name, sizeof(fs1->name));
 }
 
 
-int storage_init(handler_t handler, unsigned int queuesz)
+int storage_init(void (*msgHandler)(void *data, msg_t *msg), unsigned int queuesz)
 {
 	request_t *reqs;
 	unsigned int i;
@@ -570,15 +676,16 @@ int storage_init(handler_t handler, unsigned int queuesz)
 	for (i = 0; i < queuesz; i++)
 		LIST_ADD(&storage_common.free.reqs, reqs + i);
 
-	if ((err = storagectx_init(&storage_common.ctx, handler, NULL)) < 0)
+	if ((err = storagectx_init(&storage_common.ctx, msgHandler)) < 0)
 		goto ctx_fail;
 
 	storage_common.state = state_stop;
+
 	lib_rbInit(&storage_common.fss, storage_cmpfs, NULL);
-	idtree_init(&storage_common.devs);
+	idtree_init(&storage_common.strgs);
 	requestctx_run(&storage_common.ctx);
 
-	return storage_common.ctx.port;
+	return EOK;
 
 ctx_fail:
 	free(reqs);
