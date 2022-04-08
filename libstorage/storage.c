@@ -130,7 +130,8 @@ static int queue_init(queue_t *q)
 {
 	int err;
 
-	if ((err = mutexCreate(&q->lock)) < 0)
+	err = mutexCreate(&q->lock);
+	if (err < 0)
 		return err;
 
 	q->reqs = NULL;
@@ -376,15 +377,18 @@ static int storagectx_init(request_ctx_t *ctx, void (*msgHandler)(void *data, ms
 {
 	int err;
 
-	if ((err = mutexCreate(&ctx->lock)) < 0)
+	err = mutexCreate(&ctx->lock);
+	if (err < 0)
 		return err;
 
-	if ((err = condCreate(&ctx->scond)) < 0) {
+	err = condCreate(&ctx->scond);
+	if (err < 0) {
 		resourceDestroy(ctx->lock);
 		return err;
 	}
 
-	if ((err = portCreate(&ctx->port)) < 0) {
+	err = portCreate(&ctx->port);
+	if (err < 0) {
 		resourceDestroy(ctx->scond);
 		resourceDestroy(ctx->lock);
 		return err;
@@ -396,7 +400,8 @@ static int storagectx_init(request_ctx_t *ctx, void (*msgHandler)(void *data, ms
 	ctx->nreqs = 0;
 	ctx->state = state_stop;
 
-	if ((err = beginthread(storage_reqthr, REQTHR_PRIORITY, ctx->stack, sizeof(ctx->stack), ctx)) < 0) {
+	err = beginthread(storage_reqthr, REQTHR_PRIORITY, ctx->stack, sizeof(ctx->stack), ctx);
+	if (err < 0) {
 		portDestroy(ctx->port);
 		resourceDestroy(ctx->scond);
 		resourceDestroy(ctx->lock);
@@ -431,7 +436,8 @@ int storage_registerfs(const char *name, storage_mount_t mount, storage_umount_t
 	if ((name == NULL) || (mount == NULL) || (umount == NULL))
 		return -EINVAL;
 
-	if ((handler = malloc(sizeof(storage_fsHandler_t))) == NULL)
+	handler = malloc(sizeof(storage_fsHandler_t));
+	if (handler == NULL)
 		return -ENOMEM;
 
 	strncpy(handler->name, name, sizeof(handler->name));
@@ -608,13 +614,15 @@ int storage_run(unsigned int nthreads, unsigned int stacksz)
 	char *stacks;
 	int err;
 
-	if ((stacks = malloc(nthreads * stacksz)) == NULL)
+	stacks = malloc(nthreads * stacksz);
+	if (stacks == NULL)
 		return -ENOMEM;
 
 	storage_common.state = state_run;
 
 	for (i = 0; i < nthreads; i++) {
-		if ((err = beginthread(storage_poolthr, POOLTHR_PRIORITY, stacks + i * stacksz, stacksz, NULL)) < 0) {
+		err = beginthread(storage_poolthr, POOLTHR_PRIORITY, stacks + i * stacksz, stacksz, NULL);
+		if (err < 0) {
 			mutexLock(storage_common.lock);
 
 			storage_common.state = state_exit;
@@ -653,22 +661,28 @@ int storage_init(void (*msgHandler)(void *data, msg_t *msg), unsigned int queues
 	unsigned int i;
 	int err;
 
-	if ((err = mutexCreate(&storage_common.lock)) < 0)
+	err = mutexCreate(&storage_common.lock);
+	if (err < 0)
 		goto lock_fail;
 
-	if ((err = condCreate(&storage_common.rcond)) < 0)
+	err = condCreate(&storage_common.rcond);
+	if (err < 0)
 		goto rcond_fail;
 
-	if ((err = condCreate(&storage_common.fcond)) < 0)
+	err = condCreate(&storage_common.fcond);
+	if (err < 0)
 		goto fcond_fail;
 
-	if ((err = queue_init(&storage_common.ready)) < 0)
+	err = queue_init(&storage_common.ready);
+	if (err < 0)
 		goto ready_fail;
 
-	if ((err = queue_init(&storage_common.free)) < 0)
+	err = queue_init(&storage_common.free);
+	if (err < 0)
 		goto free_fail;
 
-	if ((reqs = malloc(queuesz * sizeof(request_t))) == NULL) {
+	reqs = malloc(queuesz * sizeof(request_t));
+	if (reqs == NULL) {
 		err = -ENOMEM;
 		goto reqs_fail;
 	}
@@ -676,7 +690,8 @@ int storage_init(void (*msgHandler)(void *data, msg_t *msg), unsigned int queues
 	for (i = 0; i < queuesz; i++)
 		LIST_ADD(&storage_common.free.reqs, reqs + i);
 
-	if ((err = storagectx_init(&storage_common.ctx, msgHandler)) < 0)
+	err = storagectx_init(&storage_common.ctx, msgHandler);
+	if (err < 0)
 		goto ctx_fail;
 
 	storage_common.state = state_stop;
