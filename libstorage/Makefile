@@ -10,7 +10,6 @@
 
 
 NAME := libstorage
-LOCAL_SRCS := storage.c
+LOCAL_SRCS := storage.c fs.c
 LOCAL_HEADERS_DIR := include
 include $(static-lib.mk)
-

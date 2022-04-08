@@ -58,4 +58,6 @@ typedef int (*storage_mount_t)(struct _storage_t *dev, storage_fs_t *fs, const c
 typedef int (*storage_umount_t)(storage_fs_t *fs);
 
 
+extern void storage_fsHandler(void *data, msg_t *msg);
+
 #endif

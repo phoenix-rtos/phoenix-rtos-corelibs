@@ -14,8 +14,8 @@
 #ifndef _STORAGE_H_
 #define _STORAGE_H_
 
-#include <storage/fs.h>
-#include <storage/dev.h>
+#include "fs.h"
+#include "dev.h"
 
 #include <sys/msg.h>
 #include <sys/types.h>

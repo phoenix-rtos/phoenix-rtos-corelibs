@@ -17,12 +17,11 @@
 
 #include <sys/list.h>
 #include <sys/rb.h>
-#include <sys/file.h>
 #include <sys/threads.h>
 
 #include <posix/idtree.h>
 
-#include <storage/storage.h>
+#include "include/storage/storage.h"
 
 
 #define REQTHR_PRIORITY  1
@@ -295,81 +294,6 @@ static void requestctx_done(request_ctx_t *ctx)
 
 	resourceDestroy(ctx->scond);
 	resourceDestroy(ctx->lock);
-}
-
-
-static void storage_fsHandler(void *data, msg_t *msg)
-{
-	storage_fs_t *fs = (storage_fs_t *)data;
-
-	switch (msg->type) {
-		case mtOpen:
-			fs->ops->open(fs->info, &msg->i.openclose.oid);
-			break;
-
-		case mtClose:
-			fs->ops->close(fs->info, &msg->i.openclose.oid);
-			break;
-
-		case mtRead:
-			msg->o.io.err = fs->ops->read(fs->info, &msg->i.io.oid, msg->i.io.offs, msg->o.data, msg->o.size);
-			break;
-
-		case mtWrite:
-			msg->o.io.err = fs->ops->write(fs->info, &msg->i.io.oid, msg->i.io.offs, msg->i.data, msg->i.size);
-			break;
-
-		case mtTruncate:
-			msg->o.io.err = fs->ops->truncate(fs->info, &msg->i.io.oid, msg->i.io.len);
-			break;
-
-		case mtDevCtl:
-			msg->o.io.err = -EINVAL;
-			break;
-
-		case mtCreate:
-			msg->o.create.err = fs->ops->create(fs->info, &msg->i.create.dir, msg->i.data, &msg->o.create.oid, msg->i.create.mode, msg->i.create.type, &msg->i.create.dev);
-			break;
-
-		case mtDestroy:
-			msg->o.io.err = fs->ops->destroy(fs->info, &msg->i.destroy.oid);
-			break;
-
-		case mtSetAttr:
-			msg->o.attr.err = fs->ops->setattr(fs->info, &msg->i.attr.oid, msg->i.attr.type, msg->i.attr.val, msg->i.data, msg->i.size);
-			break;
-
-		case mtGetAttr:
-			msg->o.attr.err = fs->ops->getattr(fs->info, &msg->i.attr.oid, msg->i.attr.type, &msg->o.attr.val);
-			break;
-
-		case mtLookup:
-			msg->o.lookup.err = fs->ops->lookup(fs->info, &msg->i.lookup.dir, msg->i.data, &msg->o.lookup.fil, &msg->o.lookup.dev, msg->o.data, msg->o.size);
-			break;
-
-		case mtLink:
-			msg->o.io.err = fs->ops->link(fs->info, &msg->i.ln.dir, msg->i.data, &msg->i.ln.oid);
-			break;
-
-		case mtUnlink:
-			msg->o.io.err = fs->ops->unlink(fs->info, &msg->i.ln.dir, msg->i.data);
-			break;
-
-		case mtReaddir:
-			msg->o.io.err = fs->ops->readdir(fs->info, &msg->i.readdir.dir, msg->i.readdir.offs, msg->o.data, msg->o.size);
-			break;
-
-		case mtStat:
-			msg->o.io.err = fs->ops->statfs(fs->info, msg->o.data, msg->o.size);
-			break;
-
-		case mtSync:
-			fs->ops->sync(fs->info, &msg->i.io.oid);
-			break;
-
-		default:
-			break;
-	}
 }
 
 
