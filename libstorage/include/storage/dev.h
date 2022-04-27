@@ -18,6 +18,7 @@
 
 
 struct _storage_t;
+struct _storage_devCtx_t; /* Device driver context should be defined by flash driver */
 
 
 /* Block device interface */
@@ -80,9 +81,9 @@ typedef struct {
 /* Storage device structure */
 
 typedef struct {
-	unsigned int id;    /* Field allows to identify several devices within one driver */
-	storage_blk_t *blk; /* Block device context */
-	storage_mtd_t *mtd; /* MTD device context */
+	storage_blk_t *blk;            /* Block device context */
+	storage_mtd_t *mtd;            /* MTD device context */
+	struct _storage_devCtx_t *ctx; /* Device driver context */
 } storage_dev_t;
 
 
