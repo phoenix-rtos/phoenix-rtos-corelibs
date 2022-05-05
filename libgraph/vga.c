@@ -167,7 +167,7 @@ int vga_colorset(graph_t *graph, const unsigned char *colors, unsigned char firs
 {
 	vga_dev_t *vga = (vga_dev_t *)graph->adapter;
 	void *ctx = vga->ctx;
-	unsigned char i;
+	unsigned int i;
 
 	if (graph->depth != 1)
 		return -ENOTSUP;
@@ -192,7 +192,7 @@ int vga_colorget(graph_t *graph, unsigned char *colors, unsigned char first, uns
 {
 	vga_dev_t *vga = (vga_dev_t *)graph->adapter;
 	void *ctx = vga->ctx;
-	unsigned char i;
+	unsigned int i;
 
 	if (graph->depth != 1)
 		return -ENOTSUP;

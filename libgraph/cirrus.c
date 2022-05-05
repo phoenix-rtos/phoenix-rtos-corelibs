@@ -317,7 +317,7 @@ int cirrus_colorset(graph_t *graph, const unsigned char *colors, unsigned char f
 {
 	cirrus_dev_t *cdev = (cirrus_dev_t *)graph->adapter;
 	void *ctx = cdev->ctx;
-	unsigned char i;
+	unsigned int i;
 
 	if (graph->depth != 1)
 		return -ENOTSUP;
@@ -342,7 +342,7 @@ int cirrus_colorget(graph_t *graph, unsigned char *colors, unsigned char first, 
 {
 	cirrus_dev_t *cdev = (cirrus_dev_t *)graph->adapter;
 	void *ctx = cdev->ctx;
-	unsigned char i;
+	unsigned int i;
 
 	if (graph->depth != 1)
 		return -ENOTSUP;
