@@ -73,7 +73,8 @@ typedef struct {
 	size_t writesz;              /* Minimal writable flash unit size. For NOR it is 1, for NAND it is one page */
 	size_t writeBuffsz;          /* For NOR flash it is page size, for NAND should be equal writesz */
 	size_t metaSize;             /* Amount of meta data per block */
-	size_t metaAvail;            /* Available meta data per block */
+	size_t oobSize;              /* out-of-bound (oob) data size */
+	size_t oobAvail;             /* available out-of-bound (oob) data size */
 	const storage_mtdops_t *ops; /* Pointer to operations on the MTD device */
 } storage_mtd_t;
 
