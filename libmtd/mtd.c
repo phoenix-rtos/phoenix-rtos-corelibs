@@ -44,7 +44,7 @@ int mtd_erase(struct mtd_info *mtdInfo, struct erase_info *instr)
 	}
 	else {
 		instr->state = MTD_ERASE_PENDING;
-		res = mtd->ops->erase(mtdInfo->storage, instr->addr, instr->len);
+		res = mtd->ops->erase(mtdInfo->storage, mtdInfo->storage->start + instr->addr, instr->len);
 		if (res < 0) {
 			instr->fail_addr = instr->addr;
 			instr->state = MTD_ERASE_FAILED;
@@ -84,7 +84,7 @@ int mtd_point(struct mtd_info *mtdInfo, off_t from, size_t len, size_t *retlen, 
 		ret = EOK;
 	}
 	else {
-		ret = mtd->ops->point(mtdInfo->storage, from, len, retlen, virt, phys);
+		ret = mtd->ops->point(mtdInfo->storage, mtdInfo->storage->start + from, len, retlen, virt, phys);
 	}
 
 	return ret;
@@ -106,7 +106,7 @@ int mtd_unpoint(struct mtd_info *mtdInfo, off_t from, size_t len)
 		ret = EOK;
 	}
 	else {
-		ret = mtd->ops->unPoint(mtdInfo->storage, from, len);
+		ret = mtd->ops->unPoint(mtdInfo->storage, mtdInfo->storage->start + from, len);
 	}
 
 	return ret;
@@ -119,13 +119,13 @@ unsigned long mtd_get_unmapped_area(struct mtd_info *mtdInfo, unsigned long len,
 	void *virt;
 	int ret;
 
-	ret = mtd_point(mtdInfo, offset, len, &retlen, &virt, NULL);
+	ret = mtd_point(mtdInfo, mtdInfo->storage->start + offset, len, &retlen, &virt, NULL);
 	if (ret > 0) {
 		return ret;
 	}
 
 	if (retlen != len) {
-		mtd_unpoint(mtdInfo, offset, retlen);
+		mtd_unpoint(mtdInfo, mtdInfo->storage->start + offset, retlen);
 		return -ENOSYS;
 	}
 
@@ -150,7 +150,7 @@ int mtd_read(struct mtd_info *mtdInfo, off_t from, size_t len, size_t *retlen, u
 		ret = EOK;
 	}
 	else {
-		ret = mtd->ops->read(mtdInfo->storage, from, buf, len);
+		ret = mtd->ops->read(mtdInfo->storage, mtdInfo->storage->start + from, buf, len);
 	}
 
 	if (ret > 0) {
@@ -177,7 +177,7 @@ int mtd_write(struct mtd_info *mtdInfo, off_t to, size_t len, size_t *retlen, co
 		ret = EOK;
 	}
 	else {
-		ret = mtd->ops->write(mtdInfo->storage, to, buf, len);
+		ret = mtd->ops->write(mtdInfo->storage, mtdInfo->storage->start + to, buf, len);
 	}
 
 	if (ret > 0) {
@@ -190,7 +190,7 @@ int mtd_write(struct mtd_info *mtdInfo, off_t to, size_t len, size_t *retlen, co
 
 static int mtd_check_oob_ops(struct mtd_info *mtd, off_t offs, struct mtd_oob_ops *ops)
 {
-	int ret;
+	int ret = EOK;
 
 	if (ops->datbuf == NULL) {
 		ops->len = 0;
@@ -203,18 +203,11 @@ static int mtd_check_oob_ops(struct mtd_info *mtd, off_t offs, struct mtd_oob_op
 	if (offs < 0 || offs + ops->len > mtd->size) {
 		ret = -EINVAL;
 	}
-	else if (ops->ooblen > mtd->oobsize) {
-		ret = -EINVAL;
-	}
-	else {
-		ret = EOK;
-	}
 
 	return ret;
 }
 
 
-/* TODO: test NAND flash memory */
 int mtd_read_oob(struct mtd_info *mtdInfo, off_t from, struct mtd_oob_ops *ops)
 {
 	ssize_t ret;
@@ -229,7 +222,7 @@ int mtd_read_oob(struct mtd_info *mtdInfo, off_t from, struct mtd_oob_ops *ops)
 	}
 
 	if (ret >= 0) {
-		ret = mtd->ops->meta_read(mtdInfo->storage, from, ops->oobbuf, ops->ooblen);
+		ret = mtd->ops->meta_read(mtdInfo->storage, mtdInfo->storage->start + from, ops->oobbuf, ops->ooblen);
 		if (ret > 0) {
 			ops->oobretlen = ret;
 		}
@@ -239,7 +232,6 @@ int mtd_read_oob(struct mtd_info *mtdInfo, off_t from, struct mtd_oob_ops *ops)
 }
 
 
-/* TODO: test NAND flash memory */
 int mtd_write_oob(struct mtd_info *mtdInfo, off_t to, struct mtd_oob_ops *ops)
 {
 	int ret;
@@ -257,9 +249,9 @@ int mtd_write_oob(struct mtd_info *mtdInfo, off_t to, struct mtd_oob_ops *ops)
 	}
 
 	if (ret >= 0) {
-		ret = mtd->ops->meta_write(mtdInfo->storage, to, ops->oobbuf, ops->ooblen);
+		ret = mtd->ops->meta_write(mtdInfo->storage, mtdInfo->storage->start + to, ops->oobbuf, ops->ooblen);
 		if (ret > 0) {
-			ops->ooblen = ret;
+			ops->oobretlen = ret;
 		}
 	}
 
@@ -324,7 +316,7 @@ int mtd_lock(struct mtd_info *mtdInfo, off_t ofs, uint64_t len)
 		ret = EOK;
 	}
 	else {
-		ret = mtd->ops->lock(mtdInfo->storage, ofs, len);
+		ret = mtd->ops->lock(mtdInfo->storage, mtdInfo->storage->start + ofs, len);
 	}
 
 	return ret;
@@ -346,7 +338,7 @@ int mtd_unlock(struct mtd_info *mtdInfo, off_t ofs, uint64_t len)
 		ret = EOK;
 	}
 	else {
-		ret = mtd->ops->unLock(mtdInfo->storage, ofs, len);
+		ret = mtd->ops->unLock(mtdInfo->storage, mtdInfo->storage->start + ofs, len);
 	}
 
 	return ret;
@@ -368,7 +360,7 @@ int mtd_is_locked(struct mtd_info *mtdInfo, off_t ofs, uint64_t len)
 		ret = EOK;
 	}
 	else {
-		ret = mtd->ops->isLocked(mtdInfo->storage, ofs, len);
+		ret = mtd->ops->isLocked(mtdInfo->storage, mtdInfo->storage->start + ofs, len);
 	}
 
 	return ret;
@@ -387,14 +379,13 @@ int mtd_block_isreserved(struct mtd_info *mtdInfo, off_t ofs)
 		ret = -EOPNOTSUPP;
 	}
 	else {
-		ret = mtd->ops->block_isReserved(mtdInfo->storage, ofs);
+		ret = mtd->ops->block_isReserved(mtdInfo->storage, mtdInfo->storage->start + ofs);
 	}
 
 	return ret;
 }
 
 
-/* TODO: test NAND flash memory */
 int mtd_block_isbad(struct mtd_info *mtdInfo, off_t ofs)
 {
 	int ret;
@@ -407,14 +398,13 @@ int mtd_block_isbad(struct mtd_info *mtdInfo, off_t ofs)
 		ret = -EOPNOTSUPP;
 	}
 	else {
-		ret = mtd->ops->block_isBad(mtdInfo->storage, ofs);
+		ret = mtd->ops->block_isBad(mtdInfo->storage, mtdInfo->storage->start + ofs);
 	}
 
 	return ret;
 }
 
 
-/* TODO: test NAND flash memory */
 int mtd_block_markbad(struct mtd_info *mtdInfo, off_t ofs)
 {
 	int ret;
@@ -427,7 +417,7 @@ int mtd_block_markbad(struct mtd_info *mtdInfo, off_t ofs)
 		ret = EOK;
 	}
 	else {
-		ret = mtd->ops->block_markBad(mtdInfo->storage, ofs);
+		ret = mtd->ops->block_markBad(mtdInfo->storage, mtdInfo->storage->start + ofs);
 	}
 
 	return ret;
