@@ -41,11 +41,11 @@ typedef struct {
 	int (*erase)(struct _storage_t *dev, off_t offs, size_t size);
 	int (*unPoint)(struct _storage_t *dev, off_t offs, size_t size);
 	ssize_t (*point)(struct _storage_t *dev, off_t offs, size_t size, size_t *retlen, void **virt, addr_t *phys);
-	ssize_t (*read)(struct _storage_t *dev, off_t offs, void *data, size_t len);
-	ssize_t (*write)(struct _storage_t *dev, off_t offs, const void *data, size_t len);
+	int (*read)(struct _storage_t *dev, off_t offs, void *data, size_t len, size_t *retlen);
+	int (*write)(struct _storage_t *dev, off_t offs, const void *data, size_t len, size_t *retlen);
 
-	ssize_t (*meta_read)(struct _storage_t *dev, off_t offs, void *data, size_t len);
-	ssize_t (*meta_write)(struct _storage_t *dev, off_t offs, const void *data, size_t len);
+	int (*meta_read)(struct _storage_t *dev, off_t offs, void *data, size_t len, size_t *retlen);
+	int (*meta_write)(struct _storage_t *dev, off_t offs, const void *data, size_t len, size_t *retlen);
 
 	void (*sync)(struct _storage_t *dev);
 	int (*lock)(struct _storage_t *dev, off_t offs, size_t len);
