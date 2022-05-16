@@ -100,7 +100,7 @@ static request_t *queue_pop(queue_t *q)
 		return NULL;
 	}
 
-	req = q->reqs->prev;
+	req = q->reqs;
 	LIST_REMOVE(&q->reqs, req);
 
 	mutexUnlock(q->lock);
