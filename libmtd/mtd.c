@@ -150,14 +150,10 @@ int mtd_read(struct mtd_info *mtdInfo, off_t from, size_t len, size_t *retlen, u
 		ret = EOK;
 	}
 	else {
-		ret = mtd->ops->read(mtdInfo->storage, mtdInfo->storage->start + from, buf, len);
+		ret = mtd->ops->read(mtdInfo->storage, mtdInfo->storage->start + from, buf, len, retlen);
 	}
 
-	if (ret > 0) {
-		*retlen = ret;
-	}
-
-	return ret >= 0 ? EOK : ret;
+	return ret;
 }
 
 
@@ -177,14 +173,10 @@ int mtd_write(struct mtd_info *mtdInfo, off_t to, size_t len, size_t *retlen, co
 		ret = EOK;
 	}
 	else {
-		ret = mtd->ops->write(mtdInfo->storage, mtdInfo->storage->start + to, buf, len);
+		ret = mtd->ops->write(mtdInfo->storage, mtdInfo->storage->start + to, buf, len, retlen);
 	}
 
-	if (ret > 0) {
-		*retlen = ret;
-	}
-
-	return ret >= 0 ? EOK : ret;
+	return ret;
 }
 
 
@@ -222,13 +214,10 @@ int mtd_read_oob(struct mtd_info *mtdInfo, off_t from, struct mtd_oob_ops *ops)
 	}
 
 	if (ret >= 0) {
-		ret = mtd->ops->meta_read(mtdInfo->storage, mtdInfo->storage->start + from, ops->oobbuf, ops->ooblen);
-		if (ret > 0) {
-			ops->oobretlen = ret;
-		}
+		ret = mtd->ops->meta_read(mtdInfo->storage, mtdInfo->storage->start + from, ops->oobbuf, ops->ooblen, &ops->oobretlen);
 	}
 
-	return ret >= 0 ? EOK : ret;
+	return ret;
 }
 
 
@@ -249,13 +238,10 @@ int mtd_write_oob(struct mtd_info *mtdInfo, off_t to, struct mtd_oob_ops *ops)
 	}
 
 	if (ret >= 0) {
-		ret = mtd->ops->meta_write(mtdInfo->storage, mtdInfo->storage->start + to, ops->oobbuf, ops->ooblen);
-		if (ret > 0) {
-			ops->oobretlen = ret;
-		}
+		ret = mtd->ops->meta_write(mtdInfo->storage, mtdInfo->storage->start + to, ops->oobbuf, ops->ooblen, &ops->oobretlen);
 	}
 
-	return ret >= 0 ? EOK : ret;
+	return ret;
 }
 
 
