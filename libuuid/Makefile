@@ -11,6 +11,7 @@
 
 NAME := libuuid
 
+LOCAL_SRCS := uuid.c
 LOCAL_HEADERS_DIR := include
 
 include $(static-lib.mk)
