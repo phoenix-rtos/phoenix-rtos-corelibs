@@ -33,8 +33,22 @@ static inline char nibble2hex(const unsigned char nibble)
 /* Converts hex ASCII code to 4-bit unsigned char */
 static inline int hex2nibble(unsigned char *nibble, const char hex)
 {
-	*nibble = (hex >= 'a') ? hex - 'a' + 10 : hex - '0';
-	return (*nibble <= 15) ? 0 : -1;
+	char c = hex;
+
+	if ((c >= '0') && (c <= '9')) {
+		*nibble = c - '0';
+		return 0;
+	}
+	else {
+		c |= 0x20;
+		if ((c >= 'a') && (c <= 'f')) {
+			*nibble = c - 'a' + 10;
+			return 0;
+		}
+	}
+
+	*nibble = 0;
+	return -1;
 }
 
 
@@ -69,10 +83,10 @@ static void uuid_useRand(uuid_t out)
 
 void uuid_unparse(const uuid_t uu, char *out)
 {
-	int i;
+	size_t i;
 	char *temp = out;
 
-	for (i = 0; i < (int)sizeof(uuid_t); i++) {
+	for (i = 0; i < sizeof(uuid_t); i++) {
 		if ((i == 4) || (i == 6) || (i == 8) || (i == 10)) {
 			*temp++ = '-';
 		}
@@ -87,31 +101,38 @@ void uuid_unparse(const uuid_t uu, char *out)
 
 int uuid_parse(const char *in, uuid_t uu)
 {
-	int i, ret;
+	int ret;
 	unsigned char val;
 	const char *temp;
-	size_t len;
+	size_t i;
 
-	len = strlen(in);
-	if (len != 36) {
+	if (strlen(in) != 36) {
 		return -1;
 	}
 
 	temp = in;
 
-	for (i = 0; i < (int)sizeof(uuid_t); i++) {
+	for (i = 0; i < sizeof(uuid_t); i++) {
 		if ((i == 4) || (i == 6) || (i == 8) || (i == 10)) {
+			if (*temp != '-') {
+				ret = -1;
+				break;
+			}
 			temp++;
 		}
 
 		ret = hex2nibble(&val, *temp++);
-		uu[i] = val << 4;
-		ret = hex2nibble(&val, *temp++);
-		uu[i] |= val;
-
 		if (ret < 0) {
 			break;
 		}
+		uu[i] = val << 4;
+
+		ret = hex2nibble(&val, *temp++);
+		if (ret < 0) {
+			break;
+		}
+		uu[i] |= val;
+
 	}
 
 	return ret;
@@ -158,7 +179,8 @@ void uuid_generate_random(uuid_t out)
 
 		fclose(file);
 	}
-	else if (useRand > 0) {
+
+	if (useRand > 0) {
 		uuid_useRand(out);
 	}
 
