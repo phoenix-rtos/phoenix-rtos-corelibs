@@ -28,4 +28,7 @@ typedef struct _cacheline_t {
     unsigned char isValid;
 } cacheline_t;
 
+/* Creates line of cache */
+cacheline_t cache_createLine(uint64_t tag, uint32_t *data);
+
 #endif
