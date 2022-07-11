@@ -28,7 +28,17 @@ typedef struct _cacheline_t {
     unsigned char isValid;
 } cacheline_t;
 
+/* Set of cache */
+typedef struct _cacheset_t {
+    cacheline_t *timestamps[NUM_WAYS];
+    cacheline_t *tags[NUM_WAYS];
+    cacheline_t lines[NUM_WAYS];
+} cacheset_t;
+
 /* Creates line of cache */
 cacheline_t cache_createLine(uint64_t tag, uint32_t *data);
+
+/* Creates cache set */
+cacheset_t *cache_createSet(void);
 
 #endif
