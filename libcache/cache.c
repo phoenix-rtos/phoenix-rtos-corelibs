@@ -24,14 +24,16 @@ cacheline_t cache_createLine(uint64_t tag, uint32_t *data)
 
 cacheset_t *cache_createSet(void)
 {
+	int i = 0;
 	cacheset_t *cache_set = malloc(sizeof(cacheset_t)); 
 
-	if (cache_set == NULL)
+	if (cache_set == NULL) {
 		return NULL;
+	}
 	
 	cacheline_t cache_line = {0, 0, '0'};
 
-	for (int i = 0; i < NUM_WAYS; ++i) {
+	for (; i < NUM_WAYS; ++i) {
 		cache_set->timestamps[i] = NULL;
 		cache_set->tags[i] = NULL;
 		cache_set->lines[i] = cache_line; 	
