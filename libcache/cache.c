@@ -31,13 +31,9 @@ cacheset_t *cache_createSet(void)
 		return NULL;
 	}
 	
-	cacheline_t cache_line = {0, 0, '0'};
-
-	for (; i < NUM_WAYS; ++i) {
-		cache_set->timestamps[i] = NULL;
-		cache_set->tags[i] = NULL;
-		cache_set->lines[i] = cache_line; 	
-	}
+	cache_set->timestamps = calloc(NUM_WAYS, sizeof(cacheline_t*));
+	cache_set->tags = calloc(NUM_WAYS, sizeof(cacheline_t*));
+	cache_set->lines = calloc(NUM_WAYS, sizeof(cacheline_t));
 
 	return cache_set;
 }

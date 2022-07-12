@@ -29,10 +29,11 @@ typedef struct _cacheline_t {
 } cacheline_t;
 
 /* Set of cache */
+
 typedef struct _cacheset_t {
-    cacheline_t *timestamps[NUM_WAYS];
-    cacheline_t *tags[NUM_WAYS];
-    cacheline_t lines[NUM_WAYS];
+    cacheline_t **timestamps;
+    cacheline_t **tags;
+    cacheline_t *lines;
 } cacheset_t;
 
 /* Creates line of cache */
