@@ -25,30 +25,30 @@ cacheline_t cache_createLine(uint64_t tag, uint32_t *data)
 cacheset_t *cache_createSet(void)
 {
 	int i = 0;
-	cacheset_t *cache_set = malloc(sizeof(cacheset_t)); 
+	cacheset_t *cacheSet = malloc(sizeof(cacheset_t)); 
 
-	if (cache_set == NULL) {
+	if (cacheSet == NULL) {
 		return NULL;
 	}
 	
-	cache_set->timestamps = calloc(NUM_WAYS, sizeof(cacheline_t*));
-	cache_set->tags = calloc(NUM_WAYS, sizeof(cacheline_t*));
-	cache_set->lines = calloc(NUM_WAYS, sizeof(cacheline_t));
+	cacheSet->timestamps = calloc(NUM_WAYS, sizeof(cacheline_t*));
+	cacheSet->tags = calloc(NUM_WAYS, sizeof(cacheline_t*));
+	cacheSet->lines = calloc(NUM_WAYS, sizeof(cacheline_t));
 
-	if (cache_set->timestamps == NULL || cache_set->tags == NULL || cache_set->lines == NULL) {
-		if (cache_set->timestamps != NULL) {
-			free(cache_set->timestamps);
+	if (cacheSet->timestamps == NULL || cacheSet->tags == NULL || cacheSet->lines == NULL) {
+		if (cacheSet->timestamps != NULL) {
+			free(cacheSet->timestamps);
 		}
-		if (cache_set->tags != NULL) {
-			free(cache_set->tags);
+		if (cacheSet->tags != NULL) {
+			free(cacheSet->tags);
 		}
-		if (cache_set->lines != NULL) {
-			free(cache_set->lines);
+		if (cacheSet->lines != NULL) {
+			free(cacheSet->lines);
 		}
 
-		free(cache_set);
+		free(cacheSet);
 		return NULL;
 	}
 
-	return cache_set;
+	return cacheSet;
 }
