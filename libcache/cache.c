@@ -52,3 +52,18 @@ cacheset_t *cache_createSet(void)
 
 	return cacheSet;
 }
+
+int cache_destroySet(cacheset_t *cacheSet)
+{
+	if (cacheSet ==	NULL) {
+		return -1;
+	}
+	
+	free(cacheSet->timestamps);
+	free(cacheSet->tags);
+	free(cacheSet->lines);
+
+	free(cacheSet);
+
+	return 0;
+}

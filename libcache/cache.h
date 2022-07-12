@@ -36,10 +36,14 @@ typedef struct _cacheset_t {
     cacheline_t *lines;
 } cacheset_t;
 
+
 /* Creates line of cache */
 cacheline_t cache_createLine(uint64_t tag, uint32_t *data);
 
 /* Creates cache set */
 cacheset_t *cache_createSet(void);
+
+/* Destroys cache set and frees memory */
+int cache_destroySet(cacheset_t *cacheSet);
 
 #endif
