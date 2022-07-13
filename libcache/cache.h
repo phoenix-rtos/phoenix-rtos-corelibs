@@ -17,9 +17,19 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-#define NUM_WAYS        2
-#define NUM_SETS        16
-#define CACHE_LINE_SIZE 64
+/* N-way set-associative cache parameters */
+#ifndef LIBCACHE_NUM_WAYS
+#define LIBCACHE_NUM_WAYS        2
+#endif
+
+#ifndef LIBCACHE_NUM_SETS
+#define LIBCACHE_NUM_SETS        16
+#endif
+
+#ifndef LIBCACHE_CACHE_LINE_SIZE
+#define LIBCACHE_CACHE_LINE_SIZE 64
+#endif
+
 
 /* Line of cache */
 typedef struct _cacheline_t {

@@ -31,9 +31,9 @@ cacheset_t *cache_createSet(void)
 		return NULL;
 	}
 
-	cacheSet->timestamps = calloc(NUM_WAYS, sizeof(cacheline_t *));
-	cacheSet->tags = calloc(NUM_WAYS, sizeof(cacheline_t *));
-	cacheSet->lines = calloc(NUM_WAYS, sizeof(cacheline_t));
+	cacheSet->timestamps = calloc(LIBCACHE_NUM_WAYS, sizeof(cacheline_t *));
+	cacheSet->tags = calloc(LIBCACHE_NUM_WAYS, sizeof(cacheline_t *));
+	cacheSet->lines = calloc(LIBCACHE_NUM_WAYS, sizeof(cacheline_t));
 
 	if (cacheSet->timestamps == NULL || cacheSet->tags == NULL || cacheSet->lines == NULL) {
 		cache_freeSet(cacheSet);
@@ -84,5 +84,5 @@ int cache_compareTags(const void *lhs, const void *rhs)
 
 void cache_sortSetByTags(cacheset_t *cacheSet)
 {
-	qsort(cacheSet->tags, NUM_WAYS, sizeof(cacheline_t *), cache_compareTags);
+	qsort(cacheSet->tags, LIBCACHE_NUM_WAYS, sizeof(cacheline_t *), cache_compareTags);
 }
