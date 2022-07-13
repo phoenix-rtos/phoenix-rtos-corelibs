@@ -24,7 +24,6 @@ cacheline_t cache_createLine(uint64_t tag, uint32_t *data)
 
 cacheset_t *cache_createSet(void)
 {
-	int i = 0;
 	cacheset_t *cacheSet = malloc(sizeof(cacheset_t));
 
 	if (cacheSet == NULL) {
