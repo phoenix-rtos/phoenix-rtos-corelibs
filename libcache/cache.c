@@ -81,3 +81,8 @@ int cache_compareTags(const void *lhs, const void *rhs)
 
 	return ret;
 }
+
+void cache_sortSetByTags(cacheset_t *cacheSet)
+{
+	qsort(cacheSet->tags, NUM_WAYS, sizeof(cacheline_t *), cache_compareTags);
+}

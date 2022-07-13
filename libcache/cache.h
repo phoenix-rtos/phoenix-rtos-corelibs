@@ -51,4 +51,7 @@ void cache_freeSet(cacheset_t *cacheSet);
 /* Compares values of cache line tags*/
 int cache_compareTags(const void *lhs, const void *rhs);
 
+/* Sorts cache lines in set by tag */
+void cache_sortSetByTags(cacheset_t *cacheSet);
+
 #endif
