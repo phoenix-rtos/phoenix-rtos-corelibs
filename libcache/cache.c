@@ -14,6 +14,7 @@
 #include "cache.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 cacheline_t cache_createLine(uint64_t tag, uint32_t *data)
 {
@@ -55,15 +56,9 @@ int cache_destroySet(cacheset_t *cacheSet)
 
 void cache_freeSet(cacheset_t *cacheSet)
 {
-	if (cacheSet->timestamps != NULL) {
-		free(cacheSet->timestamps);
-	}
-	if (cacheSet->tags != NULL) {
-		free(cacheSet->tags);
-	}
-	if (cacheSet->lines != NULL) {
-		free(cacheSet->lines);
-	}
+	free(cacheSet->lines);
+	free(cacheSet->tags);
+	free(cacheSet->timestamps);
 
 	free(cacheSet);
 }
