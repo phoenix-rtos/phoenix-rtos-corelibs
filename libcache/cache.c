@@ -36,17 +36,7 @@ cacheset_t *cache_createSet(void)
 	cacheSet->lines = calloc(NUM_WAYS, sizeof(cacheline_t));
 
 	if (cacheSet->timestamps == NULL || cacheSet->tags == NULL || cacheSet->lines == NULL) {
-		if (cacheSet->timestamps != NULL) {
-			free(cacheSet->timestamps);
-		}
-		if (cacheSet->tags != NULL) {
-			free(cacheSet->tags);
-		}
-		if (cacheSet->lines != NULL) {
-			free(cacheSet->lines);
-		}
-
-		free(cacheSet);
+		cache_freeSet(cacheSet);
 		return NULL;
 	}
 
