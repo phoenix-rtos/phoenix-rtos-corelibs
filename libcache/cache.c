@@ -17,22 +17,22 @@
 
 cacheline_t cache_createLine(uint64_t tag, uint32_t *data)
 {
-	cacheline_t line = {tag, data, '1'};
+	cacheline_t line = { tag, data, '1' };
 
-	return line;	
+	return line;
 }
 
 cacheset_t *cache_createSet(void)
 {
 	int i = 0;
-	cacheset_t *cacheSet = malloc(sizeof(cacheset_t)); 
+	cacheset_t *cacheSet = malloc(sizeof(cacheset_t));
 
 	if (cacheSet == NULL) {
 		return NULL;
 	}
-	
-	cacheSet->timestamps = calloc(NUM_WAYS, sizeof(cacheline_t*));
-	cacheSet->tags = calloc(NUM_WAYS, sizeof(cacheline_t*));
+
+	cacheSet->timestamps = calloc(NUM_WAYS, sizeof(cacheline_t *));
+	cacheSet->tags = calloc(NUM_WAYS, sizeof(cacheline_t *));
 	cacheSet->lines = calloc(NUM_WAYS, sizeof(cacheline_t));
 
 	if (cacheSet->timestamps == NULL || cacheSet->tags == NULL || cacheSet->lines == NULL) {
@@ -45,10 +45,10 @@ cacheset_t *cache_createSet(void)
 
 int cache_destroySet(cacheset_t *cacheSet)
 {
-	if (cacheSet ==	NULL) {
+	if (cacheSet == NULL) {
 		return -1;
 	}
-	
+
 	cache_freeSet(cacheSet);
 
 	return 0;

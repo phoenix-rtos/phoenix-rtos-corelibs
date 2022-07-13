@@ -17,23 +17,23 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-#define NUM_WAYS 2
-#define NUM_SETS 16
+#define NUM_WAYS        2
+#define NUM_SETS        16
 #define CACHE_LINE_SIZE 64
 
 /* Line of cache */
 typedef struct _cacheline_t {
-    uint64_t tag;
-    uint32_t *data;
-    unsigned char isValid;
+	uint64_t tag;
+	uint32_t *data;
+	unsigned char isValid;
 } cacheline_t;
 
 /* Set of cache */
 
 typedef struct _cacheset_t {
-    cacheline_t **timestamps;
-    cacheline_t **tags;
-    cacheline_t *lines;
+	cacheline_t **timestamps;
+	cacheline_t **tags;
+	cacheline_t *lines;
 } cacheset_t;
 
 
