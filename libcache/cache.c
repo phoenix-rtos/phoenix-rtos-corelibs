@@ -67,3 +67,18 @@ int cache_destroySet(cacheset_t *cacheSet)
 
 	return 0;
 }
+
+void cache_freeSet(cacheset_t *cacheSet)
+{
+	if (cacheSet->timestamps != NULL) {
+		free(cacheSet->timestamps);
+	}
+	if (cacheSet->tags != NULL) {
+		free(cacheSet->tags);
+	}
+	if (cacheSet->lines != NULL) {
+		free(cacheSet->lines);
+	}
+
+	free(cacheSet);
+}

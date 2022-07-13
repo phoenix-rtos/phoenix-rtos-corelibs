@@ -46,4 +46,6 @@ cacheset_t *cache_createSet(void);
 /* Destroys cache set and frees memory */
 int cache_destroySet(cacheset_t *cacheSet);
 
+void cache_freeSet(cacheset_t *cacheSet);
+
 #endif
