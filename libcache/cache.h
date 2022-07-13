@@ -38,6 +38,7 @@ typedef struct _cacheline_t {
 	unsigned char isValid;
 } cacheline_t;
 
+
 /* Set of cache */
 typedef struct _cacheset_t {
 	cacheline_t **timestamps;
@@ -49,13 +50,17 @@ typedef struct _cacheset_t {
 /* Creates cache set */
 cacheset_t *cache_createSet(void);
 
+
 /* Frees cache set */
 void cache_freeSet(cacheset_t *cacheSet);
+
 
 /* Compares values of cache line tags*/
 int cache_compareTags(const void *lhs, const void *rhs);
 
+
 /* Sorts cache lines in set by tag */
 void cache_sortSetByTags(cacheset_t *cacheSet);
+
 
 #endif

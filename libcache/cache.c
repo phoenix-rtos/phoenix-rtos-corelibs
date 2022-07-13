@@ -46,6 +46,7 @@ void cache_freeSet(cacheset_t *cacheSet)
 	free(cacheSet);
 }
 
+
 int cache_compareTags(const void *lhs, const void *rhs)
 {
 	int ret = 0;
@@ -64,6 +65,7 @@ int cache_compareTags(const void *lhs, const void *rhs)
 
 	return ret;
 }
+
 
 void cache_sortSetByTags(cacheset_t *cacheSet)
 {
