@@ -48,4 +48,7 @@ int cache_destroySet(cacheset_t *cacheSet);
 /* Frees cache set */
 void cache_freeSet(cacheset_t *cacheSet);
 
+/* Compares values of cache line tags*/
+int cache_compareTags(const void *lhs, const void *rhs);
+
 #endif
