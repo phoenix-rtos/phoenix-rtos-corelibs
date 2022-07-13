@@ -19,11 +19,11 @@
 
 /* N-way set-associative cache parameters */
 #ifndef LIBCACHE_NUM_WAYS
-#define LIBCACHE_NUM_WAYS        2
+#define LIBCACHE_NUM_WAYS 2
 #endif
 
 #ifndef LIBCACHE_NUM_SETS
-#define LIBCACHE_NUM_SETS        16
+#define LIBCACHE_NUM_SETS 16
 #endif
 
 #ifndef LIBCACHE_CACHE_LINE_SIZE
@@ -42,7 +42,7 @@ typedef struct _cacheline_t {
 typedef struct _cacheset_t {
 	cacheline_t **timestamps;
 	cacheline_t **tags;
-	cacheline_t *lines;
+	cacheline_t lines[LIBCACHE_NUM_WAYS];
 } cacheset_t;
 
 

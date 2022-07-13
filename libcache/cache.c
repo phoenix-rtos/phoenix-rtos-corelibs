@@ -27,9 +27,9 @@ cacheset_t *cache_createSet(void)
 
 	cacheSet->timestamps = calloc(LIBCACHE_NUM_WAYS, sizeof(cacheline_t *));
 	cacheSet->tags = calloc(LIBCACHE_NUM_WAYS, sizeof(cacheline_t *));
-	cacheSet->lines = calloc(LIBCACHE_NUM_WAYS, sizeof(cacheline_t));
+	memset(cacheSet->lines, 0, sizeof(cacheSet->lines));
 
-	if (cacheSet->timestamps == NULL || cacheSet->tags == NULL || cacheSet->lines == NULL) {
+	if (cacheSet->timestamps == NULL || cacheSet->tags == NULL) {
 		cache_freeSet(cacheSet);
 		return NULL;
 	}
@@ -40,7 +40,6 @@ cacheset_t *cache_createSet(void)
 
 void cache_freeSet(cacheset_t *cacheSet)
 {
-	free(cacheSet->lines);
 	free(cacheSet->tags);
 	free(cacheSet->timestamps);
 
