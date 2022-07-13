@@ -46,9 +46,6 @@ typedef struct _cacheset_t {
 } cacheset_t;
 
 
-/* Creates line of cache */
-cacheline_t cache_createLine(uint64_t tag, uint32_t *data);
-
 /* Creates cache set */
 cacheset_t *cache_createSet(void);
 

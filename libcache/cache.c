@@ -16,12 +16,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-cacheline_t cache_createLine(uint64_t tag, uint32_t *data)
-{
-	cacheline_t line = { tag, data, '1' };
-
-	return line;
-}
 
 cacheset_t *cache_createSet(void)
 {
