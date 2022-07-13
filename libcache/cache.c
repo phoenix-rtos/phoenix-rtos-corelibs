@@ -59,11 +59,7 @@ int cache_destroySet(cacheset_t *cacheSet)
 		return -1;
 	}
 	
-	free(cacheSet->timestamps);
-	free(cacheSet->tags);
-	free(cacheSet->lines);
-
-	free(cacheSet);
+	cache_freeSet(cacheSet);
 
 	return 0;
 }
