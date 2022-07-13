@@ -37,16 +37,6 @@ cacheset_t *cache_createSet(void)
 	return cacheSet;
 }
 
-int cache_destroySet(cacheset_t *cacheSet)
-{
-	if (cacheSet == NULL) {
-		return -1;
-	}
-
-	cache_freeSet(cacheSet);
-
-	return 0;
-}
 
 void cache_freeSet(cacheset_t *cacheSet)
 {

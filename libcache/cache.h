@@ -49,9 +49,6 @@ typedef struct _cacheset_t {
 /* Creates cache set */
 cacheset_t *cache_createSet(void);
 
-/* Destroys cache set and frees memory */
-int cache_destroySet(cacheset_t *cacheSet);
-
 /* Frees cache set */
 void cache_freeSet(cacheset_t *cacheSet);
 
