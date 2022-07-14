@@ -17,6 +17,33 @@
 #include <string.h>
 
 
+/* Line of cache */
+typedef struct _cacheline_t {
+	uint64_t tag;
+	uint32_t *data;
+	unsigned char isValid;
+} cacheline_t;
+
+
+/* Set of cache */
+typedef struct _cacheset_t {
+	cacheline_t **timestamps;
+	cacheline_t **tags;
+	cacheline_t lines[LIBCACHE_NUM_WAYS];
+} cacheset_t;
+
+
+/* Frees cache set */
+void cache_freeSet(cacheset_t *cacheSet)
+{
+	free(cacheSet->tags);
+	free(cacheSet->timestamps);
+
+	free(cacheSet);
+}
+
+
+/* Creates cache set */
 cacheset_t *cache_createSet(void)
 {
 	cacheset_t *cacheSet = malloc(sizeof(cacheset_t));
@@ -38,15 +65,7 @@ cacheset_t *cache_createSet(void)
 }
 
 
-void cache_freeSet(cacheset_t *cacheSet)
-{
-	free(cacheSet->tags);
-	free(cacheSet->timestamps);
-
-	free(cacheSet);
-}
-
-
+/* Compares values of cache line tags */
 int cache_compareTags(const void *lhs, const void *rhs)
 {
 	int ret = 0;
@@ -67,6 +86,7 @@ int cache_compareTags(const void *lhs, const void *rhs)
 }
 
 
+/* Sorts cache lines in set by tag */
 void cache_sortSetByTags(cacheset_t *cacheSet)
 {
 	qsort(cacheSet->tags, LIBCACHE_NUM_WAYS, sizeof(cacheline_t *), cache_compareTags);

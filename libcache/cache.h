@@ -17,6 +17,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+
 /* N-way set-associative cache parameters */
 #ifndef LIBCACHE_NUM_WAYS
 #define LIBCACHE_NUM_WAYS 2
@@ -29,38 +30,6 @@
 #ifndef LIBCACHE_CACHE_LINE_SIZE
 #define LIBCACHE_CACHE_LINE_SIZE 64
 #endif
-
-
-/* Line of cache */
-typedef struct _cacheline_t {
-	uint64_t tag;
-	uint32_t *data;
-	unsigned char isValid;
-} cacheline_t;
-
-
-/* Set of cache */
-typedef struct _cacheset_t {
-	cacheline_t **timestamps;
-	cacheline_t **tags;
-	cacheline_t lines[LIBCACHE_NUM_WAYS];
-} cacheset_t;
-
-
-/* Creates cache set */
-cacheset_t *cache_createSet(void);
-
-
-/* Frees cache set */
-void cache_freeSet(cacheset_t *cacheSet);
-
-
-/* Compares values of cache line tags*/
-int cache_compareTags(const void *lhs, const void *rhs);
-
-
-/* Sorts cache lines in set by tag */
-void cache_sortSetByTags(cacheset_t *cacheSet);
 
 
 #endif
