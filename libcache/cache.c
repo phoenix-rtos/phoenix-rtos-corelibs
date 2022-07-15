@@ -1,7 +1,7 @@
 /*
  * Phoenix-RTOS
  *
- * Graphics library
+ * Cache library
  *
  * Copyright 2022 Phoenix Systems
  * Author: Malgorzata Wrobel
