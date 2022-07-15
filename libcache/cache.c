@@ -70,16 +70,28 @@ int cache_compareTags(const void *lhs, const void *rhs)
 {
 	int ret = 0;
 
-	cacheline_t *lhsLine = (cacheline_t *)lhs, *rhsLine = (cacheline_t *)rhs;
+	cacheline_t **lhsLine = (cacheline_t **)lhs;
+	cacheline_t **rhsLine = (cacheline_t **)rhs;
 
-	if (lhsLine->tag < rhsLine->tag) {
-		ret = -1;
-	}
-	else if (lhsLine->tag == rhsLine->tag) {
+	if (*lhsLine == NULL && *rhsLine == NULL) {
 		ret = 0;
 	}
-	else {
+	else if (*lhsLine == NULL && *rhsLine != NULL) {
+		ret = -1;
+	}
+	else if (*lhsLine != NULL && *rhsLine == NULL) {
 		ret = 1;
+	}
+	else {
+		if ((*lhsLine)->tag < (*rhsLine)->tag) {
+			ret = -1;
+		}
+		else if ((*lhsLine)->tag == (*rhsLine)->tag) {
+			ret = 0;
+		}
+		else {
+			ret = 1;
+		}
 	}
 
 	return ret;
