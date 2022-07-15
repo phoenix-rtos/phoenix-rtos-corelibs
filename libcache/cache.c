@@ -96,10 +96,3 @@ int cache_compareTags(const void *lhs, const void *rhs)
 
 	return ret;
 }
-
-
-/* Sorts cache lines in set by tag */
-void cache_sortSetByTags(cacheset_t *cacheSet)
-{
-	qsort(cacheSet->tags, LIBCACHE_NUM_WAYS, sizeof(cacheline_t *), cache_compareTags);
-}
