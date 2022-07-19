@@ -121,6 +121,7 @@ void cache_addToSet(cacheset_t *cacheSet, cacheline_t *cacheLine)
 	for (; i < LIBCACHE_NUM_WAYS - 1; ++i) {
 		cacheSet->timestamps[i] = cacheSet->timestamps[i + 1];
 	}
+	
 	cacheSet->timestamps[LIBCACHE_NUM_WAYS - 1] = cacheLine;
 
 	if (oldest == NULL) {
@@ -130,6 +131,7 @@ void cache_addToSet(cacheset_t *cacheSet, cacheline_t *cacheLine)
 				break;
 			}
 		}
+
 		temp = &(cacheSet->lines[i]);
 
 		for (i = 0; i < LIBCACHE_NUM_WAYS; ++i) {
@@ -178,6 +180,7 @@ uint32_t *cache_searchInSet(cacheset_t *cacheSet, uint64_t tag)
 				cacheSet->timestamps[i] = cacheSet->timestamps[i + 1];
 			}
 		}
+
 		cacheSet->timestamps[LIBCACHE_NUM_WAYS - 1] = *linePtr;
 	}
 
