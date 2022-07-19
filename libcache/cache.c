@@ -109,7 +109,7 @@ int cache_compareTags(const void *lhs, const void *rhs)
 void cache_addToSet(cacheset_t *cacheSet, cacheline_t *cacheLine)
 {
 	int i = 0;
-	cacheline_t *oldest = NULL, **linePtr = NULL;
+	cacheline_t *oldest = NULL, **linePtr = NULL, *temp;
 
 	oldest = cacheSet->timestamps[0];
 
@@ -125,10 +125,11 @@ void cache_addToSet(cacheset_t *cacheSet, cacheline_t *cacheLine)
 				break;
 			}
 		}
+	temp = &(cacheSet->lines[i]);
 
 		for (i = 0; i < LIBCACHE_NUM_WAYS; ++i) {
 			if (cacheSet->tags[i] == NULL) {
-				cacheSet->tags[i] = cacheLine;
+				cacheSet->tags[i] = temp;
 				break;
 			}
 		}
