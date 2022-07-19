@@ -177,3 +177,39 @@ uint32_t *cache_searchInSet(cacheset_t *cacheSet, uint64_t tag)
 
 	return ret;
 }
+
+
+cachetable_t *cache_create()
+{
+	int i = 0, j = 0;
+
+	cachetable_t *cache = malloc(sizeof(cachetable_t));
+
+	if (cache == NULL) {
+		return NULL;
+	}
+
+	cache->sets = calloc(LIBCACHE_NUM_SETS, sizeof(cacheset_t *));
+
+	if (cache->sets == NULL) {
+		free(cache);
+
+		return NULL;
+	}
+
+	for (; i < LIBCACHE_NUM_SETS; ++i) {
+		cache->sets[i] = cache_createSet();
+
+		if (cache->sets[i] == NULL) {
+			for (; j < i; ++j) {
+				cache_freeSet(cache->sets[j]);
+			}
+			free(cache->sets);
+			free(cache);
+
+			return NULL;
+		}
+	}
+
+	return cache;
+}

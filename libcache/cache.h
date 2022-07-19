@@ -43,4 +43,7 @@
 typedef struct _cachetable_t cachetable_t;
 
 
+/* Creates cache table */
+cachetable_t *cache_create();
+
 #endif
