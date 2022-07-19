@@ -130,7 +130,7 @@ void cache_addToSet(cacheset_t *cacheSet, cacheline_t *cacheLine)
 				break;
 			}
 		}
-	temp = &(cacheSet->lines[i]);
+		temp = &(cacheSet->lines[i]);
 
 		for (i = 0; i < LIBCACHE_NUM_WAYS; ++i) {
 			if (cacheSet->tags[i] == NULL) {
@@ -246,7 +246,7 @@ void cache_add(cachetable_t *cache, const uint64_t addr, uint32_t *data)
 	/* uint64_t offset = addr & cache->offsetMask; */
 	uint64_t tag = (addr ^ cache->tagMask);
 
-	cacheline_t cacheLine = { tag, data, '1' }; 
+	cacheline_t cacheLine = { tag, data, '1' };
 
 	cache_addToSet(cache->sets[set], &cacheLine);
 }
