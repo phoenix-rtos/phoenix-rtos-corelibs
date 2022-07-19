@@ -214,3 +214,10 @@ cachetable_t *cache_create()
 
 	return cache;
 }
+
+
+/* Generates mask of type uint64_t with numBits set to 1 */
+uint64_t cache_genMask(int numBits)
+{
+	return ((uint64_t)1 << (uint64_t)numBits) - (uint64_t)1;
+}
