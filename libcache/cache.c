@@ -118,12 +118,6 @@ void cache_addToSet(cacheset_t *cacheSet, cacheline_t *cacheLine)
 
 	oldest = cacheSet->timestamps[0];
 
-	for (; i < LIBCACHE_NUM_WAYS - 1; ++i) {
-		cacheSet->timestamps[i] = cacheSet->timestamps[i + 1];
-	}
-
-	cacheSet->timestamps[LIBCACHE_NUM_WAYS - 1] = cacheLine;
-
 	if (oldest == NULL) {
 		for (i = 0; i < LIBCACHE_NUM_WAYS; ++i) {
 			if (cacheSet->lines[i].isValid != '1') {
@@ -149,10 +143,18 @@ void cache_addToSet(cacheset_t *cacheSet, cacheline_t *cacheLine)
 			}
 		}
 
+		temp = &(cacheSet->lines[i]);
+
 		linePtr = bsearch(&oldest, cacheSet->tags, LIBCACHE_NUM_WAYS, sizeof(cacheline_t *), cache_compareTags);
 
 		*linePtr = cacheLine;
 	}
+
+	for (; i < LIBCACHE_NUM_WAYS - 1; ++i) {
+		cacheSet->timestamps[i] = cacheSet->timestamps[i + 1];
+	}
+
+	cacheSet->timestamps[LIBCACHE_NUM_WAYS - 1] = temp;
 
 	qsort(cacheSet->tags, LIBCACHE_NUM_WAYS, sizeof(cacheline_t *), cache_compareTags);
 }
