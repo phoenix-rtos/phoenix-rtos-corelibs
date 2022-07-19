@@ -31,5 +31,13 @@
 #define LIBCACHE_CACHE_LINE_SIZE 64
 #endif
 
+#ifndef LIBCACHE_MEM_SIZE
+#define LIBCACHE_MEM_SIZE 2048
+#endif
+
+#ifndef LIBCACHE_ADDR_WIDTH
+#define LIBCACHE_ADDR_WIDTH 64
+#endif
+
 
 #endif
