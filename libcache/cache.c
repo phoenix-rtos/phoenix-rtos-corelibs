@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <math.h>
 
 
 /* Line of cache */
@@ -184,6 +185,13 @@ uint32_t *cache_searchInSet(cacheset_t *cacheSet, uint64_t tag)
 }
 
 
+/* Generates mask of type uint64_t with numBits set to 1 */
+uint64_t cache_genMask(int numBits)
+{
+	return ((uint64_t)1 << (uint64_t)numBits) - (uint64_t)1;
+}
+
+
 cachetable_t *cache_create()
 {
 	int i = 0, j = 0;
@@ -216,12 +224,16 @@ cachetable_t *cache_create()
 		}
 	}
 
+	cache->offsetWidth = log2(LIBCACHE_CACHE_LINE_SIZE);
+	int numLines = LIBCACHE_MEM_SIZE / LIBCACHE_CACHE_LINE_SIZE;
+	int numSets = numLines / LIBCACHE_NUM_WAYS;
+	int setBits = log2(numSets);
+	int tagBits = LIBCACHE_ADDR_WIDTH - setBits - cache->offsetWidth;
+
+
+	cache->tagMask = cache_genMask(tagBits);
+	cache->setMask = cache_genMask(setBits);
+	cache->offsetMask = cache_genMask(cache->offsetWidth);
+
 	return cache;
-}
-
-
-/* Generates mask of type uint64_t with numBits set to 1 */
-uint64_t cache_genMask(int numBits)
-{
-	return ((uint64_t)1 << (uint64_t)numBits) - (uint64_t)1;
 }
