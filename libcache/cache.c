@@ -37,6 +37,10 @@ typedef struct _cacheset_t {
 /* Cache table */
 struct _cachetable_t {
 	cacheset_t **sets;
+	uint64_t tagMask;
+	uint64_t setMask;
+	uint64_t offsetMask;
+	int offsetWidth;
 };
 
 
