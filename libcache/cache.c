@@ -34,6 +34,12 @@ typedef struct _cacheset_t {
 } cacheset_t;
 
 
+/* Cache table */
+struct _cachetable_t {
+	cacheset_t **sets;
+};
+
+
 /* Frees cache set */
 void cache_freeSet(cacheset_t *cacheSet)
 {

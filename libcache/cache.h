@@ -40,4 +40,7 @@
 #endif
 
 
+typedef struct _cachetable_t cachetable_t;
+
+
 #endif
