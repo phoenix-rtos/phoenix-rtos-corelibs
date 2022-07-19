@@ -51,4 +51,8 @@ cachetable_t *cache_create();
 void cache_add(cachetable_t *cache, uint64_t addr, uint32_t *data);
 
 
+/* Search address in cache */
+uint32_t *cache_search(cachetable_t *cache, const uint64_t addr);
+
+
 #endif

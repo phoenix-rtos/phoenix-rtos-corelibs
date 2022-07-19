@@ -250,3 +250,14 @@ void cache_add(cachetable_t *cache, const uint64_t addr, uint32_t *data)
 
 	cache_addToSet(cache->sets[set], &cacheLine);
 }
+
+
+uint32_t *cache_search(cachetable_t *cache, const uint64_t addr)
+{
+	uint64_t set = addr >> cache->offsetWidth;
+	set = (set & cache->setMask);
+	/* uint64_t offset = addr & cache->offsetMask; */
+	uint64_t tag = (addr ^ cache->tagMask);
+
+	return cache_searchInSet(cache->sets[set], tag);
+}
