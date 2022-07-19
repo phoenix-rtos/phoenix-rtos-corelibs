@@ -237,3 +237,16 @@ cachetable_t *cache_create()
 
 	return cache;
 }
+
+
+void cache_add(cachetable_t *cache, const uint64_t addr, uint32_t *data)
+{
+	uint64_t set = addr >> cache->offsetWidth;
+	set = (set & cache->setMask);
+	/* uint64_t offset = addr & cache->offsetMask; */
+	uint64_t tag = (addr ^ cache->tagMask);
+
+	cacheline_t cacheLine = { tag, data, '1' }; 
+
+	cache_addToSet(cache->sets[set], &cacheLine);
+}

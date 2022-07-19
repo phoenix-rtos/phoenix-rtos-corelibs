@@ -46,4 +46,9 @@ typedef struct _cachetable_t cachetable_t;
 /* Creates cache table */
 cachetable_t *cache_create();
 
+
+/* Adds line to cache table */
+void cache_add(cachetable_t *cache, uint64_t addr, uint32_t *data);
+
+
 #endif
