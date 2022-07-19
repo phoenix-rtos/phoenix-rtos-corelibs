@@ -48,7 +48,7 @@ cachetable_t *cache_create();
 
 
 /* Adds line to cache table */
-void cache_add(cachetable_t *cache, uint64_t addr, uint32_t *data);
+void cache_add(cachetable_t *cache, const uint64_t addr, uint32_t *data);
 
 
 /* Search address in cache */
