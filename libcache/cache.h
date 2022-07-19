@@ -20,11 +20,11 @@
 
 /* N-way set-associative cache parameters */
 #ifndef LIBCACHE_NUM_WAYS
-#define LIBCACHE_NUM_WAYS 2
+#define LIBCACHE_NUM_WAYS 4
 #endif
 
 #ifndef LIBCACHE_NUM_SETS
-#define LIBCACHE_NUM_SETS 16
+#define LIBCACHE_NUM_SETS 8
 #endif
 
 #ifndef LIBCACHE_CACHE_LINE_SIZE
