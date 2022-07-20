@@ -37,7 +37,7 @@ typedef struct _cacheset_t {
 
 /* Cache table */
 struct _cachetable_t {
-	cacheset_t **sets;
+	cacheset_t *sets;
 	uint64_t tagMask;
 	uint64_t setMask;
 	uint64_t offsetMask;
@@ -203,6 +203,7 @@ cachetable_t *cache_create(void)
 	int i = 0, j = 0;
 
 	cachetable_t *cache = malloc(sizeof(cachetable_t));
+	cacheset_t *set = NULL;
 
 	if (cache == NULL) {
 		return NULL;
@@ -211,7 +212,7 @@ cachetable_t *cache_create(void)
 	int numLines = LIBCACHE_MEM_SIZE / LIBCACHE_CACHE_LINE_SIZE;
 	cache->numSets = numLines / LIBCACHE_NUM_WAYS;
 
-	cache->sets = calloc(cache->numSets, sizeof(cacheset_t *));
+	cache->sets = calloc(cache->numSets, sizeof(cacheset_t));
 
 	if (cache->sets == NULL) {
 		free(cache);
@@ -220,17 +221,21 @@ cachetable_t *cache_create(void)
 	}
 
 	for (; i < cache->numSets; ++i) {
-		cache->sets[i] = cache_createSet();
+		set = cache_createSet();
 
-		if (cache->sets[i] == NULL) {
+		if (set == NULL) {
 			for (; j < i; ++j) {
-				cache_freeSet(cache->sets[j]);
+				free(cache->sets[j].timestamps);
+				free(cache->sets[j].tags);
 			}
+
 			free(cache->sets);
 			free(cache);
-
-			return NULL;
 		}
+
+		cache->sets[i] = *set;
+
+		free(set);
 	}
 
 	cache->offsetWidth = log2(LIBCACHE_CACHE_LINE_SIZE);
@@ -255,7 +260,7 @@ void cache_add(cachetable_t *cache, const uint64_t addr, uint32_t *data)
 
 	cacheline_t cacheLine = { tag, data, '1' };
 
-	cache_addToSet(cache->sets[set], &cacheLine);
+	cache_addToSet(&cache->sets[set], &cacheLine);
 }
 
 
@@ -266,5 +271,5 @@ uint32_t *cache_search(cachetable_t *cache, const uint64_t addr)
 	/* uint64_t offset = addr & cache->offsetMask; */
 	uint64_t tag = (addr ^ cache->tagMask);
 
-	return cache_searchInSet(cache->sets[set], tag);
+	return cache_searchInSet(&cache->sets[set], tag);
 }
