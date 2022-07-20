@@ -41,6 +41,7 @@ struct _cachetable_t {
 	uint64_t tagMask;
 	uint64_t setMask;
 	uint64_t offsetMask;
+	int numSets;
 	int offsetWidth;
 };
 
@@ -207,7 +208,10 @@ cachetable_t *cache_create()
 		return NULL;
 	}
 
-	cache->sets = calloc(LIBCACHE_NUM_SETS, sizeof(cacheset_t *));
+	int numLines = LIBCACHE_MEM_SIZE / LIBCACHE_CACHE_LINE_SIZE;
+	cache->numSets = numLines / LIBCACHE_NUM_WAYS;
+
+	cache->sets = calloc(cache->numSets, sizeof(cacheset_t *));
 
 	if (cache->sets == NULL) {
 		free(cache);
@@ -215,7 +219,7 @@ cachetable_t *cache_create()
 		return NULL;
 	}
 
-	for (; i < LIBCACHE_NUM_SETS; ++i) {
+	for (; i < cache->numSets; ++i) {
 		cache->sets[i] = cache_createSet();
 
 		if (cache->sets[i] == NULL) {
@@ -230,9 +234,7 @@ cachetable_t *cache_create()
 	}
 
 	cache->offsetWidth = log2(LIBCACHE_CACHE_LINE_SIZE);
-	int numLines = LIBCACHE_MEM_SIZE / LIBCACHE_CACHE_LINE_SIZE;
-	int numSets = numLines / LIBCACHE_NUM_WAYS;
-	int setBits = log2(numSets);
+	int setBits = log2(cache->numSets);
 	int tagBits = LIBCACHE_ADDR_WIDTH - setBits - cache->offsetWidth;
 
 
