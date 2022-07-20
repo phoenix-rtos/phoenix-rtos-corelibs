@@ -198,7 +198,7 @@ uint64_t cache_genMask(int numBits)
 }
 
 
-cachetable_t *cache_create()
+cachetable_t *cache_create(void)
 {
 	int i = 0, j = 0;
 
