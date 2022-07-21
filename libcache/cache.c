@@ -13,6 +13,7 @@
 
 #include "cache.h"
 
+#include <sys/list.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
@@ -20,18 +21,22 @@
 
 
 /* Line of cache */
-typedef struct _cacheline_t {
+typedef struct _cacheline_t cacheline_t;
+
+struct _cacheline_t {
 	uint64_t tag;
 	uint32_t *data;
 	unsigned char isValid;
-} cacheline_t;
+	cacheline_t *prev, *next; /* Circular doubly linked list */
+};
 
 
 /* Set of cache */
 typedef struct _cacheset_t {
-	cacheline_t **timestamps;
+	cacheline_t *timestamps;
 	cacheline_t **tags;
 	cacheline_t lines[LIBCACHE_NUM_WAYS];
+	int count;
 } cacheset_t;
 
 
@@ -50,7 +55,6 @@ struct _cachetable_t {
 void cache_freeSet(cacheset_t *cacheSet)
 {
 	free(cacheSet->tags);
-	free(cacheSet->timestamps);
 
 	free(cacheSet);
 }
@@ -65,11 +69,11 @@ cacheset_t *cache_createSet(void)
 		return NULL;
 	}
 
-	cacheSet->timestamps = calloc(LIBCACHE_NUM_WAYS, sizeof(cacheline_t *));
+	cacheSet->timestamps = NULL;
 	cacheSet->tags = calloc(LIBCACHE_NUM_WAYS, sizeof(cacheline_t *));
 	memset(cacheSet->lines, 0, sizeof(cacheSet->lines));
 
-	if (cacheSet->timestamps == NULL || cacheSet->tags == NULL) {
+	if (cacheSet->tags == NULL) {
 		cache_freeSet(cacheSet);
 		return NULL;
 	}
@@ -115,11 +119,10 @@ int cache_compareTags(const void *lhs, const void *rhs)
 void cache_addToSet(cacheset_t *cacheSet, cacheline_t *cacheLine)
 {
 	int i = 0;
-	cacheline_t *oldest = NULL, **linePtr = NULL, *temp = NULL;
+	cacheline_t **linePtr = NULL, *temp = NULL;
+	cacheline_t *oldest = NULL;
 
-	oldest = cacheSet->timestamps[0];
-
-	if (oldest == NULL) {
+	if (cacheSet->count < LIBCACHE_NUM_WAYS) {
 		for (i = 0; i < LIBCACHE_NUM_WAYS; ++i) {
 			if (cacheSet->lines[i].isValid != '1') {
 				cacheSet->lines[i] = *cacheLine;
@@ -137,6 +140,8 @@ void cache_addToSet(cacheset_t *cacheSet, cacheline_t *cacheLine)
 		}
 	}
 	else {
+		oldest = cacheSet->timestamps->prev;
+
 		for (i = 0; i < LIBCACHE_NUM_WAYS; ++i) {
 			if (cacheSet->lines[i].tag == oldest->tag) {
 				cacheSet->lines[i] = *cacheLine;
@@ -149,13 +154,13 @@ void cache_addToSet(cacheset_t *cacheSet, cacheline_t *cacheLine)
 		linePtr = bsearch(&oldest, cacheSet->tags, LIBCACHE_NUM_WAYS, sizeof(cacheline_t *), cache_compareTags);
 
 		*linePtr = cacheLine;
+
+		LIST_REMOVE(&cacheSet->timestamps, oldest);
+		cacheSet->count--;
 	}
 
-	for (; i < LIBCACHE_NUM_WAYS - 1; ++i) {
-		cacheSet->timestamps[i] = cacheSet->timestamps[i + 1];
-	}
-
-	cacheSet->timestamps[LIBCACHE_NUM_WAYS - 1] = temp;
+	LIST_ADD(&cacheSet->timestamps, temp);
+	cacheSet->count++;
 
 	qsort(cacheSet->tags, LIBCACHE_NUM_WAYS, sizeof(cacheline_t *), cache_compareTags);
 }
@@ -164,7 +169,6 @@ void cache_addToSet(cacheset_t *cacheSet, cacheline_t *cacheLine)
 /* Search a line of cache in a cache set */
 uint32_t *cache_searchInSet(cacheset_t *cacheSet, uint64_t tag)
 {
-	int i = 0, found = 0;
 	uint32_t *ret = NULL;
 	cacheline_t key, *keyPtr = &key, **linePtr = NULL;
 
@@ -175,16 +179,8 @@ uint32_t *cache_searchInSet(cacheset_t *cacheSet, uint64_t tag)
 	if (linePtr != NULL) {
 		ret = (*linePtr)->data;
 
-		for (i = 0; i < LIBCACHE_NUM_WAYS - 1; ++i) {
-			if (cacheSet->timestamps[i] == *linePtr) {
-				found = 1;
-			}
-			if (found == 1) {
-				cacheSet->timestamps[i] = cacheSet->timestamps[i + 1];
-			}
-		}
-
-		cacheSet->timestamps[LIBCACHE_NUM_WAYS - 1] = *linePtr;
+		LIST_REMOVE(&cacheSet->timestamps, *linePtr);
+		LIST_ADD(&cacheSet->timestamps, *linePtr);
 	}
 
 	return ret;
@@ -225,7 +221,6 @@ cachetable_t *cache_create(void)
 
 		if (set == NULL) {
 			for (; j < i; ++j) {
-				free(cache->sets[j].timestamps);
 				free(cache->sets[j].tags);
 			}
 
@@ -234,6 +229,8 @@ cachetable_t *cache_create(void)
 		}
 
 		cache->sets[i] = *set;
+
+		cache->sets[i].count = 0;
 
 		free(set);
 	}
