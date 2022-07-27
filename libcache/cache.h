@@ -18,10 +18,9 @@
 #include <stdint.h>
 
 
-enum {
-	WRITE_BACK = 0,
-	WRITE_THROUGH = 1
-};
+/* Cache write policies */
+#define LIBCACHE_WRITE_BACK 0
+#define LIBCACHE_WRITE_THROUGH 1
 
 
 typedef struct cachectx_s cachectx_t;
