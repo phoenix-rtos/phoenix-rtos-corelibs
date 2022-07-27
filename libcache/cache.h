@@ -18,6 +18,12 @@
 #include <stdint.h>
 
 
+enum {
+	WRITE_BACK = 0,
+	WRITE_THROUGH = 1
+};
+
+
 typedef struct cachectx_s cachectx_t;
 
 
@@ -27,7 +33,7 @@ typedef ssize_t (*cache_readCb_t)(off_t offset, void *buffer, size_t size, size_
 typedef ssize_t (*cache_writeCb_t)(off_t offset, const void *buffer, size_t size, size_t count);
 
 
-cachectx_t *cache_init(size_t size, size_t lineSize, cache_writeCb_t writeCb, cache_readCb_t readCb);
+cachectx_t *cache_init(size_t size, size_t lineSize, cache_writeCb_t writeCb, cache_readCb_t readCb, int policy);
 
 
 int cache_deinit(cachectx_t *cache);

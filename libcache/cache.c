@@ -61,6 +61,8 @@ struct cachectx_s {
 
 	cache_readCb_t readCb;
 	cache_writeCb_t writeCb;
+
+	int policy;
 };
 
 
@@ -92,7 +94,7 @@ uint64_t cache_genMask(int numBits)
 }
 
 
-cachectx_t *cache_init(size_t size, size_t lineSize, cache_writeCb_t writeCb, cache_readCb_t readCb)
+cachectx_t *cache_init(size_t size, size_t lineSize, cache_writeCb_t writeCb, cache_readCb_t readCb, int policy)
 {
 	int i = 0, j = 0;
 	cacheset_t *set = NULL;
@@ -150,6 +152,8 @@ cachectx_t *cache_init(size_t size, size_t lineSize, cache_writeCb_t writeCb, ca
 	cache->readCb = readCb;
 	cache->writeCb = writeCb;
 
+	cache->policy = policy;
+
 	return cache;
 }
 
@@ -204,7 +208,7 @@ int cache_compareTags(const void *lhs, const void *rhs)
 }
 
 
-ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cacheline_t *line, const off_t offset)
+ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cacheline_t *line, const off_t offset, int policy)
 {
 	int i = 0;
 	ssize_t wrt = 0;
@@ -218,8 +222,16 @@ ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cacheline_t *
 			}
 		}
 
-		set->lines[i].isDirty = '1';
 		temp = &(set->lines[i]);
+
+		/* write-through */
+		if (policy) {
+			wrt = (*writeCb)(offset, temp->data, sizeof *(temp->data), 1);
+		}
+		/* write-back */
+		else {
+			set->lines[i].isDirty = '1';
+		}
 
 		for (i = 0; i < LIBCACHE_NUM_WAYS; ++i) {
 			if (set->tags[i] == NULL) {
@@ -235,6 +247,7 @@ ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cacheline_t *
 		oldest = set->timestamps;
 		LIST_REMOVE(&set->timestamps, oldest);
 
+		/* write-back */
 		if (oldest->isDirty == '1') {
 			wrt = (*writeCb)(offset, oldest->data, sizeof *(oldest->data), 1);
 		}
@@ -246,7 +259,14 @@ ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cacheline_t *
 			}
 		}
 
-		set->lines[i].isDirty = '1';
+		/* write-through */
+		if (policy) {
+			wrt = (*writeCb)(offset, oldest->data, sizeof *(oldest->data), 1);
+		}
+		/* write-back */
+		else {
+			set->lines[i].isDirty = '1';
+		}
 
 		LIST_ADD(&set->timestamps, oldest);
 	}
@@ -291,7 +311,7 @@ ssize_t cache_write(cachectx_t *cache, const off_t addr, void *buffer)
 
 	cacheline_t line = { tag, data, '1', '0' };
 
-	return cache_writeToSet(cache->writeCb, &cache->sets[setIndex], &line, offset);
+	return cache_writeToSet(cache->writeCb, &cache->sets[setIndex], &line, offset, cache->policy);
 }
 
 
@@ -314,7 +334,7 @@ ssize_t cache_read(cachectx_t *cache, const off_t addr, void *buffer)
 	if (ret == NULL) {
 		cache->readCb(offset, data, sizeof *data, 1);
 		printf("data read by callback: %u\n", *data);
-		wrt = cache_write(cache, addr, buffer);
+		wrt = cache_write(cache, addr, data);
 
 		ret = cache_readFromSet(&cache->sets[setIndex], tag, offset);
 	}
