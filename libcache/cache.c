@@ -13,8 +13,8 @@
 
 #include "cache.h"
 
-#include <sys/list.h>
-// #include "list.h"
+// #include <sys/list.h>
+#include "list.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -25,21 +25,42 @@
 #define LIBCACHE_ADDR_WIDTH 64
 
 
+#define IS_VALID(f) (((f) & (1 << 0)) != 0 ? 1 : 0)
+#define IS_DIRTY(f) (((f) & (1 << 1)) != 0 ? 1 : 0)
+
+#define SET_VALID(f) \
+	do { \
+		(f) |= (1 << 0); \
+	} while (0)
+#define CLEAR_VALID \
+	do { \
+		(f) &= ~(1 << 0); \
+	} while (0)
+
+#define SET_DIRTY(f) \
+	do { \
+		(f) |= (1 << 1); \
+	} while (0)
+#define CLEAR_DIRTY \
+	do { \
+		(f) &= ~(1 << 1); \
+	} while (0)
+
+
 typedef struct cacheline_s cacheline_t;
 
 
 struct cacheline_s {
 	uint64_t tag;
 	uint32_t *data;
-	unsigned char isValid;
-	unsigned char isDirty;
+	unsigned char flags;
 	cacheline_t *prev, *next; /* Circular doubly linked list */
 };
 
 
 typedef struct cacheset_s {
 	cacheline_t *timestamps;
-	cacheline_t **tags;
+	cacheline_t *tags[LIBCACHE_NUM_WAYS];
 	cacheline_t lines[LIBCACHE_NUM_WAYS];
 	size_t count;
 } cacheset_t;
@@ -64,31 +85,20 @@ struct cachectx_s {
 };
 
 
-cacheset_t *cache_setInit(void)
+void cache_setInit(cacheset_t *set)
 {
-	cacheset_t *set = malloc(sizeof(cacheset_t));
-
-	if (set == NULL) {
-		return NULL;
-	}
-
 	set->timestamps = NULL;
-	set->tags = calloc(LIBCACHE_NUM_WAYS, sizeof(cacheline_t *));
+	memset(set->tags, 0, sizeof(set->tags));
 	memset(set->lines, 0, sizeof(set->lines));
 
-	if (set->tags == NULL) {
-		free(set);
-		return NULL;
-	}
-
-	return set;
+	set->count = 0;
 }
 
 
 /* Generates mask of type uint64_t with numBits set to 1 */
 uint64_t cache_genMask(int numBits)
 {
-	return ((uint64_t)1 << (uint64_t)numBits) - (uint64_t)1;
+	return ((uint64_t)1 << numBits) - (uint64_t)1;
 }
 
 
@@ -121,22 +131,7 @@ cachectx_t *cache_init(size_t size, size_t lineSize, cache_writeCb_t writeCb, ca
 	}
 
 	for (; i < cache->numSets; ++i) {
-		set = cache_setInit();
-
-		if (set == NULL) {
-			for (; j < i; ++j) {
-				free(cache->sets[j].tags);
-			}
-			free(cache->sets);
-			free(cache);
-
-			return NULL;
-		}
-		cache->sets[i] = *set;
-
-		cache->sets[i].count = 0;
-
-		free(set);
+		cache_setInit(&cache->sets[i]);
 	}
 
 	cache->offBitNum = log2(lineSize);
@@ -156,14 +151,6 @@ cachectx_t *cache_init(size_t size, size_t lineSize, cache_writeCb_t writeCb, ca
 
 int cache_deinit(cachectx_t *cache)
 {
-	int i = 0;
-
-	for (; i < cache->numSets; ++i) {
-		if (cache->sets != NULL) {
-			free(cache->sets[i].tags);
-		}
-	}
-
 	free(cache->sets);
 
 	free(cache);
@@ -206,13 +193,13 @@ int cache_compareTags(const void *lhs, const void *rhs)
 
 ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cacheline_t *line, const off_t offset, int policy)
 {
-	int i = 0;
+	int i, j;
 	ssize_t wrt = 0;
-	cacheline_t *temp = NULL, *oldest = NULL, **linePtr = NULL;
+	cacheline_t *temp = NULL, **linePtr = NULL;
 
 	if (set->count < LIBCACHE_NUM_WAYS) {
-		for (; i < LIBCACHE_NUM_WAYS; ++i) {
-			if (set->lines[i].isValid != '1') {
+		for (i = 0; i < LIBCACHE_NUM_WAYS; ++i) {
+			if (!IS_VALID(set->lines[i].flags)) {
 				set->lines[i] = *line;
 				break;
 			}
@@ -220,25 +207,9 @@ ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cacheline_t *
 
 		temp = &(set->lines[i]);
 
-		switch (policy) {
-			case 0: {
-				/* write-back */
-				set->lines[i].isDirty = '1';
-				break;
-			}
-			case 1: {
-				/* write-through */
-				wrt = (*writeCb)(offset, temp->data, sizeof *(temp->data), 1);
-				break;
-			}
-			default: {
-				break;
-			}
-		}
-
-		for (i = 0; i < LIBCACHE_NUM_WAYS; ++i) {
-			if (set->tags[i] == NULL) {
-				set->tags[i] = temp;
+		for (j = 0; j < LIBCACHE_NUM_WAYS; ++j) {
+			if (set->tags[j] == NULL) {
+				set->tags[j] = temp;
 				break;
 			}
 		}
@@ -247,39 +218,37 @@ ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cacheline_t *
 		set->count++;
 	}
 	else {
-		oldest = set->timestamps;
-		LIST_REMOVE(&set->timestamps, oldest);
+		temp = set->timestamps;
+		LIST_REMOVE(&set->timestamps, temp);
 
 		/* write-back */
-		if (oldest->isDirty == '1') {
-			wrt = (*writeCb)(offset, oldest->data, sizeof *(oldest->data), 1);
+		if (IS_DIRTY(temp->flags)) {
+			wrt = (*writeCb)(offset, temp->data, sizeof(*temp->data), 1);
 		}
 
-		for (; i < LIBCACHE_NUM_WAYS; ++i) {
-			if (set->lines[i].tag == oldest->tag) {
+		for (i = 0; i < LIBCACHE_NUM_WAYS; ++i) {
+			if (set->lines[i].tag == temp->tag) {
 				set->lines[i] = *line;
 				break;
 			}
 		}
 
-		switch (policy) {
-			case 0: {
-				/* write-back */
-				set->lines[i].isDirty = '1';
-				break;
-			}
-			case 1: {
-				/* write-through */
-				wrt = (*writeCb)(offset, oldest->data, sizeof *(oldest->data), 1);
-				break;
-			}
-			default: {
-				break;
-			}
-		}
-
-		LIST_ADD(&set->timestamps, oldest);
+		LIST_ADD(&set->timestamps, temp);
 	}
+
+	switch (policy) {
+		case 0:
+			/* write-back */
+			SET_DIRTY(set->lines[i].flags);
+			break;
+		case 1:
+			/* write-through */
+			wrt = (*writeCb)(offset, temp->data, sizeof(*temp->data), 1);
+			break;
+		default:
+			break;
+	}
+
 	qsort(set->tags, LIBCACHE_NUM_WAYS, sizeof(cacheline_t *), cache_compareTags);
 
 	return wrt;
@@ -309,6 +278,7 @@ uint32_t *cache_readFromSet(cacheset_t *set, uint64_t tag, off_t offset)
 ssize_t cache_write(cachectx_t *cache, const off_t addr, void *buffer, int policy)
 {
 	ssize_t wrt = 0;
+	unsigned char flags = 0;
 	uint32_t *data = (uint32_t *)buffer;
 
 	off_t setIndex = (addr >> cache->offBitNum) & cache->setMask;
@@ -319,7 +289,9 @@ ssize_t cache_write(cachectx_t *cache, const off_t addr, void *buffer, int polic
 	printf("addr: %lu\n", addr);
 	printf("tag: %lu\n", tag);
 
-	cacheline_t line = { tag, data, '1', '0' };
+	SET_VALID(flags);
+
+	cacheline_t line = { tag, data, flags };
 
 	return cache_writeToSet(cache->writeCb, &cache->sets[setIndex], &line, offset, policy);
 }
@@ -342,15 +314,13 @@ ssize_t cache_read(cachectx_t *cache, const off_t addr, void *buffer)
 
 	/* cache miss */
 	if (ret == NULL) {
-		cache->readCb(offset, data, sizeof *data, 1);
+		cache->readCb(offset, data, sizeof(*data), 1);
 		printf("data read by callback: %u\n", *data);
 
 		wrt = cache_write(cache, addr, data, -1);
-
-		ret = cache_readFromSet(&cache->sets[setIndex], tag, offset);
 	}
 	/* cache hit */
-	*data = *ret;
+	// *data = *ret;
 	printf("data: %u\n", *data);
 
 	return wrt;

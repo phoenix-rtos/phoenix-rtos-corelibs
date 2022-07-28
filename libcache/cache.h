@@ -19,7 +19,7 @@
 
 
 /* Cache write policies */
-#define LIBCACHE_WRITE_BACK 0
+#define LIBCACHE_WRITE_BACK    0
 #define LIBCACHE_WRITE_THROUGH 1
 
 
