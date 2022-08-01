@@ -88,7 +88,7 @@ struct cachectx_s {
 };
 
 
-void cache_setInit(cacheset_t *set)
+static void cache_setInit(cacheset_t *set)
 {
 	set->timestamps = NULL;
 	memset(set->tags, 0, sizeof(set->tags));
@@ -99,7 +99,7 @@ void cache_setInit(cacheset_t *set)
 
 
 /* Generates mask of type uint64_t with numBits set to 1 */
-uint64_t cache_genMask(int numBits)
+static uint64_t cache_genMask(int numBits)
 {
 	return ((uint64_t)1 << numBits) - (uint64_t)1;
 }
@@ -173,7 +173,7 @@ int cache_deinit(cachectx_t *cache)
 }
 
 
-int cache_compareTags(const void *lhs, const void *rhs)
+static int cache_compareTags(const void *lhs, const void *rhs)
 {
 	int ret = 0;
 
@@ -205,7 +205,7 @@ int cache_compareTags(const void *lhs, const void *rhs)
 }
 
 
-ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cacheline_t *line, const uint64_t offset, size_t count, int policy)
+static ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cacheline_t *line, const uint64_t offset, size_t count, int policy)
 {
 	int i, j;
 	ssize_t written = 0;
@@ -271,7 +271,7 @@ ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cacheline_t *
 }
 
 
-void *cache_readFromSet(cacheset_t *set, uint64_t tag, uint64_t offset)
+static void *cache_readFromSet(cacheset_t *set, uint64_t tag, uint64_t offset)
 {
 	unsigned char *buf = NULL;
 	cacheline_t key, *keyPtr = &key, **linePtr = NULL;
@@ -291,19 +291,19 @@ void *cache_readFromSet(cacheset_t *set, uint64_t tag, uint64_t offset)
 }
 
 
-uint64_t cache_compOffset(const cachectx_t *cache, const uint64_t addr)
+static uint64_t cache_compOffset(const cachectx_t *cache, const uint64_t addr)
 {
 	return addr & cache->offMask;
 }
 
 
-uint64_t cache_compSet(const cachectx_t *cache, const uint64_t addr)
+static uint64_t cache_compSet(const cachectx_t *cache, const uint64_t addr)
 {
 	return (addr >> cache->offBitNum) & cache->setMask;
 }
 
 
-uint64_t cache_compTag(const cachectx_t *cache, const uint64_t addr)
+static uint64_t cache_compTag(const cachectx_t *cache, const uint64_t addr)
 {
 	return (addr >> (cache->offBitNum + cache->setBitsNum)) & cache->tagMask;
 }
@@ -341,7 +341,7 @@ ssize_t cache_write(cachectx_t *cache, const uint64_t addr, void *buffer, size_t
 }
 
 
-ssize_t cache_readOnMiss(cachectx_t *cache, const uint64_t addr, const uint64_t offset, void *buffer, size_t position, size_t count)
+static ssize_t cache_readOnMiss(cachectx_t *cache, const uint64_t addr, const uint64_t offset, void *buffer, size_t position, size_t count)
 {
 	ssize_t read = 0, written = 0;
 	void *temp = NULL;
