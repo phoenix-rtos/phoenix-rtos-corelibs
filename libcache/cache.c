@@ -17,10 +17,9 @@
 // #include "list.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <math.h>
 #include <errno.h>
 #include <string.h>
-#include <assert.h>
+
 
 #define LIBCACHE_NUM_WAYS   4
 #define LIBCACHE_ADDR_WIDTH 64
@@ -46,6 +45,9 @@
 	do { \
 		(f) &= ~(1 << 1); \
 	} while (0)
+
+
+#define LOG2(x) ((uint8_t)(8 * sizeof(unsigned long) - __builtin_clzl((x)) - 1))
 
 
 typedef struct cacheline_s cacheline_t;
@@ -79,9 +81,9 @@ struct cachectx_s {
 	uint64_t setMask;
 	uint64_t offMask;
 
-	uint64_t offBitNum;
-	uint64_t setBitsNum;
-	uint64_t tagBitsNum;
+	uint8_t offBitsNum;
+	uint8_t setBitsNum;
+	uint8_t tagBitsNum;
 
 	cache_readCb_t readCb;
 	cache_writeCb_t writeCb;
@@ -90,18 +92,15 @@ struct cachectx_s {
 
 static void cache_setInit(cacheset_t *set)
 {
-	set->timestamps = NULL;
-	memset(set->tags, 0, sizeof(set->tags));
-	memset(set->lines, 0, sizeof(set->lines));
-
 	set->count = 0;
+	memset(set, 0, sizeof(*set));
 }
 
 
 /* Generates mask of type uint64_t with numBits set to 1 */
 static uint64_t cache_genMask(int numBits)
 {
-	return ((uint64_t)1 << numBits) - (uint64_t)1;
+	return ((uint64_t)1 << numBits) - 1;
 }
 
 
@@ -109,16 +108,20 @@ cachectx_t *cache_init(size_t size, size_t lineSize, cache_writeCb_t writeCb, ca
 {
 	int i = 0, j = 0;
 	cacheset_t *set = NULL;
+	cachectx_t *cache = NULL;
 
-	cachectx_t *cache = malloc(sizeof(cachectx_t));
-
-	if (cache == NULL) {
+	if (size == 0 || lineSize == 0 || size < lineSize) {
 		return NULL;
 	}
 
 	if (size % lineSize != 0 || size % LIBCACHE_NUM_WAYS != 0) {
 		fprintf(stderr, "Invalid size parameters: size in bytes must be multiple of lineSize and multiple of %d\n", LIBCACHE_NUM_WAYS);
-		free(cache);
+		return NULL;
+	}
+
+	cache = malloc(sizeof(cachectx_t));
+
+	if (cache == NULL) {
 		return NULL;
 	}
 
@@ -138,13 +141,13 @@ cachectx_t *cache_init(size_t size, size_t lineSize, cache_writeCb_t writeCb, ca
 		cache_setInit(&cache->sets[i]);
 	}
 
-	cache->offBitNum = log2(cache->lineSize);
-	cache->setBitsNum = log2(cache->numSets);
-	cache->tagBitsNum = LIBCACHE_ADDR_WIDTH - cache->setBitsNum - cache->offBitNum;
+	cache->offBitsNum = LOG2(cache->lineSize);
+	cache->setBitsNum = LOG2(cache->numSets);
+	cache->tagBitsNum = LIBCACHE_ADDR_WIDTH - cache->setBitsNum - cache->offBitsNum;
 
 	cache->tagMask = cache_genMask(cache->tagBitsNum);
 	cache->setMask = cache_genMask(cache->setBitsNum);
-	cache->offMask = cache_genMask(cache->offBitNum);
+	cache->offMask = cache_genMask(cache->offBitsNum);
 
 	cache->readCb = readCb;
 	cache->writeCb = writeCb;
@@ -212,7 +215,9 @@ static ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cachel
 	cacheline_t *temp = NULL, **linePtr = NULL;
 
 	if (set->count < LIBCACHE_NUM_WAYS) {
-		for (i = 0; i < LIBCACHE_NUM_WAYS; ++i) {
+		set->count++;
+
+		for (i = 0; i < set->count; ++i) {
 			if (!IS_VALID(set->lines[i].flags)) {
 				set->lines[i] = *line;
 				break;
@@ -221,7 +226,7 @@ static ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cachel
 
 		temp = &(set->lines[i]);
 
-		for (j = 0; j < LIBCACHE_NUM_WAYS; ++j) {
+		for (j = 0; j < set->count; ++j) {
 			if (set->tags[j] == NULL) {
 				set->tags[j] = temp;
 				break;
@@ -229,7 +234,6 @@ static ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cachel
 		}
 
 		LIST_ADD(&set->timestamps, temp);
-		set->count++;
 	}
 	else {
 		temp = set->timestamps;
@@ -241,7 +245,7 @@ static ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cachel
 			free(temp->data);
 		}
 
-		for (i = 0; i < LIBCACHE_NUM_WAYS; ++i) {
+		for (i = 0; i < set->count; ++i) {
 			if (IS_VALID(set->lines[i].flags) && (set->lines[i].tag == temp->tag)) {
 				set->lines[i] = *line;
 				break;
@@ -299,13 +303,13 @@ static uint64_t cache_compOffset(const cachectx_t *cache, const uint64_t addr)
 
 static uint64_t cache_compSet(const cachectx_t *cache, const uint64_t addr)
 {
-	return (addr >> cache->offBitNum) & cache->setMask;
+	return (addr >> cache->offBitsNum) & cache->setMask;
 }
 
 
 static uint64_t cache_compTag(const cachectx_t *cache, const uint64_t addr)
 {
-	return (addr >> (cache->offBitNum + cache->setBitsNum)) & cache->tagMask;
+	return (addr >> (cache->offBitsNum + cache->setBitsNum)) & cache->tagMask;
 }
 
 
@@ -349,8 +353,6 @@ static ssize_t cache_readOnMiss(cachectx_t *cache, const uint64_t addr, const ui
 	temp = calloc(cache->lineSize, sizeof(unsigned char));
 
 	read = cache->readCb(addr, temp, sizeof(*temp), cache->lineSize);
-
-	assert(read == cache->lineSize);
 
 	written = cache_write(cache, addr, temp, cache->lineSize, -1);
 
