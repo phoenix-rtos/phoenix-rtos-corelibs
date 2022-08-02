@@ -41,7 +41,7 @@ int cache_deinit(cachectx_t *cache);
 ssize_t cache_read(cachectx_t *cache, uint64_t addr, void *buffer, size_t count);
 
 
-ssize_t cache_write(cachectx_t *cache, const uint64_t addr, void *buffer, size_t count, int policy);
+ssize_t cache_write(cachectx_t *cache, uint64_t addr, void *buffer, size_t count, int policy);
 
 
 int cache_flush(cachectx_t *cache, const uint64_t begAddr, const uint64_t endAddr);
