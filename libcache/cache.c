@@ -114,8 +114,7 @@ cachectx_t *cache_init(size_t size, size_t lineSize, cache_writeCb_t writeCb, ca
 		return NULL;
 	}
 
-	if (size % lineSize != 0 || size % LIBCACHE_NUM_WAYS != 0) {
-		fprintf(stderr, "Invalid size parameters: size in bytes must be multiple of lineSize and multiple of %d\n", LIBCACHE_NUM_WAYS);
+	if (size % lineSize != 0 || (size / lineSize) % LIBCACHE_NUM_WAYS != 0) {
 		return NULL;
 	}
 
