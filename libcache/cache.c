@@ -386,10 +386,8 @@ ssize_t cache_write(cachectx_t *cache, uint64_t addr, void *buffer, size_t count
 		}
 		else {
 			linePtr = cache_updateTimestamps(&cache->sets[index], tag);
-			dest = (unsigned char *)data + offset;
+			dest = (unsigned char *)linePtr->data + offset;
 			memcpy(dest, buffer + position, pieceSize);
-
-			linePtr->data = data;
 
 			ret = cache_executePolicy(cache->writeCb, linePtr, addr, cache->lineSize, policy);
 
@@ -458,9 +456,11 @@ ssize_t cache_read(cachectx_t *cache, uint64_t addr, void *buffer, size_t count)
 		}
 		else if (left == remainder) {
 			pieceSize = remainder;
+			offset = 0;
 		}
 		else {
 			pieceSize = cache->lineSize;
+			offset = 0;
 		}
 
 		data = cache_readFromSet(&cache->sets[index], tag, offset);
