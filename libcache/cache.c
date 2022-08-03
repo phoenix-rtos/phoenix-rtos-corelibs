@@ -90,13 +90,6 @@ struct cachectx_s {
 };
 
 
-static void cache_setInit(cacheset_t *set)
-{
-	set->count = 0;
-	memset(set, 0, sizeof(*set));
-}
-
-
 /* Generates mask of type uint64_t with numBits set to 1 */
 static uint64_t cache_genMask(int numBits)
 {
@@ -134,10 +127,6 @@ cachectx_t *cache_init(size_t size, size_t lineSize, cache_writeCb_t writeCb, ca
 	if (cache->sets == NULL) {
 		free(cache);
 		return NULL;
-	}
-
-	for (; i < cache->numSets; ++i) {
-		cache_setInit(&cache->sets[i]);
 	}
 
 	cache->offBitsNum = LOG2(cache->lineSize);
