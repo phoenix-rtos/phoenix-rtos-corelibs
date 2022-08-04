@@ -99,8 +99,6 @@ static uint64_t cache_genMask(int numBits)
 
 cachectx_t *cache_init(size_t size, size_t lineSize, cache_writeCb_t writeCb, cache_readCb_t readCb)
 {
-	int i = 0, j = 0;
-	cacheset_t *set = NULL;
 	cachectx_t *cache = NULL;
 
 	if (size == 0 || lineSize == 0 || size < lineSize) {
@@ -227,7 +225,7 @@ static ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cachel
 {
 	int i, j;
 	ssize_t written = 0;
-	cacheline_t *temp = NULL, **linePtr = NULL;
+	cacheline_t *temp = NULL;
 
 	if (set->count < LIBCACHE_NUM_WAYS) {
 		set->count++;
@@ -552,7 +550,6 @@ int cache_invalidate(cachectx_t *cache, const uint64_t begAddr, const uint64_t e
 {
 	uint64_t addr = 0, tag = 0, index = 0, begOffset = 0, endOffset = 0;
 	cacheline_t *linePtr = NULL;
-	cacheset_t *set;
 
 	if (begAddr > endAddr) {
 		return -1;
