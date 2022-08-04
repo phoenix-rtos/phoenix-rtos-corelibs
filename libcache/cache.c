@@ -339,7 +339,13 @@ ssize_t cache_write(cachectx_t *cache, uint64_t addr, void *buffer, size_t count
 	size_t pieceSize, left = 0, remainder = 0;
 	cacheline_t line, *linePtr;
 
-	/* TODO: add argument checks */
+	if (cache == NULL || buffer == NULL) {
+		return -1;
+	}
+
+	if (count == 0) {
+		return 0;
+	}
 
 	offset = cache_compOffset(cache, addr);
 
@@ -434,7 +440,13 @@ ssize_t cache_read(cachectx_t *cache, uint64_t addr, void *buffer, size_t count)
 	uint64_t index = 0, offset = 0, tag = 0;
 	size_t pieceSize, left = 0, remainder = 0;
 
-	/* TODO: add argument checks */
+	if (cache == NULL || buffer == NULL) {
+		return -1;
+	}
+
+	if (count == 0) {
+		return 0;
+	}
 
 	offset = cache_compOffset(cache, addr);
 
