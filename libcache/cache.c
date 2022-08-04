@@ -388,7 +388,7 @@ ssize_t cache_write(cachectx_t *cache, uint64_t addr, void *buffer, size_t count
 			line.flags = flags;
 			line.offset = offset;
 
-			position += cache_writeToSet(cache->writeCb, &cache->sets[index], &line, addr, pieceSize / sizeof(*data), policy);
+			position += cache_writeToSet(cache->writeCb, &cache->sets[index], &line, addr, pieceSize / sizeof(*data), -1);
 		}
 		else {
 			linePtr = cache_updateTimestamps(&cache->sets[index], tag);
