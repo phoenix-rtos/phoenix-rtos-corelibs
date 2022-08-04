@@ -277,7 +277,7 @@ static ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cachel
 }
 
 
-static cacheline_t *cache_updateTimestamps(cacheset_t *set, uint64_t tag)
+static cacheline_t *cache_findLine(cacheset_t *set, uint64_t tag)
 {
 	cacheline_t key, *keyPtr = &key, **linePtr = NULL;
 
@@ -285,11 +285,21 @@ static cacheline_t *cache_updateTimestamps(cacheset_t *set, uint64_t tag)
 
 	linePtr = bsearch(&keyPtr, set->tags, LIBCACHE_NUM_WAYS, sizeof(cacheline_t *), cache_compareTags);
 
-	if (linePtr != NULL) {
-		LIST_REMOVE(&set->timestamps, *linePtr);
-		LIST_ADD(&set->timestamps, *linePtr);
+	return (linePtr != NULL) ? *linePtr : NULL;
+}
 
-		return *linePtr;
+
+static cacheline_t *cache_updateTimestamps(cacheset_t *set, uint64_t tag)
+{
+	cacheline_t *linePtr = NULL;
+
+	linePtr = cache_findLine(set, tag);
+
+	if (linePtr != NULL) {
+		LIST_REMOVE(&set->timestamps, linePtr);
+		LIST_ADD(&set->timestamps, linePtr);
+
+		return linePtr;
 	}
 
 	return NULL;
@@ -298,16 +308,11 @@ static cacheline_t *cache_updateTimestamps(cacheset_t *set, uint64_t tag)
 
 static void *cache_readFromSet(cacheset_t *set, uint64_t tag, uint64_t offset)
 {
-	unsigned char *buf = NULL;
 	cacheline_t *linePtr = NULL;
 
 	linePtr = cache_updateTimestamps(set, tag);
 
-	if (linePtr != NULL) {
-		buf = (unsigned char *)(linePtr)->data + offset;
-	}
-
-	return buf;
+	return (linePtr != NULL) ? (unsigned char *)(linePtr)->data + offset : NULL;
 }
 
 
@@ -500,20 +505,97 @@ ssize_t cache_read(cachectx_t *cache, uint64_t addr, void *buffer, size_t count)
 }
 
 
+/* TODO: add checks, test */
 int cache_flush(cachectx_t *cache, const uint64_t begAddr, const uint64_t endAddr)
 {
+	int ret = 0;
+	size_t written = 0;
+	uint64_t addr = 0, tag = 0, index = 0, begOffset = 0, endOffset = 0;
+	cacheline_t *linePtr = NULL;
+
+	if (begAddr > endAddr) {
+		return -1;
+	}
+
+	begOffset = cache_compOffset(cache, begAddr);
+	endOffset = cache_compOffset(cache, endAddr);
+
+	addr = begAddr - begOffset;
+
+	while (1) {
+		index = cache_compSet(cache, addr);
+		tag = cache_compTag(cache, addr);
+
+		linePtr = cache_findLine(&cache->sets[index], tag);
+
+		if (linePtr != NULL && IS_VALID(linePtr->flags) && IS_DIRTY(linePtr->flags)) {
+			written = cache->writeCb(addr, linePtr->data, sizeof(*(linePtr->data)), cache->lineSize);
+			if (written != cache->lineSize) {
+				ret = -1;
+				break;
+			}
+			CLEAR_DIRTY(linePtr->flags);
+		}
+
+		addr += cache->lineSize;
+
+		if (addr == (endAddr - endOffset + cache->lineSize)) {
+			break;
+		}
+	}
+
+	return ret;
 }
 
 
 int cache_invalidate(cachectx_t *cache, const uint64_t begAddr, const uint64_t endAddr)
 {
+	uint64_t addr = 0, tag = 0, index = 0, begOffset = 0, endOffset = 0;
+	cacheline_t *linePtr = NULL;
+	cacheset_t *set;
+
+	if (begAddr > endAddr) {
+		return -1;
+	}
+
+	begOffset = cache_compOffset(cache, begAddr);
+	endOffset = cache_compOffset(cache, endAddr);
+
+	addr = begAddr - begOffset;
+
+	while (1) {
+		index = cache_compSet(cache, addr);
+		tag = cache_compTag(cache, addr);
+
+		linePtr = cache_findLine(&cache->sets[index], tag);
+
+		if (linePtr != NULL && IS_VALID(linePtr->flags)) {
+			CLEAR_VALID(linePtr->flags);
+			free(linePtr->data);
+			linePtr->data = NULL;
+
+			LIST_REMOVE(cache->sets[index].timestamps, linePtr);
+			if (cache->sets[index].count == 1) {
+				cache->sets[index].timestamps = NULL;
+			}
+			cache->sets[index].count -= 1;
+		}
+
+		addr += cache->lineSize;
+
+		if (addr == (endAddr - endOffset + cache->lineSize)) {
+			break;
+		}
+	}
+
+	return 0;
 }
 
 
 #ifdef CACHE_DEBUG
 void cache_print(cachectx_t *cache)
 {
-	int i, j;
+	int i, j, valid, dirty;
 	unsigned char *data = NULL;
 	uint64_t offset;
 
@@ -521,6 +603,7 @@ void cache_print(cachectx_t *cache)
 	for (i = 0; i < cache->numSets; ++i) {
 		printf("set: %2d\n", i);
 		printf("-------\n");
+		printf("\t\t\t\ttag\toffset\tvalid\tdirty\t\t\tdata\n");
 		for (j = 0; j < LIBCACHE_NUM_WAYS; ++j) {
 			if (&cache->sets[i] != NULL) {
 				if (cache->sets[i].lines[j].data == NULL) {
@@ -531,7 +614,11 @@ void cache_print(cachectx_t *cache)
 					offset = cache->sets[i].lines[j].offset;
 					data = (unsigned char *)(cache->sets[i].lines[j].data + offset);
 				}
-				printf("line: %1d\t\t%20lu\t%5li\t%20s\n", j, cache->sets[i].lines[j].tag, offset, data);
+				valid = (IS_VALID(cache->sets[i].lines[j].flags)) ? 1 : 0;
+
+				dirty = (IS_DIRTY(cache->sets[i].lines[j].flags)) ? 1 : 0;
+
+				printf("line: %1d\t\t%20lu\t%5li\t%d\t%d\t%20s\n", j, cache->sets[i].lines[j].tag, offset, valid, dirty, data);
 			}
 		}
 	}
