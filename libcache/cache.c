@@ -194,14 +194,25 @@ static int cache_compareTags(const void *lhs, const void *rhs)
 }
 
 
-static ssize_t cache_executePolicy(cache_writeCb_t writeCb, cacheline_t *linePtr, const uint64_t addr, size_t count, int policy)
+static ssize_t cache_flushLine(cache_writeCb_t writeCb, cacheline_t *linePtr, const uint64_t addr, size_t count)
 {
 	ssize_t written = 0;
 
-	if (IS_DIRTY(linePtr->flags)) {
+	if (linePtr != NULL && IS_VALID(linePtr->flags) && IS_DIRTY(linePtr->flags)) {
 		written = (*writeCb)(addr, linePtr->data, sizeof(*linePtr->data), count);
 		CLEAR_DIRTY(linePtr->flags);
+		if (written != count) {
+			written = -1;
+		}
 	}
+
+	return written;
+}
+
+
+static ssize_t cache_executePolicy(cache_writeCb_t writeCb, cacheline_t *linePtr, const uint64_t addr, size_t count, int policy)
+{
+	ssize_t written = 0;
 
 	switch (policy) {
 		case 0:
@@ -223,7 +234,7 @@ static ssize_t cache_executePolicy(cache_writeCb_t writeCb, cacheline_t *linePtr
 
 static ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cacheline_t *line, const uint64_t offset, size_t count, int policy)
 {
-	int i, j;
+	int i;
 	ssize_t written = 0;
 	cacheline_t *temp = NULL;
 
@@ -239,9 +250,9 @@ static ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cachel
 
 		temp = &(set->lines[i]);
 
-		for (j = 0; j < set->count; ++j) {
-			if (set->tags[j] == NULL) {
-				set->tags[j] = temp;
+		for (i = 0; i < set->count; ++i) {
+			if (set->tags[i] == NULL) {
+				set->tags[i] = temp;
 				break;
 			}
 		}
@@ -254,6 +265,10 @@ static ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cachel
 
 		/* write-back */
 		if (IS_DIRTY(temp->flags)) {
+			written = cache_flushLine(writeCb, temp, offset, count);
+			if (written == -1) {
+				return -1;
+			}
 			free(temp->data);
 		}
 
@@ -346,7 +361,7 @@ ssize_t cache_write(cachectx_t *cache, uint64_t addr, void *buffer, size_t count
 		return -1;
 	}
 
-	if (count == 0) {
+	if (count == 0 || (policy != LIBCACHE_WRITE_BACK && policy != LIBCACHE_WRITE_THROUGH)) {
 		return 0;
 	}
 
@@ -391,10 +406,17 @@ ssize_t cache_write(cachectx_t *cache, uint64_t addr, void *buffer, size_t count
 			line.flags = flags;
 			line.offset = offset;
 
-			position += cache_writeToSet(cache->writeCb, &cache->sets[index], &line, addr, pieceSize / sizeof(*data), -1);
+			position += cache_writeToSet(cache->writeCb, &cache->sets[index], &line, addr, cache->lineSize, -1);
 		}
 		else {
-			linePtr = cache_updateTimestamps(&cache->sets[index], tag);
+			linePtr = cache_findLine(&cache->sets[index], tag);
+
+			ret = cache_flushLine(cache->writeCb, linePtr, addr, cache->lineSize);
+			if (ret == -1) {
+				position = -1;
+				break;
+			}
+
 			dest = (unsigned char *)linePtr->data + offset;
 			memcpy(dest, buffer + position, pieceSize);
 
@@ -526,13 +548,10 @@ int cache_flush(cachectx_t *cache, const uint64_t begAddr, const uint64_t endAdd
 
 		linePtr = cache_findLine(&cache->sets[index], tag);
 
-		if (linePtr != NULL && IS_VALID(linePtr->flags) && IS_DIRTY(linePtr->flags)) {
-			written = cache->writeCb(addr, linePtr->data, sizeof(*(linePtr->data)), cache->lineSize);
-			if (written != cache->lineSize) {
-				ret = -1;
-				break;
-			}
-			CLEAR_DIRTY(linePtr->flags);
+		ret = cache_flushLine(cache->writeCb, linePtr, addr, cache->lineSize);
+
+		if (ret == -1) {
+			break;
 		}
 
 		addr += cache->lineSize;
@@ -543,6 +562,24 @@ int cache_flush(cachectx_t *cache, const uint64_t begAddr, const uint64_t endAdd
 	}
 
 	return ret;
+}
+
+
+static void cache_invalidateLine(cacheset_t *set, cacheline_t *linePtr)
+{
+	if (linePtr != NULL && IS_VALID(linePtr->flags)) {
+		CLEAR_VALID(linePtr->flags);
+		free(linePtr->data);
+		linePtr->data = NULL;
+
+		LIST_REMOVE(set->timestamps, linePtr);
+
+		if (set->count == 1) {
+			set->timestamps = NULL;
+		}
+
+		set->count -= 1;
+	}
 }
 
 
@@ -566,17 +603,7 @@ int cache_invalidate(cachectx_t *cache, const uint64_t begAddr, const uint64_t e
 
 		linePtr = cache_findLine(&cache->sets[index], tag);
 
-		if (linePtr != NULL && IS_VALID(linePtr->flags)) {
-			CLEAR_VALID(linePtr->flags);
-			free(linePtr->data);
-			linePtr->data = NULL;
-
-			LIST_REMOVE(cache->sets[index].timestamps, linePtr);
-			if (cache->sets[index].count == 1) {
-				cache->sets[index].timestamps = NULL;
-			}
-			cache->sets[index].count -= 1;
-		}
+		cache_invalidateLine(&cache->sets[index], linePtr);
 
 		addr += cache->lineSize;
 
