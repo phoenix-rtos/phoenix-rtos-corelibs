@@ -25,6 +25,10 @@
 #define LIBCACHE_ADDR_WIDTH 64
 
 
+#define LIBCACHE_TIMESTAMPS_UPDATE    1
+#define LIBCACHE_TIMESTAMPS_NO_UPDATE 0
+
+
 #define IS_VALID(f) (((f) & (1 << 0)) != 0 ? 1 : 0)
 #define IS_DIRTY(f) (((f) & (1 << 1)) != 0 ? 1 : 0)
 
@@ -55,14 +59,14 @@ typedef struct cacheline_s cacheline_t;
 
 struct cacheline_s {
 	uint64_t tag;
-	void *data;
 	uint64_t offset;
-	unsigned char flags;
 	cacheline_t *prev, *next; /* Circular doubly linked list */
+	void *data;
+	unsigned char flags;
 };
 
 
-typedef struct cacheset_s {
+typedef struct {
 	cacheline_t *timestamps;
 	cacheline_t *tags[LIBCACHE_NUM_WAYS];
 	cacheline_t lines[LIBCACHE_NUM_WAYS];
@@ -101,7 +105,7 @@ cachectx_t *cache_init(size_t size, size_t lineSize, cache_writeCb_t writeCb, ca
 {
 	cachectx_t *cache = NULL;
 
-	if (size == 0 || lineSize == 0 || size < lineSize) {
+	if (size == 0 || lineSize == 0) {
 		return NULL;
 	}
 
@@ -194,45 +198,58 @@ static int cache_compareTags(const void *lhs, const void *rhs)
 }
 
 
-static ssize_t cache_flushLine(cache_writeCb_t writeCb, cacheline_t *linePtr, const uint64_t addr, size_t count)
+static ssize_t cache_flushLine(cache_writeCb_t writeCb, cacheline_t *linePtr, uint64_t addr, size_t count)
 {
-	ssize_t written = 0;
+	ssize_t written = 0, position = 0;
+	size_t left = count;
 
 	if (linePtr != NULL && IS_VALID(linePtr->flags) && IS_DIRTY(linePtr->flags)) {
-		written = (*writeCb)(addr, linePtr->data, sizeof(*linePtr->data), count);
-		CLEAR_DIRTY(linePtr->flags);
-		if (written != count) {
-			written = -1;
+		while (left > 0) {
+			written = (*writeCb)(addr, linePtr->data + position, left);
+
+			left -= written;
+			addr += written;
+			position += written;
 		}
+		CLEAR_DIRTY(linePtr->flags);
 	}
 
 	return written;
 }
 
 
-static ssize_t cache_executePolicy(cache_writeCb_t writeCb, cacheline_t *linePtr, const uint64_t addr, size_t count, int policy)
+static ssize_t cache_executePolicy(cache_writeCb_t writeCb, cacheline_t *linePtr, uint64_t addr, size_t count, int policy)
 {
-	ssize_t written = 0;
-
+	ssize_t written = 0, position = 0;
+	size_t left = count;
+	cacheline_t *dest = NULL;
 	switch (policy) {
 		case 0:
 			/* write-back */
-			SET_DIRTY(linePtr->flags);
-			written = count;
+			if (!IS_DIRTY(linePtr->flags)) {
+				SET_DIRTY(linePtr->flags);
+				position = count;
+			}
 			break;
 		case 1:
 			/* write-through */
-			written = (*writeCb)(addr, linePtr->data, sizeof(*linePtr->data), count);
+			while (left > 0) {
+				written = (*writeCb)(addr, linePtr->data, left);
+
+				left -= written;
+				addr += written;
+				position += written;
+			}
 			break;
 		default:
 			break;
 	}
 
-	return written;
+	return position;
 }
 
 
-static ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cacheline_t *line, const uint64_t offset, size_t count, int policy)
+static ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cacheline_t *line, const uint64_t offset, size_t count)
 {
 	int i;
 	ssize_t written = 0;
@@ -266,11 +283,9 @@ static ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cachel
 		/* write-back */
 		if (IS_DIRTY(temp->flags)) {
 			written = cache_flushLine(writeCb, temp, offset, count);
-			if (written == -1) {
-				return -1;
-			}
-			free(temp->data);
 		}
+
+		free(temp->data);
 
 		for (i = 0; i < set->count; ++i) {
 			if (IS_VALID(set->lines[i].flags) && (set->lines[i].tag == temp->tag)) {
@@ -282,15 +297,13 @@ static ssize_t cache_writeToSet(cache_writeCb_t writeCb, cacheset_t *set, cachel
 		LIST_ADD(&set->timestamps, temp);
 	}
 
-	written = cache_executePolicy(writeCb, temp, offset, count, policy);
-
 	qsort(set->tags, LIBCACHE_NUM_WAYS, sizeof(cacheline_t *), cache_compareTags);
 
 	return written;
 }
 
 
-static cacheline_t *cache_findLine(cacheset_t *set, uint64_t tag)
+static cacheline_t *cache_findLine(cacheset_t *set, uint64_t tag, int update)
 {
 	cacheline_t key, *keyPtr = &key, **linePtr = NULL;
 
@@ -298,34 +311,15 @@ static cacheline_t *cache_findLine(cacheset_t *set, uint64_t tag)
 
 	linePtr = bsearch(&keyPtr, set->tags, LIBCACHE_NUM_WAYS, sizeof(cacheline_t *), cache_compareTags);
 
-	return (linePtr != NULL) ? *linePtr : NULL;
-}
-
-
-static cacheline_t *cache_updateTimestamps(cacheset_t *set, uint64_t tag)
-{
-	cacheline_t *linePtr = NULL;
-
-	linePtr = cache_findLine(set, tag);
-
 	if (linePtr != NULL) {
-		LIST_REMOVE(&set->timestamps, linePtr);
-		LIST_ADD(&set->timestamps, linePtr);
-
-		return linePtr;
+		if (update == LIBCACHE_TIMESTAMPS_UPDATE) {
+			LIST_REMOVE(&set->timestamps, *linePtr);
+			LIST_ADD(&set->timestamps, *linePtr);
+		}
+		return *linePtr;
 	}
 
 	return NULL;
-}
-
-
-static void *cache_readFromSet(cacheset_t *set, uint64_t tag, uint64_t offset)
-{
-	cacheline_t *linePtr = NULL;
-
-	linePtr = cache_updateTimestamps(set, tag);
-
-	return (linePtr != NULL) ? (unsigned char *)(linePtr)->data + offset : NULL;
 }
 
 
@@ -347,89 +341,127 @@ static uint64_t cache_compTag(const cachectx_t *cache, const uint64_t addr)
 }
 
 
+static size_t cache_compPieceSize(const size_t left, const size_t lineSize, uint64_t *addr, uint64_t *offset, const size_t count, const size_t remainder)
+{
+	size_t pieceSize = 0;
+
+	if (left == count) {
+		if (count <= (lineSize - *offset)) {
+			pieceSize = count;
+		}
+		else {
+			pieceSize = lineSize - *offset;
+		}
+		*addr -= *offset;
+	}
+	else if (left == remainder) {
+		pieceSize = remainder;
+		*offset = 0;
+	}
+	else {
+		pieceSize = lineSize;
+		*offset = 0;
+	}
+
+	return pieceSize;
+}
+
+
+static ssize_t cache_readFromMemOnMiss(cachectx_t *cache, const uint64_t addr, const uint64_t index, const uint64_t tag, const uint64_t offset)
+{
+	unsigned char flags = 0;
+	ssize_t read = 0, readPos = 0, written = 0;
+	void *temp = NULL;
+	uint64_t tempAddr = 0;
+	size_t left = cache->lineSize;
+	cacheline_t line, *linePtr;
+
+	temp = calloc(cache->lineSize, sizeof(unsigned char));
+
+	tempAddr = addr;
+
+	while (left > 0) {
+		read = cache->readCb(tempAddr, temp + readPos, left);
+
+		left -= read;
+		tempAddr += read;
+		readPos += read;
+	}
+
+	SET_VALID(flags);
+	line.tag = tag;
+	line.data = temp;
+	line.flags = flags;
+	line.offset = offset;
+
+	written = cache_writeToSet(cache->writeCb, &cache->sets[index], &line, addr, cache->lineSize);
+
+	return written;
+}
+
+
 /* TODO: add error handling */
 ssize_t cache_write(cachectx_t *cache, uint64_t addr, void *buffer, size_t count, int policy)
 {
-	ssize_t position = 0, ret = 0;
+	ssize_t position = 0, ret = 0, read = 0, written = 0, readPos;
 	void *data = NULL, *dest = NULL;
 	unsigned char flags = 0;
-	uint64_t index = 0, offset = 0, tag = 0;
-	size_t pieceSize, left = 0, remainder = 0;
+	uint64_t index = 0, offset = 0, tag = 0, tempAddr;
+	size_t pieceSize, left = count, remainder = 0, leftToRead = cache->lineSize;
 	cacheline_t line, *linePtr;
 
-	if (cache == NULL || buffer == NULL) {
+	if (cache == NULL || buffer == NULL || (policy != LIBCACHE_WRITE_BACK && policy != LIBCACHE_WRITE_THROUGH)) {
 		return -1;
 	}
 
-	if (count == 0 || (policy != LIBCACHE_WRITE_BACK && policy != LIBCACHE_WRITE_THROUGH)) {
+	if (count == 0) {
 		return 0;
 	}
 
 	offset = cache_compOffset(cache, addr);
+	remainder = (left - (cache->lineSize - offset)) % cache->lineSize;
 
-	left = count;
-
-	while (1) {
+	while (left > 0) {
 		index = cache_compSet(cache, addr);
 		tag = cache_compTag(cache, addr);
 
-		if (left == count) {
-			if (count <= (cache->lineSize - offset)) {
-				pieceSize = count;
+		pieceSize = cache_compPieceSize(left, cache->lineSize, &addr, &offset, count, remainder);
+
+		linePtr = cache_findLine(&cache->sets[index], tag, LIBCACHE_TIMESTAMPS_UPDATE);
+
+		/* cache miss */
+		if (linePtr == NULL) {
+			if (pieceSize != cache->lineSize) {
+				written = cache_readFromMemOnMiss(cache, addr, index, tag, offset);
+
+				linePtr = cache_findLine(&cache->sets[index], tag, LIBCACHE_TIMESTAMPS_NO_UPDATE);
+				memcpy(linePtr->data + offset, buffer + position, pieceSize);
+
+				ret = cache_executePolicy(cache->writeCb, linePtr, addr, cache->lineSize, policy);
 			}
 			else {
-				pieceSize = cache->lineSize - offset;
-				remainder = (left - pieceSize) % cache->lineSize;
+				data = calloc(cache->lineSize, sizeof(unsigned char));
+				memcpy(data + offset, buffer + position, pieceSize);
+
+				SET_VALID(flags);
+				line.tag = tag;
+				line.data = data;
+				line.flags = flags;
+				line.offset = offset;
+
+				cache_writeToSet(cache->writeCb, &cache->sets[index], &line, addr, cache->lineSize);
 			}
-			addr -= offset;
 		}
-		else if (left == remainder) {
-			pieceSize = remainder;
-			offset = 0;
-		}
+		/* cache hit */
 		else {
-			pieceSize = cache->lineSize;
-			offset = 0;
-		}
-
-		data = cache_readFromSet(&cache->sets[index], tag, offset);
-
-		if (data == NULL) {
-			data = calloc(cache->lineSize, sizeof(unsigned char));
-			dest = (unsigned char *)data + offset;
-			memcpy(dest, buffer + position, pieceSize);
-			SET_VALID(flags);
-
-			line.tag = tag;
-			line.data = data;
-
-			line.flags = flags;
-			line.offset = offset;
-
-			position += cache_writeToSet(cache->writeCb, &cache->sets[index], &line, addr, cache->lineSize, -1);
-		}
-		else {
-			linePtr = cache_findLine(&cache->sets[index], tag);
-
-			ret = cache_flushLine(cache->writeCb, linePtr, addr, cache->lineSize);
-			if (ret == -1) {
-				position = -1;
-				break;
-			}
-
 			dest = (unsigned char *)linePtr->data + offset;
 			memcpy(dest, buffer + position, pieceSize);
 
 			ret = cache_executePolicy(cache->writeCb, linePtr, addr, cache->lineSize, policy);
-
-			position += pieceSize;
 		}
 
+		position += pieceSize;
 		left -= pieceSize;
-
-		if (left == 0) {
-			break;
-		}
 
 		addr += cache->lineSize;
 	}
@@ -438,32 +470,14 @@ ssize_t cache_write(cachectx_t *cache, uint64_t addr, void *buffer, size_t count
 }
 
 
-static ssize_t cache_readOnMiss(cachectx_t *cache, const uint64_t addr, const uint64_t offset, void *buffer, size_t position, size_t count)
-{
-	ssize_t read = 0, written = 0;
-	void *temp = NULL;
-
-	temp = calloc(cache->lineSize, sizeof(unsigned char));
-
-	read = cache->readCb(addr, temp, sizeof(*temp), cache->lineSize);
-
-	written = cache_write(cache, addr, temp, cache->lineSize, -1);
-
-	memcpy(buffer + position, temp + offset, count);
-
-	free(temp);
-
-	return count;
-}
-
-
 /* TODO: add error handling */
 ssize_t cache_read(cachectx_t *cache, uint64_t addr, void *buffer, size_t count)
 {
-	ssize_t position = 0;
+	ssize_t position = 0, read = 0;
 	void *data = NULL;
+	cacheline_t *linePtr = NULL;
 	uint64_t index = 0, offset = 0, tag = 0;
-	size_t pieceSize, left = 0, remainder = 0;
+	size_t pieceSize, left = count, remainder = 0;
 
 	if (cache == NULL || buffer == NULL) {
 		return -1;
@@ -476,47 +490,29 @@ ssize_t cache_read(cachectx_t *cache, uint64_t addr, void *buffer, size_t count)
 	offset = cache_compOffset(cache, addr);
 
 	left = count;
+	remainder = (left - (cache->lineSize - offset)) % cache->lineSize;
 
-	while (1) {
+	while (left > 0) {
 		index = cache_compSet(cache, addr);
 		tag = cache_compTag(cache, addr);
 
-		if (left == count) {
-			if (count <= (cache->lineSize - offset)) {
-				pieceSize = count;
-			}
-			else {
-				pieceSize = cache->lineSize - offset;
-				remainder = (left - pieceSize) % cache->lineSize;
-			}
-			addr -= offset;
-		}
-		else if (left == remainder) {
-			pieceSize = remainder;
-			offset = 0;
-		}
-		else {
-			pieceSize = cache->lineSize;
-			offset = 0;
-		}
+		pieceSize = cache_compPieceSize(left, cache->lineSize, &addr, &offset, count, remainder);
 
-		data = cache_readFromSet(&cache->sets[index], tag, offset);
+		linePtr = cache_findLine(&cache->sets[index], tag, LIBCACHE_TIMESTAMPS_UPDATE);
 
 		/* cache miss */
-		if (data == NULL) {
-			position += cache_readOnMiss(cache, addr, offset, buffer, position, pieceSize);
+		if (linePtr == NULL) {
+			read = cache_readFromMemOnMiss(cache, addr, index, tag, offset);
+			linePtr = cache_findLine(&cache->sets[index], tag, LIBCACHE_TIMESTAMPS_NO_UPDATE);
+			memcpy(buffer + position, linePtr->data + offset, pieceSize);
 		}
 		/* cache hit */
 		else {
-			memcpy(buffer + position, data, pieceSize);
-			position += pieceSize;
+			memcpy(buffer + position, linePtr->data + offset, pieceSize);
 		}
 
+		position += pieceSize;
 		left -= pieceSize;
-
-		if (left == 0) {
-			break;
-		}
 
 		addr += cache->lineSize;
 	}
@@ -530,7 +526,7 @@ int cache_flush(cachectx_t *cache, const uint64_t begAddr, const uint64_t endAdd
 {
 	int ret = 0;
 	size_t written = 0;
-	uint64_t addr = 0, tag = 0, index = 0, begOffset = 0, endOffset = 0;
+	uint64_t addr = 0, tag = 0, index = 0, begOffset = 0;
 	cacheline_t *linePtr = NULL;
 
 	if (begAddr > endAddr) {
@@ -538,27 +534,22 @@ int cache_flush(cachectx_t *cache, const uint64_t begAddr, const uint64_t endAdd
 	}
 
 	begOffset = cache_compOffset(cache, begAddr);
-	endOffset = cache_compOffset(cache, endAddr);
-
 	addr = begAddr - begOffset;
 
-	while (1) {
+	while (addr < endAddr) {
 		index = cache_compSet(cache, addr);
 		tag = cache_compTag(cache, addr);
 
-		linePtr = cache_findLine(&cache->sets[index], tag);
+		linePtr = cache_findLine(&cache->sets[index], tag, LIBCACHE_TIMESTAMPS_UPDATE);
 
 		ret = cache_flushLine(cache->writeCb, linePtr, addr, cache->lineSize);
 
+		/* TODO: add proper condition */
 		if (ret == -1) {
 			break;
 		}
 
 		addr += cache->lineSize;
-
-		if (addr == (endAddr - endOffset + cache->lineSize)) {
-			break;
-		}
 	}
 
 	return ret;
@@ -585,7 +576,7 @@ static void cache_invalidateLine(cacheset_t *set, cacheline_t *linePtr)
 
 int cache_invalidate(cachectx_t *cache, const uint64_t begAddr, const uint64_t endAddr)
 {
-	uint64_t addr = 0, tag = 0, index = 0, begOffset = 0, endOffset = 0;
+	uint64_t addr = 0, tag = 0, index = 0, begOffset = 0;
 	cacheline_t *linePtr = NULL;
 
 	if (begAddr > endAddr) {
@@ -593,23 +584,17 @@ int cache_invalidate(cachectx_t *cache, const uint64_t begAddr, const uint64_t e
 	}
 
 	begOffset = cache_compOffset(cache, begAddr);
-	endOffset = cache_compOffset(cache, endAddr);
-
 	addr = begAddr - begOffset;
 
-	while (1) {
+	while (addr < endAddr) {
 		index = cache_compSet(cache, addr);
 		tag = cache_compTag(cache, addr);
 
-		linePtr = cache_findLine(&cache->sets[index], tag);
+		linePtr = cache_findLine(&cache->sets[index], tag, LIBCACHE_TIMESTAMPS_NO_UPDATE);
 
 		cache_invalidateLine(&cache->sets[index], linePtr);
 
 		addr += cache->lineSize;
-
-		if (addr == (endAddr - endOffset + cache->lineSize)) {
-			break;
-		}
 	}
 
 	return 0;
@@ -636,7 +621,7 @@ void cache_print(cachectx_t *cache)
 				}
 				else {
 					offset = cache->sets[i].lines[j].offset;
-					data = (unsigned char *)(cache->sets[i].lines[j].data + offset);
+					data = (unsigned char *)(cache->sets[i].lines[j].data);
 				}
 				valid = (IS_VALID(cache->sets[i].lines[j].flags)) ? 1 : 0;
 
