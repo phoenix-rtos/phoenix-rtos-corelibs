@@ -438,8 +438,6 @@ ssize_t cache_write(cachectx_t *cache, uint64_t addr, void *buffer, size_t count
 
 				linePtr = cache_findLine(&cache->sets[index], tag, LIBCACHE_TIMESTAMPS_NO_UPDATE);
 				memcpy((unsigned char *)linePtr->data + offset, (unsigned char *)buffer + position, pieceSize);
-
-				cache_executePolicy(cache->writeCb, linePtr, addr, cache->lineSize, policy);
 			}
 			else {
 				data = calloc(cache->lineSize, sizeof(unsigned char));
@@ -457,15 +455,17 @@ ssize_t cache_write(cachectx_t *cache, uint64_t addr, void *buffer, size_t count
 				line.offset = offset;
 
 				cache_writeToSet(cache->writeCb, &cache->sets[index], &line, addr, cache->lineSize);
+
+				linePtr = cache_findLine(&cache->sets[index], tag, LIBCACHE_TIMESTAMPS_NO_UPDATE);
 			}
 		}
 		/* cache hit */
 		else {
 			dest = (unsigned char *)linePtr->data + offset;
 			memcpy(dest, (unsigned char *)buffer + position, pieceSize);
-
-			cache_executePolicy(cache->writeCb, linePtr, addr, cache->lineSize, policy);
 		}
+
+		cache_executePolicy(cache->writeCb, linePtr, addr, cache->lineSize, policy);
 
 		position += pieceSize;
 		left -= pieceSize;
