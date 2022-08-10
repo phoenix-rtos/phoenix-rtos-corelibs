@@ -70,7 +70,7 @@ static void uuid_useRand(uuid_t out)
 	}
 
 	/* to prevent same numbers when using the same seed */
-	n = (int)(ts.tv_nsec / 100);
+	n = (int)(ts.tv_nsec / (1000 * 1000));
 	for (i = 0; i < n; i++) {
 		rand();
 	}
