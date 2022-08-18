@@ -63,8 +63,7 @@ static void uuid_useRand(uuid_t out)
 	clock_gettime(CLOCK_MONOTONIC, &ts);
 	pid = getpid();
 
-	/* only if (pid2 == 255 + n*pid1) and the first 24 bits of tv_sec were the same it could be the same seed */
-	if (init == 1 || (rand() % 2) == 1) {
+	if (init == 1) {
 		srand((unsigned int)((ts.tv_sec & 0x0FFF) | (pid << 24)));
 		init = 0;
 	}
