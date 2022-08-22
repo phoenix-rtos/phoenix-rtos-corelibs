@@ -32,7 +32,7 @@ typedef ssize_t (*cache_readCb_t)(uint64_t offset, void *buffer, size_t count);
 typedef ssize_t (*cache_writeCb_t)(uint64_t offset, const void *buffer, size_t count);
 
 
-cachectx_t *cache_init(size_t size, size_t lineSize, cache_writeCb_t writeCb, cache_readCb_t readCb);
+cachectx_t *cache_init(size_t srcMemSize, size_t size, size_t lineSize, cache_writeCb_t writeCb, cache_readCb_t readCb);
 
 
 int cache_deinit(cachectx_t *cache);
