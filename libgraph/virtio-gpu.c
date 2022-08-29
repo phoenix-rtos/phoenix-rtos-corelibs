@@ -1092,7 +1092,7 @@ static int virtiogpu_initdev(virtiogpu_dev_t *vgpu)
 			vgpu->done = 1;
 			condSignal(vgpu->cond);
 			mutexUnlock(vgpu->lock);
-			while (threadJoin(0) < 0)
+			while (threadJoin(-1, 0) < 0)
 				;
 
 			resourceDestroy(vgpu->cond);
@@ -1130,7 +1130,7 @@ void virtiogpu_close(graph_t *graph)
 	vgpu->done = 1;
 	condSignal(vgpu->cond);
 	mutexUnlock(vgpu->lock);
-	while (threadJoin(0) < 0)
+	while (threadJoin(-1, 0) < 0)
 		;
 
 	/* Destroy device */
@@ -1234,7 +1234,7 @@ int virtiogpu_open(graph_t *graph)
 			vgpu->done = 1;
 			condSignal(vgpu->cond);
 			mutexUnlock(vgpu->lock);
-			while (threadJoin(0) < 0)
+			while (threadJoin(-1, 0) < 0)
 				;
 
 			/* Destroy device */
