@@ -62,7 +62,7 @@ int mtd_erase(struct mtd_info *mtdInfo, struct erase_info *instr)
 }
 
 
-int mtd_point(struct mtd_info *mtdInfo, off_t from, size_t len, size_t *retlen, void **virt, size_t *phys)
+int mtd_point(struct mtd_info *mtdInfo, off_t from, size_t len, size_t *retlen, void **virt, addr_t *phys)
 {
 	int ret;
 	storage_mtd_t *mtd = mtdInfo->storage->dev->mtd;
