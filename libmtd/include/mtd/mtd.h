@@ -105,7 +105,7 @@ extern int mtd_erase(struct mtd_info *mtd, struct erase_info *instr);
 
 /* Function for eXecute-In-Place mechanism. Phys is optional and may be set to NULL */
 extern int mtd_point(struct mtd_info *mtd, off_t from, size_t len, size_t *retlen,
-	void **virt, size_t *phys);
+	void **virt, addr_t *phys);
 
 
 /* Unpoint selected memory area */
