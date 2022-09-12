@@ -174,7 +174,8 @@ static ssize_t cache_flushLine(cachectx_t *cache, cacheline_t *linePtr, uint64_t
 			written = cache->writeCb(addr, (unsigned char *)linePtr->data + position, left);
 
 			if (written <= 0) {
-				return -EIO;
+				written = -EIO;
+				break;
 			}
 
 			left -= written;
@@ -182,7 +183,9 @@ static ssize_t cache_flushLine(cachectx_t *cache, cacheline_t *linePtr, uint64_t
 			position += written;
 		}
 
-		CLEAR_DIRTY(linePtr->flags);
+		if (written == (ssize_t)cache->lineSize) {
+			CLEAR_DIRTY(linePtr->flags);
+		}
 	}
 
 	return written;
@@ -209,7 +212,7 @@ int cache_deinit(cachectx_t *cache)
 					addr = cache_computeAddr(cache, linePtr->tag, i);
 					written = cache_flushLine(cache, linePtr, addr);
 
-					if (written < cache->lineSize) {
+					if (written < (ssize_t)cache->lineSize) {
 						return -EIO;
 					}
 				}
@@ -270,9 +273,8 @@ static ssize_t cache_executePolicy(cachectx_t *cache, cacheline_t *linePtr, uint
 
 	if (policy == 1) {
 		written = cache_flushLine(cache, linePtr, addr);
-
 		if (written <= 0) {
-			return -EIO;
+			written = -EIO;
 		}
 	}
 
@@ -430,10 +432,10 @@ static ssize_t cache_fetchLine(cachectx_t *cache, cacheline_t *linePtr, const ui
 
 	while (left > 0) {
 		read = cache->readCb(tempAddr, (unsigned char *)linePtr->data + position, left);
-
 		if (read <= 0) {
 			free(linePtr->data);
-			return -EIO;
+			position = -EIO;
+			break;
 		}
 
 		left -= read;
@@ -447,8 +449,7 @@ static ssize_t cache_fetchLine(cachectx_t *cache, cacheline_t *linePtr, const ui
 
 ssize_t cache_write(cachectx_t *cache, uint64_t addr, void *buffer, size_t count, int policy)
 {
-	int err = -1;
-	ssize_t position = 0, written = 0;
+	ssize_t err = -1, position = 0, written = 0;
 	uint64_t index = 0, offset = 0, tag = 0;
 	size_t tempCount = 0, left = 0, remainder = 0;
 	cacheline_t *linePtr = NULL;
@@ -488,14 +489,16 @@ ssize_t cache_write(cachectx_t *cache, uint64_t addr, void *buffer, size_t count
 			linePtr = cache_allocateLine(cache, index, tag);
 
 			if (linePtr == NULL) {
-				return -ENOMEM;
+				position = -ENOMEM;
+				break;
 			}
 
 			if (tempCount < cache->lineSize) {
 				err = cache_fetchLine(cache, linePtr, addr);
-				if (err < cache->lineSize) {
+				if (err < (ssize_t)cache->lineSize) {
 					CLEAR_VALID(linePtr->flags);
-					return err;
+					position = err;
+					break;
 				}
 			}
 		}
@@ -505,8 +508,9 @@ ssize_t cache_write(cachectx_t *cache, uint64_t addr, void *buffer, size_t count
 		SET_DIRTY(linePtr->flags);
 
 		written = cache_executePolicy(cache, linePtr, addr, policy);
-		if (written < cache->lineSize) {
-			return -EIO;
+		if (written < (ssize_t)cache->lineSize) {
+			position = -EIO;
+			break;
 		}
 
 		position += tempCount;
@@ -522,8 +526,7 @@ ssize_t cache_write(cachectx_t *cache, uint64_t addr, void *buffer, size_t count
 
 ssize_t cache_read(cachectx_t *cache, uint64_t addr, void *buffer, size_t count)
 {
-	int err = -1;
-	ssize_t position = 0;
+	ssize_t err = -1, position = 0;
 	void *data = NULL;
 	cacheline_t *linePtr = NULL;
 	uint64_t index = 0, offset = 0, tag = 0;
@@ -541,7 +544,7 @@ ssize_t cache_read(cachectx_t *cache, uint64_t addr, void *buffer, size_t count)
 		return -EINVAL;
 	}
 	else if (addr < cache->srcMemSize && addr + count > cache->srcMemSize) {
-		left = cache->srcMemSize - addr;
+		count = cache->srcMemSize - addr;
 	}
 
 	left = count;
@@ -563,13 +566,15 @@ ssize_t cache_read(cachectx_t *cache, uint64_t addr, void *buffer, size_t count)
 			linePtr = cache_allocateLine(cache, index, tag);
 
 			if (linePtr == NULL) {
-				return -ENOMEM;
+				position = -ENOMEM;
+				break;
 			}
 
 			err = cache_fetchLine(cache, linePtr, addr);
-			if (err < cache->lineSize) {
+			if (err < (ssize_t)cache->lineSize) {
 				CLEAR_VALID(linePtr->flags);
-				return err;
+				position = err;
+				break;
 			}
 		}
 		/* cache hit */
@@ -588,6 +593,7 @@ ssize_t cache_read(cachectx_t *cache, uint64_t addr, void *buffer, size_t count)
 
 int cache_flush(cachectx_t *cache, const uint64_t begAddr, const uint64_t endAddr)
 {
+	int ret = EOK;
 	ssize_t written = 0, writtenPiece = 0;
 	uint64_t addr = 0, end = endAddr, tag = 0, index = 0, begOffset = 0;
 	cacheline_t *linePtr = NULL;
@@ -621,8 +627,9 @@ int cache_flush(cachectx_t *cache, const uint64_t begAddr, const uint64_t endAdd
 		if (linePtr != NULL && IS_DIRTY(linePtr->flags)) {
 			writtenPiece = cache_flushLine(cache, linePtr, addr);
 
-			if (writtenPiece < cache->lineSize) {
-				return -EIO;
+			if (writtenPiece < (ssize_t)cache->lineSize) {
+				ret = -EIO;
+				break;
 			}
 
 			written += writtenPiece;
@@ -633,7 +640,7 @@ int cache_flush(cachectx_t *cache, const uint64_t begAddr, const uint64_t endAdd
 
 	mutexUnlock(cache->lock);
 
-	return EOK;
+	return ret;
 }
 
 
