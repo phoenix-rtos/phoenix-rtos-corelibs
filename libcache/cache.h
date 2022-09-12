@@ -49,10 +49,4 @@ int cache_flush(cachectx_t *cache, const uint64_t begAddr, const uint64_t endAdd
 
 int cache_invalidate(cachectx_t *cache, const uint64_t begAddr, const uint64_t endAddr);
 
-
-#define CACHE_DEBUG
-#ifdef CACHE_DEBUG
-void cache_print(cachectx_t *cache);
-#endif
-
 #endif
