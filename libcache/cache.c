@@ -158,11 +158,45 @@ cachectx_t *cache_init(size_t srcMemSize, size_t size, size_t lineSize, cache_wr
 	return cache;
 }
 
-/* TODO: add flushing of DIRTY lines */
+
+static uint64_t cache_compAddr(const cachectx_t *cache, uint64_t tag, uint64_t setIndex)
+{
+	uint64_t temp = (tag << cache->setBitsNum) | setIndex;
+	return temp <<= cache->offBitsNum;
+}
+
+
+static ssize_t cache_flushLine(cachectx_t *cache, cacheline_t *linePtr, uint64_t addr)
+{
+	ssize_t written = 0, position = 0;
+	size_t left = cache->lineSize;
+
+	if (linePtr != NULL && IS_VALID(linePtr->flags) && IS_DIRTY(linePtr->flags)) {
+		while (left > 0) {
+			written = cache->writeCb(addr, (unsigned char *)linePtr->data + position, left);
+
+			if (written <= 0) {
+				return -EIO;
+			}
+
+			left -= written;
+			addr += written;
+			position += written;
+		}
+
+		CLEAR_DIRTY(linePtr->flags);
+	}
+
+	return written;
+}
+
+
 int cache_deinit(cachectx_t *cache)
 {
-	int err;
-	int i, j;
+	int i, j, err;
+	uint64_t addr;
+	ssize_t written;
+	cacheline_t *linePtr;
 
 	if (cache == NULL) {
 		return -EINVAL;
@@ -170,9 +204,20 @@ int cache_deinit(cachectx_t *cache)
 
 	for (i = 0; i < cache->numSets; ++i) {
 		for (j = 0; j < LIBCACHE_NUM_WAYS; ++j) {
-			if (IS_VALID(cache->sets[i].lines[j].flags)) {
-				free(cache->sets[i].lines[j].data);
-				CLEAR_VALID(cache->sets[i].lines[j].flags);
+			linePtr = &(cache->sets[i].lines[j]);
+
+			if (IS_VALID(linePtr->flags)) {
+				if (IS_DIRTY(linePtr->flags)) {
+					addr = cache_compAddr(cache, linePtr->tag, i);
+					written = cache_flushLine(cache, linePtr, addr);
+
+					if (written < cache->lineSize) {
+						return -EIO;
+					}
+				}
+
+				free(linePtr->data);
+				CLEAR_VALID(linePtr->flags);
 			}
 		}
 	}
@@ -221,31 +266,6 @@ static int cache_compareTags(const void *lhs, const void *rhs)
 }
 
 
-static ssize_t cache_flushLine(cachectx_t *cache, cacheline_t *linePtr, uint64_t addr)
-{
-	ssize_t written = 0, position = 0;
-	size_t left = cache->lineSize;
-
-	if (linePtr != NULL && IS_VALID(linePtr->flags) && IS_DIRTY(linePtr->flags)) {
-		while (left > 0) {
-			written = cache->writeCb(addr, (unsigned char *)linePtr->data + position, left);
-
-			if (written <= 0) {
-				return -EIO;
-			}
-
-			left -= written;
-			addr += written;
-			position += written;
-		}
-
-		CLEAR_DIRTY(linePtr->flags);
-	}
-
-	return written;
-}
-
-
 static ssize_t cache_executePolicy(cachectx_t *cache, cacheline_t *linePtr, uint64_t addr, int policy)
 {
 	ssize_t written = cache->lineSize;
@@ -259,13 +279,6 @@ static ssize_t cache_executePolicy(cachectx_t *cache, cacheline_t *linePtr, uint
 	}
 
 	return written;
-}
-
-
-static uint64_t cache_compAddr(const cachectx_t *cache, uint64_t tag, uint64_t setIndex)
-{
-	uint64_t temp = (tag << cache->setBitsNum) | setIndex;
-	return temp <<= cache->offBitsNum;
 }
 
 
