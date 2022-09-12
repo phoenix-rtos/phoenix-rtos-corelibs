@@ -264,7 +264,8 @@ static ssize_t cache_executePolicy(cachectx_t *cache, cacheline_t *linePtr, uint
 
 static uint64_t cache_compAddr(const cachectx_t *cache, uint64_t tag, uint64_t setIndex)
 {
-	return (tag << (cache->setBitsNum + cache->offBitsNum)) | setIndex;
+	uint64_t temp = (tag << cache->setBitsNum) | setIndex;
+	return temp <<= cache->offBitsNum;
 }
 
 
