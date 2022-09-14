@@ -174,7 +174,7 @@ static ssize_t cache_flushLine(cachectx_t *cache, cacheline_t *linePtr, uint64_t
 			written = cache->writeCb(addr, (unsigned char *)linePtr->data + position, left);
 
 			if (written <= 0) {
-				written = -EIO;
+				position = -EIO;
 				break;
 			}
 
@@ -183,12 +183,12 @@ static ssize_t cache_flushLine(cachectx_t *cache, cacheline_t *linePtr, uint64_t
 			position += written;
 		}
 
-		if (written == (ssize_t)cache->lineSize) {
+		if (position == (ssize_t)cache->lineSize) {
 			CLEAR_DIRTY(linePtr->flags);
 		}
 	}
 
-	return written;
+	return position;
 }
 
 
