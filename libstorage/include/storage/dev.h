@@ -56,6 +56,7 @@ typedef struct {
 	int (*block_isReserved)(struct _storage_t *dev, off_t offs);
 	int (*block_markBad)(struct _storage_t *dev, off_t offs);
 	int (*block_maxBadNb)(struct _storage_t *dev, off_t offs, size_t len);
+	int (*block_maxBitflips)(struct _storage_t *dev, off_t offs);
 
 	int (*suspend)(struct _storage_t *dev);
 	void (*resume)(struct _storage_t *dev);
