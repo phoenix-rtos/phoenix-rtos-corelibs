@@ -85,12 +85,11 @@ struct cachectx_s {
 	uint64_t setMask;
 	uint64_t offMask;
 
-	uint8_t offBitsNum;
-	uint8_t setBitsNum;
+	uint8_t offBitsNum; /* Number of bits in memory address corresponding to offset */
+	uint8_t setBitsNum; /* Number of bits in memory address corresponding to set index */
 	uint8_t tagBitsNum;
 
-	cache_readCb_t readCb;
-	cache_writeCb_t writeCb;
+	cache_ops_t ops;
 
 	handle_t lock;
 };
@@ -102,7 +101,7 @@ static uint64_t cache_generateMask(int numBits)
 }
 
 
-cachectx_t *cache_init(size_t srcMemSize, size_t size, size_t lineSize, cache_writeCb_t writeCb, cache_readCb_t readCb)
+cachectx_t *cache_init(size_t srcMemSize, size_t size, size_t lineSize, const cache_ops_t *ops)
 {
 	int err;
 	cachectx_t *cache = NULL;
@@ -139,8 +138,7 @@ cachectx_t *cache_init(size_t srcMemSize, size_t size, size_t lineSize, cache_wr
 			cache->setMask = cache_generateMask(cache->setBitsNum);
 			cache->offMask = cache_generateMask(cache->offBitsNum);
 
-			cache->readCb = readCb;
-			cache->writeCb = writeCb;
+			cache->ops = *ops;
 
 			err = mutexCreate(&cache->lock);
 			if (err < 0) {
@@ -169,7 +167,7 @@ static ssize_t cache_flushLine(cachectx_t *cache, cacheline_t *linePtr, uint64_t
 
 	if ((linePtr != NULL) && IS_VALID(linePtr->flags) && IS_DIRTY(linePtr->flags)) {
 		while (left > 0) {
-			writeCount = cache->writeCb(addr, (const unsigned char *)linePtr->data + position, left);
+			writeCount = cache->ops.writeCb(addr, (const unsigned char *)linePtr->data + position, left, cache->ops.ctx);
 
 			if (writeCount <= 0) {
 				position = -EIO;
@@ -421,7 +419,7 @@ static ssize_t cache_fetchLine(cachectx_t *cache, cacheline_t *linePtr, const ui
 	tempAddr = addr;
 
 	while (left > 0) {
-		readCount = cache->readCb(tempAddr, (unsigned char *)linePtr->data + position, left);
+		readCount = cache->ops.readCb(tempAddr, (unsigned char *)linePtr->data + position, left, cache->ops.ctx);
 		if (readCount <= 0) {
 			free(linePtr->data);
 			position = -EIO;

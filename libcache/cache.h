@@ -26,13 +26,24 @@
 typedef struct cachectx_s cachectx_t;
 
 
-typedef ssize_t (*cache_readCb_t)(uint64_t offset, void *buffer, size_t count);
+typedef struct cache_devCtx_s cache_devCtx_t; /* Device driver context should be defined by flash driver */
 
 
-typedef ssize_t (*cache_writeCb_t)(uint64_t offset, const void *buffer, size_t count);
+typedef ssize_t (*cache_readCb_t)(uint64_t offset, void *buffer, size_t count, cache_devCtx_t *ctx);
 
 
-cachectx_t *cache_init(size_t srcMemSize, size_t size, size_t lineSize, cache_writeCb_t writeCb, cache_readCb_t readCb);
+typedef ssize_t (*cache_writeCb_t)(uint64_t offset, const void *buffer, size_t count, cache_devCtx_t *ctx);
+
+
+/* Cached source memory interface */
+typedef struct {
+	cache_readCb_t readCb;
+	cache_writeCb_t writeCb;
+	cache_devCtx_t *ctx; /* Device driver context */
+} cache_ops_t;
+
+
+cachectx_t *cache_init(size_t srcMemSize, size_t size, size_t lineSize, const cache_ops_t *ops);
 
 
 int cache_deinit(cachectx_t *cache);
