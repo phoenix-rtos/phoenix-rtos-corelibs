@@ -43,8 +43,7 @@ typedef struct {
 } cache_ops_t;
 
 
-cachectx_t *cache_init(size_t srcMemSize, size_t size, size_t lineSize, const cache_ops_t *ops);
-
+cachectx_t *cache_init(size_t srcMemSize, size_t lineSize, size_t linesCnt, const cache_ops_t *ops);
 
 int cache_deinit(cachectx_t *cache);
 

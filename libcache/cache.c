@@ -78,7 +78,7 @@ struct cachectx_s {
 
 	size_t srcMemSize;
 	size_t lineSize;
-	size_t numLines;
+	size_t linesCnt;
 	size_t numSets;
 
 	uint64_t tagMask;
@@ -101,16 +101,16 @@ static uint64_t cache_generateMask(int numBits)
 }
 
 
-cachectx_t *cache_init(size_t srcMemSize, size_t size, size_t lineSize, const cache_ops_t *ops)
+cachectx_t *cache_init(size_t srcMemSize, size_t lineSize, size_t linesCnt, const cache_ops_t *ops)
 {
 	int err;
 	cachectx_t *cache = NULL;
 
-	if (srcMemSize == 0 || size == 0 || lineSize == 0) {
+	if (srcMemSize == 0 || linesCnt == 0 || lineSize == 0) {
 		return NULL;
 	}
 
-	if (size % lineSize != 0 || (size / lineSize) % LIBCACHE_NUM_WAYS != 0) {
+	if (linesCnt % LIBCACHE_NUM_WAYS != 0) {
 		return NULL;
 	}
 
@@ -119,9 +119,9 @@ cachectx_t *cache_init(size_t srcMemSize, size_t size, size_t lineSize, const ca
 	if (cache != NULL) {
 		cache->srcMemSize = srcMemSize;
 		cache->lineSize = lineSize;
-		cache->numLines = size / cache->lineSize;
+		cache->linesCnt = linesCnt;
 
-		cache->numSets = cache->numLines / LIBCACHE_NUM_WAYS;
+		cache->numSets = cache->linesCnt / LIBCACHE_NUM_WAYS;
 
 		cache->sets = calloc(cache->numSets, sizeof(cacheset_t));
 
