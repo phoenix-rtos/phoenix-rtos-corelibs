@@ -59,4 +59,8 @@ int cache_flush(cachectx_t *cache, const uint64_t begAddr, const uint64_t endAdd
 
 int cache_invalidate(cachectx_t *cache, const uint64_t begAddr, const uint64_t endAddr);
 
+
+int cache_clean(cachectx_t *cache, const uint64_t begAddr, const uint64_t endAddr);
+
+
 #endif
