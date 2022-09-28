@@ -645,3 +645,50 @@ int cache_invalidate(cachectx_t *cache, const uint64_t begAddr, const uint64_t e
 
 	return EOK;
 }
+
+
+int cache_clean(cachectx_t *cache, const uint64_t begAddr, const uint64_t endAddr)
+{
+	int ret = EOK;
+	uint64_t addr = 0, end = endAddr, tag = 0, index = 0, begOffset = 0;
+	ssize_t writeCount = 0;
+	cacheline_t *linePtr = NULL;
+
+	if (begAddr > endAddr || begAddr > cache->srcMemSize) {
+		return -EINVAL;
+	}
+	if (begAddr < cache->srcMemSize && endAddr > cache->srcMemSize) {
+		end = cache->srcMemSize;
+	}
+
+	begOffset = cache_computeOffset(cache, begAddr);
+	addr = begAddr - begOffset;
+
+	mutexLock(cache->lock);
+
+	while (addr < end) {
+		index = cache_computeSetIndex(cache, addr);
+		tag = cache_computeTag(cache, addr);
+
+		linePtr = cache_findLine(&cache->sets[index], tag, LIBCACHE_TIMESTAMPS_NO_UPDATE);
+
+		if (linePtr != NULL) {
+			if (IS_DIRTY(linePtr->flags)) {
+				writeCount = cache_flushLine(cache, linePtr, addr);
+
+				if (writeCount < (ssize_t)cache->lineSize) {
+					ret = -EIO;
+					break;
+				}
+			}
+
+			cache_invalidateLine(&cache->sets[index], linePtr);
+		}
+
+		addr += cache->lineSize;
+	}
+
+	mutexUnlock(cache->lock);
+
+	return ret;
+}
