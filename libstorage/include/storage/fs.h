@@ -47,6 +47,7 @@ typedef struct {
 
 
 typedef struct {
+	oid_t *mnt;                     /* Filesystem mountpoint (NULL if mounted as rootfs) */
 	void *info;                     /* Specific information for the filesystem */
 	const storage_fsops_t *ops;     /* Callbacks to operations on the filesystem */
 	struct _storage_fsctx_t *fsctx; /* File system context used internally by the storage library */

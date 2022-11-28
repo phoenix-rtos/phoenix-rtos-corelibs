@@ -48,7 +48,11 @@ extern int storage_unregisterfs(const char *name);
 
 
 /* Mounts filesystem */
-extern int storage_mountfs(storage_t *strg, const char *name, const char *data, unsigned long mode, oid_t *root);
+extern int storage_mountfs(storage_t *strg, const char *name, const char *data, unsigned long mode, oid_t *mnt, oid_t *root);
+
+
+/* Returns filesystem mountpoint (-ENOENT is returned if storage is mounted as rootfs) */
+extern int storage_mountpoint(storage_t *strg, oid_t *mnt);
 
 
 /* Unmounts filesystem */

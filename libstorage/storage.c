@@ -394,7 +394,7 @@ int storage_unregisterfs(const char *name)
 }
 
 
-int storage_mountfs(storage_t *strg, const char *name, const char *data, unsigned long mode, oid_t *root)
+int storage_mountfs(storage_t *strg, const char *name, const char *data, unsigned long mode, oid_t *mnt, oid_t *root)
 {
 	int err;
 	storage_fsctx_t *fsctx;
@@ -416,9 +416,25 @@ int storage_mountfs(storage_t *strg, const char *name, const char *data, unsigne
 		return -ENOMEM;
 	}
 
+	/* Set filesystem mountpoint */
+	if (mnt != NULL) {
+		strg->fs->mnt = malloc(sizeof(oid_t));
+		if (fsctx->mnt == NULL) {
+			free(fsctx);
+			free(strg->fs);
+			return -ENOMEM;
+		}
+		*strg->fs->mnt = *mnt;
+	}
+	/* Mounting rootfs, no mountpoint */
+	else {
+		strg->fs->mnt = NULL;
+	}
+
 	err = storagectx_init(&fsctx->reqctx, storage_fsHandler);
 	if (err < 0) {
 		free(fsctx);
+		free(strg->fs->mnt);
 		free(strg->fs);
 		strg->fs = NULL;
 		return err;
@@ -435,12 +451,29 @@ int storage_mountfs(storage_t *strg, const char *name, const char *data, unsigne
 	if (err < 0) {
 		requestctx_done(&fsctx->reqctx);
 		free(fsctx);
+		free(strg->fs->mnt);
 		free(strg->fs);
 		strg->fs = NULL;
 		return err;
 	}
 
 	requestctx_run(&fsctx->reqctx);
+
+	return EOK;
+}
+
+
+int storage_mountpoint(storage_t *strg, oid_t *mnt)
+{
+	if ((strg == NULL) || (strg->fs == NULL) || (mnt == NULL)) {
+		return -EINVAL;
+	}
+
+	/* Mounted rootfs, no mountpoint */
+	if (strg->fs->mnt == NULL) {
+		return -ENOENT;
+	}
+	*mnt = *strg->fs->mnt;
 
 	return EOK;
 }
