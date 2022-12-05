@@ -444,6 +444,8 @@ int storage_mountfs(storage_t *strg, const char *name, const char *data, unsigne
 	root->port = fsctx->reqctx.port;
 	/* Pointer to the storage_fs_t is hold by a request context and passed to a message handler */
 	fsctx->reqctx.data = strg->fs;
+	/* Set filesystem handler */
+	fsctx->handler = handler;
 	/* The filesystem context has to be assign to the storage_fs_t to make umount operation */
 	strg->fs->fsctx = fsctx;
 
