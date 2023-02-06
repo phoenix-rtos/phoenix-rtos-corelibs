@@ -10,7 +10,7 @@
 
 
 NAME := libmtd
-DEP_LIBS := libstorage
+DEPS := libstorage
 LOCAL_SRCS := mtd.c
 LOCAL_HEADERS_DIR := include
 include $(static-lib.mk)
