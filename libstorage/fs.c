@@ -3,8 +3,8 @@
  *
  * Filesystem interface
  *
- * Copyright 2022 Phoenix Systems
- * Author: Hubert Buczynski, Lukasz Kosinski
+ * Copyright 2022, 2023 Phoenix Systems
+ * Author: Hubert Buczynski, Lukasz Kosinski, Hubert Badocha
  *
  * This file is part of Phoenix-RTOS.
  *
@@ -38,7 +38,7 @@ void storage_fsHandler(void *data, msg_t *msg)
 				msg->o.io.err = -ENOSYS;
 				break;
 			}
-			fs->ops->open(fs->info, &msg->i.openclose.oid);
+			msg->o.io.err = fs->ops->open(fs->info, &msg->i.openclose.oid);
 			break;
 
 		case mtClose:
@@ -46,7 +46,7 @@ void storage_fsHandler(void *data, msg_t *msg)
 				msg->o.io.err = -ENOSYS;
 				break;
 			}
-			fs->ops->close(fs->info, &msg->i.openclose.oid);
+			msg->o.io.err = fs->ops->close(fs->info, &msg->i.openclose.oid);
 			break;
 
 		case mtRead:
@@ -74,7 +74,11 @@ void storage_fsHandler(void *data, msg_t *msg)
 			break;
 
 		case mtDevCtl:
-			msg->o.io.err = -EINVAL;
+			if (fs->ops->devctl == NULL) {
+				msg->o.io.err = -ENOSYS;
+				break;
+			}
+			(void)fs->ops->devctl(fs->info, &msg->i.io.oid, msg->i.raw, msg->o.raw);
 			break;
 
 		case mtCreate:
