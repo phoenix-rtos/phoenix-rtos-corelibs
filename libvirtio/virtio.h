@@ -183,7 +183,7 @@ virtio_vtog(64)
 	static inline uint##n##_t virtio_gtov##n(virtio_dev_t *vdev, uint##n##_t val) \
 	{ \
 		if (virtio_modern(vdev)) \
-			val = htole##n##(val); \
+			val = htole##n(val); \
 		return val; \
 	}
 #endif
