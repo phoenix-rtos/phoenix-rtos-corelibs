@@ -16,12 +16,13 @@
 #include <stddef.h>
 #include <string.h>
 
-/* Per project board configuration may overwrite PTABLE_CHECKSUM definition
- * When compiling for linux host board config is not needed, associated with issue #671
+/*
+ * Per project board configuration may overwrite PTABLE_CHECKSUM definition
+ * When compiling on a host the board config is not needed, associated with issue #671
  * It allows building host-utils separately for host-generic-pc
  */
 
-#ifndef __linux__
+#ifdef phoenix
 #include <board_config.h>
 #endif
 
