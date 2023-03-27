@@ -16,6 +16,11 @@
 
 #include <stdint.h>
 
+/* Changelog:
+ * version 2: Add checksum and version fields
+ */
+#define PTABLE_VERSION 2
+
 
 /* Structure of partition table
  *  _________________________________________________________________________
@@ -48,7 +53,8 @@ typedef struct {
 
 typedef struct {
 	uint32_t count;         /* Number of partitions */
-	uint8_t reserved[20];   /* Reserved bytes */
+	uint8_t version;        /* Ptable struct version */
+	uint8_t reserved[19];   /* Reserved bytes */
 	uint32_t crc;           /* Header checksum */
 	ptable_part_t parts[0]; /* Partitions */
 } ptable_t;

@@ -16,23 +16,8 @@
 #include <stddef.h>
 #include <string.h>
 
-/*
- * Per project board configuration may overwrite PTABLE_CHECKSUM definition
- * When compiling on a host the board config is not needed, associated with issue #671
- * It allows building host-utils separately for host-generic-pc
- */
-
-#ifdef phoenix
-#include <board_config.h>
-#endif
 
 #include "ptable.h"
-
-
-/* Enable checksum for partition table */
-#ifndef PTABLE_CHECKSUM
-#define PTABLE_CHECKSUM 0
-#endif
 
 
 static uint32_t ptable_crc32(const void *data, size_t len)
@@ -51,17 +36,15 @@ static uint32_t ptable_crc32(const void *data, size_t len)
 }
 
 
-static int ptable_partVerify(const ptable_t *ptable, const ptable_part_t *part, uint32_t memsz, uint32_t blksz)
+static int ptable_partVerify(const ptable_t *ptable, const ptable_part_t *part, uint32_t memsz, uint32_t blksz, int crcCheck)
 {
 	const ptable_part_t *p;
-	int i;
+	size_t i;
 
-#if PTABLE_CHECKSUM
 	/* Verify partition checksum */
-	if (part->crc != ptable_crc32(part, offsetof(ptable_part_t, crc))) {
+	if ((crcCheck != 0) && (part->crc != ptable_crc32(part, offsetof(ptable_part_t, crc)))) {
 		return -1;
 	}
-#endif
 
 	/* Verify offset and size */
 	if (part->size == 0) {
@@ -127,13 +110,19 @@ static int ptable_partVerify(const ptable_t *ptable, const ptable_part_t *part, 
 static int ptable_verify(const ptable_t *ptable, uint32_t memsz, uint32_t blksz)
 {
 	uint32_t size, i;
+	int crcCheck = 1;
 
-#if PTABLE_CHECKSUM
-	/* Verify header checksum */
-	if (ptable->crc != ptable_crc32(ptable, offsetof(ptable_t, crc))) {
-		return -1;
+	if (ptable->version == 0 || ptable->version == 1 || ptable->version == 0xff) {
+		/* Disable CRC check for legacy ptables */
+		crcCheck = 0;
 	}
-#endif
+
+	if (crcCheck != 0) {
+		/* Verify header checksum */
+		if (ptable->crc != ptable_crc32(ptable, offsetof(ptable_t, crc))) {
+			return -1;
+		}
+	}
 
 	/* Verify partition table size */
 	size = ptable_size(ptable->count);
@@ -148,7 +137,7 @@ static int ptable_verify(const ptable_t *ptable, uint32_t memsz, uint32_t blksz)
 
 	/* Verify partitions */
 	for (i = 0; i < ptable->count; i++) {
-		if (ptable_partVerify(ptable, ptable->parts + i, memsz, blksz) < 0) {
+		if (ptable_partVerify(ptable, ptable->parts + i, memsz, blksz, crcCheck) < 0) {
 			return -1;
 		}
 	}
@@ -185,6 +174,8 @@ int ptable_serialize(ptable_t *ptable, uint32_t memsz, uint32_t blksz)
 	if (ptable == NULL) {
 		return -1;
 	}
+
+	ptable->version = PTABLE_VERSION;
 
 	/* Calculate checksums */
 	ptable->crc = ptable_crc32(ptable, offsetof(ptable_t, crc));
