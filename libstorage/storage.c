@@ -142,7 +142,7 @@ static int queue_init(queue_t *q)
 static void storage_reqthr(void *arg)
 {
 	request_ctx_t *ctx = (request_ctx_t *)arg;
-	request_t *req;
+	request_t *req = NULL;
 	int err;
 
 	for (;;) {
@@ -193,7 +193,7 @@ static void storage_reqthr(void *arg)
 static void storage_poolthr(void *arg)
 {
 	request_ctx_t *ctx;
-	request_t *req;
+	request_t *req = NULL;
 
 	for (;;) {
 		mutexLock(storage_common.lock);
