@@ -169,23 +169,20 @@ static void storage_reqthr(void *arg)
 		mutexLock(ctx->lock);
 
 		if ((err < 0) || (ctx->state == state_exit)) {
-			mutexUnlock(ctx->lock);
-
 			queue_push(&storage_common.free, req);
 			condSignal(storage_common.fcond);
+			mutexUnlock(ctx->lock);
 			endthread();
 		}
 		else if (ctx->state == state_stop) {
 			LIST_ADD(&ctx->stopped, req);
-
-			mutexUnlock(ctx->lock);
 		}
 		else if (ctx->state == state_run) {
-			mutexUnlock(ctx->lock);
-
 			queue_push(&storage_common.ready, req);
 			condSignal(storage_common.rcond);
 		}
+
+		mutexUnlock(ctx->lock);
 	}
 }
 
@@ -227,10 +224,10 @@ static void storage_poolthr(void *arg)
 			priority(POOLTHR_PRIORITY);
 
 			msgRespond(ctx->port, &req->msg, req->rid);
-			queue_push(&storage_common.free, req);
-			condSignal(storage_common.fcond);
 
 			mutexLock(ctx->lock);
+			queue_push(&storage_common.free, req);
+			condSignal(storage_common.fcond);
 
 			if ((--ctx->nreqs == 0) && (ctx->state == state_stop))
 				condSignal(ctx->scond);
