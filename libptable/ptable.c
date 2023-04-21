@@ -17,6 +17,15 @@
 #include <string.h>
 
 
+/* le32toh() and htole32() not defined on MacOS */
+#ifdef __APPLE__
+
+#include <libkern/OSByteOrder.h>
+#define le32toh(x) OSSwapLittleToHostInt32(x)
+#define htole32(x) OSSwapHostToLittleInt32(x)
+
+#endif
+
 #include "ptable.h"
 
 
