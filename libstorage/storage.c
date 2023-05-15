@@ -28,7 +28,9 @@
 #define POOLTHR_PRIORITY 1
 
 
+/* clang-format off */
 enum { state_exit = -1, state_stop, state_run };
+/* clang-format on */
 
 
 typedef struct {
@@ -145,9 +147,8 @@ static void storage_reqthr(void *arg)
 	request_t *req = NULL;
 	int err;
 
+	mutexLock(ctx->lock);
 	for (;;) {
-		mutexLock(ctx->lock);
-
 		while ((ctx->state != state_exit) && ((ctx->state == state_stop) || ((req = queue_pop(&storage_common.free)) == NULL)))
 			condWait(storage_common.fcond, ctx->lock, 0);
 
@@ -181,8 +182,6 @@ static void storage_reqthr(void *arg)
 			queue_push(&storage_common.ready, req);
 			condSignal(storage_common.rcond);
 		}
-
-		mutexUnlock(ctx->lock);
 	}
 }
 
@@ -439,7 +438,7 @@ int storage_mountfs(storage_t *strg, const char *name, const char *data, unsigne
 
 	/* Assign the port to a filesystem from a newly created request context */
 	root->port = fsctx->reqctx.port;
-	/* Pointer to the storage_fs_t is hold by a request context and passed to a message handler */
+	/* Pointer to the storage_fs_t is held by a request context and passed to a message handler */
 	fsctx->reqctx.data = strg->fs;
 	/* Set filesystem handler */
 	fsctx->handler = handler;
