@@ -28,7 +28,7 @@
 
 
 /* Use polling on RISCV64 (interrupts trigger memory protection exception) */
-#ifdef TARGET_RISCV64
+#ifdef __TARGET_RISCV64
 #define USE_POLLING
 #endif
 
@@ -199,7 +199,7 @@ typedef struct {
 /* VirtIO GPU device descriptors */
 static const virtio_devinfo_t info[] = {
 	{ .type = vdevPCI, .id = 0x1050 },
-#ifdef TARGET_RISCV64
+#ifdef __TARGET_RISCV64
 	/* Direct VirtIO MMIO QEMU GPU device descriptors */
 	{ .type = vdevMMIO, .id = 0x10, .irq = 8, .base = { (void *)0x10008000, 0x1000 } },
 	{ .type = vdevMMIO, .id = 0x10, .irq = 7, .base = { (void *)0x10007000, 0x1000 } },
