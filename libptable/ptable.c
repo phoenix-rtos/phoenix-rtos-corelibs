@@ -49,31 +49,33 @@ static int ptable_partVerify(const ptable_t *ptable, const ptable_part_t *part, 
 {
 	const ptable_part_t *p;
 	size_t i;
+	uint32_t size = le32toh(part->size);
+	uint32_t offset = le32toh(part->offset);
 
 	/* Verify partition checksum */
-	if ((crcCheck != 0) && (part->crc != ptable_crc32(part, offsetof(ptable_part_t, crc)))) {
+	if ((crcCheck != 0) && (le32toh(part->crc) != ptable_crc32(part, offsetof(ptable_part_t, crc)))) {
 		return -1;
 	}
 
 	/* Verify offset and size */
-	if (part->size == 0) {
+	if (size == 0) {
 		return -1;
 	}
 
-	if (part->size % blksz != 0) {
+	if (size % blksz != 0) {
 		return -1;
 	}
 
-	if (part->offset % blksz != 0) {
+	if (offset % blksz != 0) {
 		return -1;
 	}
 
-	if (part->offset + part->size > memsz) {
+	if (offset + size > memsz) {
 		return -1;
 	}
 
 	/* Check for overflow */
-	if (part->offset + part->size < part->offset) {
+	if (offset + size < offset) {
 		return -1;
 	}
 
@@ -102,7 +104,7 @@ static int ptable_partVerify(const ptable_t *ptable, const ptable_part_t *part, 
 	/* Compare against previous partitions */
 	for (p = ptable->parts; p != part; p++) {
 		/* Check for range overlap */
-		if ((part->offset <= p->offset + p->size - 1) && (part->offset + part->size - 1 >= p->offset)) {
+		if ((offset <= le32toh(p->offset) + le32toh(p->size) - 1) && (offset + size - 1 >= le32toh(p->offset))) {
 			return -1;
 		}
 
@@ -120,6 +122,7 @@ static int ptable_verify(const ptable_t *ptable, uint32_t memsz, uint32_t blksz)
 {
 	uint32_t size, i;
 	int crcCheck = 1;
+	uint32_t count = le32toh(ptable->count);
 
 	if (ptable->version == 0 || ptable->version == 1 || ptable->version == 0xff) {
 		/* Disable CRC check for legacy ptables */
@@ -128,13 +131,13 @@ static int ptable_verify(const ptable_t *ptable, uint32_t memsz, uint32_t blksz)
 
 	if (crcCheck != 0) {
 		/* Verify header checksum */
-		if (ptable->crc != ptable_crc32(ptable, offsetof(ptable_t, crc))) {
+		if (le32toh(ptable->crc) != ptable_crc32(ptable, offsetof(ptable_t, crc))) {
 			return -1;
 		}
 	}
 
 	/* Verify partition table size */
-	size = ptable_size(ptable->count);
+	size = ptable_size(count);
 	if (size > blksz) {
 		return -1;
 	}
@@ -145,7 +148,7 @@ static int ptable_verify(const ptable_t *ptable, uint32_t memsz, uint32_t blksz)
 	}
 
 	/* Verify partitions */
-	for (i = 0; i < ptable->count; i++) {
+	for (i = 0; i < count; i++) {
 		if (ptable_partVerify(ptable, ptable->parts + i, memsz, blksz, crcCheck) < 0) {
 			return -1;
 		}
@@ -157,10 +160,17 @@ static int ptable_verify(const ptable_t *ptable, uint32_t memsz, uint32_t blksz)
 
 int ptable_deserialize(ptable_t *ptable, uint32_t memsz, uint32_t blksz)
 {
+	int ret;
 	uint32_t i;
 
 	if (ptable == NULL) {
 		return -1;
+	}
+
+	/* CRC must be verified with data in little endian */
+	ret = ptable_verify(ptable, memsz, blksz);
+	if (ret < 0) {
+		return ret;
 	}
 
 	ptable->count = le32toh(ptable->count);
@@ -172,7 +182,8 @@ int ptable_deserialize(ptable_t *ptable, uint32_t memsz, uint32_t blksz)
 		ptable->parts[i].crc = le32toh(ptable->parts[i].crc);
 	}
 
-	return ptable_verify(ptable, memsz, blksz);
+
+	return ret;
 }
 
 
