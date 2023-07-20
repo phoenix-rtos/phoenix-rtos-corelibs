@@ -75,10 +75,12 @@ void storage_fsHandler(void *data, msg_t *msg)
 
 		case mtDevCtl:
 			if (fs->ops->devctl == NULL) {
-				msg->o.io.err = -ENOSYS;
+				/* FIXME this error passing works by accident on ioctl(),
+				 * there's no dedicated error field for devctl. */
+				msg->o.io.err = -ENOTTY; /* To return valid errno on ioctl() */
 				break;
 			}
-			(void)fs->ops->devctl(fs->info, &msg->i.io.oid, msg->i.raw, msg->o.raw);
+			fs->ops->devctl(fs->info, &msg->i.io.oid, msg->i.raw, msg->o.raw);
 			break;
 
 		case mtCreate:
