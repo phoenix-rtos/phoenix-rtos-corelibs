@@ -11,5 +11,5 @@
 NAME := libptable
 LOCAL_SRCS := ptable.c
 LOCAL_HEADERS := ptable.h
-LOCAL_CFLAGS := -I$(PROJECT_PATH)/
+
 include $(static-lib.mk)
