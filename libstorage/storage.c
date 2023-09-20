@@ -66,7 +66,7 @@ struct _storage_fsctx_t {
 
 struct _request_t {
 	msg_t msg;              /* Request message */
-	unsigned long rid;      /* Request message receiving context */
+	msg_rid_t rid;          /* Request message receiving context */
 	request_ctx_t *ctx;     /* Request handling context */
 	request_t *prev, *next; /* Doubly linked list */
 };
