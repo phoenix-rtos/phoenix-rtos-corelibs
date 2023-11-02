@@ -324,7 +324,7 @@ static virtiogpu_req_t *virtiogpu_get(void)
 {
 	virtiogpu_req_t *req;
 
-	if ((req = mmap(NULL, (sizeof(virtiogpu_req_t) + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1), PROT_READ | PROT_WRITE, MAP_UNCACHED | MAP_ANONYMOUS, OID_CONTIGUOUS, 0)) == MAP_FAILED)
+	if ((req = mmap(NULL, (sizeof(virtiogpu_req_t) + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1), PROT_READ | PROT_WRITE, MAP_UNCACHED | MAP_ANONYMOUS | MAP_CONTIGUOUS, -1, 0)) == MAP_FAILED)
 		return NULL;
 
 	if (mutexCreate(&req->lock) < 0) {
@@ -695,7 +695,7 @@ static int virtiogpu_create(virtiogpu_dev_t *vgpu, virtiogpu_req_t *req, unsigne
 	int err;
 
 	res->len = (4 * height * width + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1);
-	if ((res->buff = mmap(NULL, res->len, PROT_READ | PROT_WRITE, MAP_UNCACHED | MAP_ANONYMOUS, OID_CONTIGUOUS, 0)) == MAP_FAILED)
+	if ((res->buff = mmap(NULL, res->len, PROT_READ | PROT_WRITE, MAP_UNCACHED | MAP_ANONYMOUS | MAP_CONTIGUOUS, -1, 0)) == MAP_FAILED)
 		return -ENOMEM;
 
 	if ((err = virtiogpu_alloc(vgpu, req, format, width, height)) < 0) {

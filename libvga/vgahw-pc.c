@@ -203,7 +203,7 @@ int vgahw_init(void *hwctx)
 
 	/* Map VGA memory (64KB) */
 	ctx->memsz = (VGA_MEMSZ + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1);
-	if ((ctx->mem = mmap(NULL, ctx->memsz, PROT_READ | PROT_WRITE, MAP_DEVICE | MAP_SHARED | MAP_UNCACHED | MAP_ANONYMOUS, OID_PHYSMEM, 0xa0000)) == MAP_FAILED)
+	if ((ctx->mem = mmap(NULL, ctx->memsz, PROT_READ | PROT_WRITE, MAP_DEVICE | MAP_SHARED | MAP_UNCACHED | MAP_ANONYMOUS | MAP_PHYSMEM, -1, 0xa0000)) == MAP_FAILED)
 		return -ENOMEM;
 
 	/* Set VGA ports */

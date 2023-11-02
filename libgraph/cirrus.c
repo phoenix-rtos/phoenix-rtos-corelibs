@@ -848,7 +848,7 @@ int cirrus_open(graph_t *graph)
 
 	/* Map video memory */
 	cdev->vmemsz = cirrus_vmemsz(cdev);
-	if ((cdev->vmem = mmap(NULL, (cdev->vmemsz + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1), PROT_READ | PROT_WRITE, MAP_DEVICE | MAP_UNCACHED | MAP_ANONYMOUS, OID_PHYSMEM, pctl.pci.dev.resources[0].base)) == MAP_FAILED) {
+	if ((cdev->vmem = mmap(NULL, (cdev->vmemsz + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1), PROT_READ | PROT_WRITE, MAP_DEVICE | MAP_UNCACHED | MAP_ANONYMOUS | MAP_PHYSMEM, -1, pctl.pci.dev.resources[0].base)) == MAP_FAILED) {
 		vgahw_done(ctx);
 		free(cdev);
 		return -ENOMEM;
