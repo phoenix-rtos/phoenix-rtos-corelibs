@@ -299,7 +299,7 @@ int virtio_initDev(virtio_dev_t *vdev)
 	if (vdev->info.type == vdevPCI)
 		return virtiopci_initDev(vdev);
 
-	if ((vdev->info.base.addr = mmap(NULL, (vdev->info.base.len + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1), PROT_READ | PROT_WRITE, MAP_DEVICE | MAP_UNCACHED, OID_PHYSMEM, (uintptr_t)vdev->info.base.addr)) == MAP_FAILED)
+	if ((vdev->info.base.addr = mmap(NULL, (vdev->info.base.len + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1), PROT_READ | PROT_WRITE, MAP_DEVICE | MAP_UNCACHED | MAP_PHYSMEM | MAP_ANONYMOUS, -1, (uintptr_t)vdev->info.base.addr)) == MAP_FAILED)
 		return -ENOMEM;
 
 	vdev->features = 0ULL;

@@ -39,7 +39,7 @@ static int virtiopci_mapReg(virtio_reg_t *reg)
 	if (addr & 0x1)
 		return EOK;
 
-	if ((reg->addr = mmap(NULL, (reg->len + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1), PROT_READ | PROT_WRITE, MAP_DEVICE | MAP_UNCACHED, OID_PHYSMEM, addr & ~(_PAGE_SIZE - 1))) == MAP_FAILED)
+	if ((reg->addr = mmap(NULL, (reg->len + _PAGE_SIZE - 1) & ~(_PAGE_SIZE - 1), PROT_READ | PROT_WRITE, MAP_DEVICE | MAP_UNCACHED | MAP_PHYSMEM | MAP_ANONYMOUS, -1, addr & ~(_PAGE_SIZE - 1))) == MAP_FAILED)
 		return -ENOMEM;
 	reg->addr = (void *)((uintptr_t)reg->addr + offs);
 
