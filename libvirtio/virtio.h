@@ -155,7 +155,7 @@ static inline void virtio_mb(void)
 	{ \
 		return val; \
 	}
-#else
+#elif __BYTE_ORDER == __BIG_ENDIAN
 	#define virtio_vtog(n) \
 	static inline uint##n##_t virtio_vtog##n(virtio_dev_t *vdev, uint##n##_t val) \
 	{ \
@@ -163,6 +163,8 @@ static inline void virtio_mb(void)
 			val = le##n##toh(val); \
 		return val; \
 	}
+#else
+#error "Unsupported byte order"
 #endif
 
 
@@ -178,7 +180,7 @@ virtio_vtog(64)
 	{ \
 		return val; \
 	}
-#else
+#elif __BYTE_ORDER == __BIG_ENDIAN
 	#define virtio_gtov(n) \
 	static inline uint##n##_t virtio_gtov##n(virtio_dev_t *vdev, uint##n##_t val) \
 	{ \
@@ -186,6 +188,8 @@ virtio_vtog(64)
 			val = htole##n(val); \
 		return val; \
 	}
+#else
+#error "Unsupported byte order"
 #endif
 
 

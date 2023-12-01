@@ -275,8 +275,10 @@ static inline int virtiogpu_xrgb(void)
 {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 	return 2;
-#else
+#elif __BYTE_ORDER == __BIG_ENDIAN
 	return 4;
+#else
+#error "Unsupported byte order"
 #endif
 }
 

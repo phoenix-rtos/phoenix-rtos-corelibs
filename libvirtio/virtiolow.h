@@ -61,10 +61,12 @@ static inline uint64_t virtio_read64(virtio_dev_t *vdev, void *base, unsigned in
 	val = *(volatile uint32_t *)(addr + 4);
 	val <<= 32;
 	val |= *(volatile uint32_t *)addr;
-#else
+#elif __BYTE_ORDER == __BIG_ENDIAN
 	val = *(volatile uint32_t *)addr;
 	val <<= 32;
 	val |= *(volatile uint32_t *)(addr + 4);
+#else
+#error "Unsupported byte order"
 #endif
 
 	return virtio_vtog64(vdev, val);
@@ -121,9 +123,11 @@ static inline void virtio_write64(virtio_dev_t *vdev, void *base, unsigned int r
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 	*(volatile uint32_t *)(addr + 4) = val >> 32;
 	*(volatile uint32_t *)addr = val;
-#else
+#elif __BYTE_ORDER == __BIG_ENDIAN
 	*(volatile uint32_t *)addr = val >> 32;
 	*(volatile uint32_t *)(addr + 4) = val;
+#else
+#error "Unsupported byte order"
 #endif
 }
 
