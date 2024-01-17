@@ -11,7 +11,7 @@ include ../phoenix-rtos-build/Makefile.common
 .DEFAULT_GOAL := all
 
 # DEFAULT_COMPONENTS are shared between all targets
-DEFAULT_COMPONENTS := libcgi libvirtio libvga libgraph libstorage libmtd libptable libuuid libcache libswdg
+DEFAULT_COMPONENTS := libcgi libvirtio libvga libgraph libstorage libmtd libptable libuuid libcache libswdg libmbr
 
 # read out all components
 ALL_MAKES := $(wildcard */Makefile) $(wildcard */*/Makefile)
