@@ -14,7 +14,7 @@
 #include <errno.h>
 #include <string.h>
 
-#include <phoenix/arch/ia32.h>
+#include <phoenix/arch/ia32/ia32.h>
 
 #include <sys/io.h>
 #include <sys/platform.h>

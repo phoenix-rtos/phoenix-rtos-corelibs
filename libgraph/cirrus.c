@@ -64,7 +64,7 @@
 #include <sys/platform.h>
 #include <sys/threads.h>
 
-#include <phoenix/arch/ia32.h>
+#include <phoenix/arch/ia32/ia32.h>
 
 #include <vga.h>
 
