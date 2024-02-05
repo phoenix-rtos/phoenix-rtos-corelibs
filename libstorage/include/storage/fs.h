@@ -27,8 +27,8 @@ typedef struct {
 	int (*open)(void *info, oid_t *oid);
 	int (*close)(void *info, oid_t *oid);
 
-	ssize_t (*read)(void *info, oid_t *oid, offs_t offs, void *data, size_t len);
-	ssize_t (*write)(void *info, oid_t *oid, offs_t offs, const void *data, size_t len);
+	ssize_t (*read)(void *info, oid_t *oid, off_t offs, void *data, size_t len);
+	ssize_t (*write)(void *info, oid_t *oid, off_t offs, const void *data, size_t len);
 	int (*setattr)(void *info, oid_t *oid, int type, long long attr, void *data, size_t len);
 	int (*getattr)(void *info, oid_t *oid, int type, long long *attr);
 	int (*truncate)(void *info, oid_t *oid, size_t size);
@@ -40,7 +40,7 @@ typedef struct {
 	int (*lookup)(void *info, oid_t *oid, const char *name, oid_t *res, oid_t *dev, char *lnk, int lnksz);
 	int (*link)(void *info, oid_t *oid, const char *name, oid_t *res);
 	int (*unlink)(void *info, oid_t *oid, const char *name);
-	int (*readdir)(void *info, oid_t *oid, offs_t offs, struct dirent *dent, size_t size);
+	int (*readdir)(void *info, oid_t *oid, off_t offs, struct dirent *dent, size_t size);
 	int (*statfs)(void *info, void *buf, size_t len);
 	int (*sync)(void *info, oid_t *oid);
 } storage_fsops_t;
