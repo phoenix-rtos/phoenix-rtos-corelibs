@@ -13,7 +13,7 @@
 #define AES_EAX_H
 
 #include <stdint.h>
-#include <aes.h>
+#include <tinyaes/aes.h>
 
 /*
  * NOTICE: to use this operation mode libtinyaes should be compiled with
@@ -21,17 +21,17 @@
  */
 
 enum aes_eax_dir_e {
-    aes_eax__encrypt,
-    aes_eax__decrypt,
+	aes_eax__encrypt,
+	aes_eax__decrypt,
 };
 
 /* AES-EAX encryption or decryption (dir) */
 int AES_EAX_crypt(
-    const uint8_t key[AES_KEYLEN],
-    const uint8_t* nonce, uint16_t nonce_len,
-    const uint8_t* hdr, uint16_t hdr_len,
-    uint8_t* m, uint16_t m_len,
-    uint8_t tag_ptr[AES_BLOCKLEN],
-    enum aes_eax_dir_e dir);
+	const uint8_t key[AES_KEYLEN],
+	const uint8_t *nonce, uint16_t nonce_len,
+	const uint8_t *hdr, uint16_t hdr_len,
+	uint8_t *m, uint16_t m_len,
+	uint8_t tag_ptr[AES_BLOCKLEN],
+	enum aes_eax_dir_e dir);
 
 #endif /* end of AES_EAX_H */
