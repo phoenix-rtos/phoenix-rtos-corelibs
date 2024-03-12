@@ -29,10 +29,11 @@ typedef struct {
 
 	ssize_t (*read)(void *info, oid_t *oid, off_t offs, void *data, size_t len);
 	ssize_t (*write)(void *info, oid_t *oid, off_t offs, const void *data, size_t len);
-	int (*setattr)(void *info, oid_t *oid, int type, long long attr, void *data, size_t len);
+	int (*setattr)(void *info, oid_t *oid, int type, long long attr, const void *data, size_t len);
 	int (*getattr)(void *info, oid_t *oid, int type, long long *attr);
+	int (*getattrall)(void *info, oid_t *oid, struct _attrAll *attrs);
 	int (*truncate)(void *info, oid_t *oid, size_t size);
-	void (*devctl)(void *info, oid_t *oid, const void *in, void *out);
+	int (*devctl)(void *info, oid_t *oid, const void *in, void *out);
 
 	int (*create)(void *info, oid_t *oid, const char *name, oid_t *dev, unsigned mode, int type, oid_t *res);
 	int (*destroy)(void *info, oid_t *oid);
