@@ -20,6 +20,7 @@ include $(static-lib.mk)
 ifeq ($(TARGET_SUBFAMILY), stm32l4x6)
   NAME := libtinyaes-stm32l4
   SRCS := $(filter-out $(LOCAL_PATH)aes.c, $(ALL_SRCS))
+  LOCAL_HEADERS_DIR := __none # prevent headers re-installation
 
   include $(static-lib.mk)
 endif
