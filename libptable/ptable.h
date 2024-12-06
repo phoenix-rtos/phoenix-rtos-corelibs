@@ -14,6 +14,7 @@
 #ifndef _LIB_PTABLE_H_
 #define _LIB_PTABLE_H_
 
+#include <stddef.h>
 #include <stdint.h>
 
 /* Changelog:
@@ -38,7 +39,11 @@ static const uint8_t ptable_magic[] = { 0xde, 0xad, 0xfc, 0xbe };
 
 
 /* Supported partition types */
-enum { ptable_raw = 0x51, ptable_jffs2 = 0x72, ptable_meterfs = 0x75 };
+/* clang-format off */
+enum { ptable_raw = 0x51, ptable_jffs2 = 0x72, ptable_meterfs = 0x75, ptable_futurefs = 0x78 };
+/* clang-format on */
+
+static const uint8_t ptable_knownTypes[] = { ptable_raw, ptable_jffs2, ptable_meterfs, ptable_futurefs };
 
 
 typedef struct {
@@ -58,6 +63,18 @@ typedef struct {
 	uint32_t crc;           /* Header checksum */
 	ptable_part_t parts[0]; /* Partitions */
 } ptable_t;
+
+
+static inline const char *ptable_typeName(int type)
+{
+	switch (type) {
+		case ptable_raw: return "raw";
+		case ptable_jffs2: return "jffs2";
+		case ptable_meterfs: return "meterfs";
+		case ptable_futurefs: return "futurefs";
+		default: return NULL;
+	}
+};
 
 
 /* Returns partition table size provided partition count */
