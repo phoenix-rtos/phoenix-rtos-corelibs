@@ -73,13 +73,13 @@ static void swdg_thread(void *arg)
 
 					/* Reload if there was no reset */
 					_swdg_reload(i, now);
+					deadline = now + swdg_common.chan[i].limit;
 				}
-				else {
-					diff = deadline - now;
-					DEBUG("Channel %zu diff = %llu\n", i, diff);
-					if ((timeout == 0) || (timeout > diff)) {
-						timeout = diff;
-					}
+
+				diff = deadline - now;
+				DEBUG("Channel %zu diff = %llu\n", i, diff);
+				if ((timeout == 0) || (timeout > diff)) {
+					timeout = diff;
 				}
 			}
 		}
