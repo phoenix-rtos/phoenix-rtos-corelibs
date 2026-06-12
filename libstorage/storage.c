@@ -25,7 +25,7 @@
 
 
 #define REQTHR_PRIORITY  1
-#define POOLTHR_PRIORITY 1
+#define POOLTHR_PRIORITY 2
 
 /* clang-format off */
 enum { state_exit = -1, state_stop, state_run };
@@ -90,6 +90,8 @@ static void storage_reqthr(void *arg)
 		}
 
 		mutexLock(ctx->lock);
+		ctx->nreqs++;
+
 		while (ctx->state == state_stop)
 			condWait(ctx->scond, ctx->lock, 0);
 
@@ -100,26 +102,19 @@ static void storage_reqthr(void *arg)
 			endthread();
 		}
 
-		ctx->nreqs++;
 		mutexUnlock(ctx->lock);
 
-		/* Forward to worker pool; msgSend blocks until a poolthr processes and responds */
-		/* TODO: replace this with nonblocking send OR MAYBE DELEGATE THE reply cap
-		 * or whatever that sel4 crap is so that the worker thread does the below
-		 * msgRespond instead
-		 *
-		 * ooooh maybe msgForward?
-		 * */
-		err = msgSend(storage_common.wport, &msg);
-		if (err < 0)
+		/* Forward to worker pool */
+		err = msgForward(storage_common.wport, &msg, rid);
+		if (err < 0) {
 			msg.o.err = err;
+			(void)msgRespond(ctx->port, &msg, rid);
 
-		(void)msgRespond(ctx->port, &msg, rid);
-
-		mutexLock(ctx->lock);
-		if (--ctx->nreqs == 0)
-			condSignal(ctx->scond);
-		mutexUnlock(ctx->lock);
+			mutexLock(ctx->lock);
+			if (--ctx->nreqs == 0)
+				condSignal(ctx->scond);
+			mutexUnlock(ctx->lock);
+		}
 	}
 }
 
@@ -171,6 +166,11 @@ static void storage_poolthr(void *arg)
 		ctx->msgHandler(ctx->data, &msg);
 
 		msgRespond(storage_common.wport, &msg, rid);
+
+		mutexLock(ctx->lock);
+		if (--ctx->nreqs == 0)
+			condSignal(ctx->scond);
+		mutexUnlock(ctx->lock);
 	}
 }
 
