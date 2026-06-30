@@ -54,6 +54,10 @@ extern int storage_unregisterfs(const char *name);
 extern int storage_mountfs(storage_t *strg, const char *name, const char *data, unsigned long mode, oid_t *mnt, oid_t *root);
 
 
+/* Mounts filesystem to predefined port number and request pool */
+extern int storage_mountfsShared(storage_t *strg, struct _storage_pool_t *poolctx, const char *name, const char *data, unsigned long mode, oid_t *mnt, unsigned int rootPort, unsigned int reqtghrpriority);
+
+
 /* Returns filesystem mountpoint (-ENOENT is returned if storage is mounted as rootfs) */
 extern int storage_mountpoint(storage_t *strg, oid_t *mnt);
 

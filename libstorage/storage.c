@@ -366,11 +366,18 @@ static void requestctx_stop(request_ctx_t *ctx)
 static void requestctx_done(request_ctx_t *ctx)
 {
 	request_t *req;
+	msg_t msg = { 0 };
 
 	requestctx_stop(ctx);
+
+	/* ensure reqthr on named port gets waked up */
+	msg.type = mtOpen;
+	msg.oid.id = 0;
+	msg.oid.port = ctx->port;
+	msgSend(ctx->port, &msg);
+
 	mutexLock(ctx->lock);
 
-	portDestroy(ctx->port);
 	ctx->state = state_exit;
 	while ((req = ctx->stopped) != NULL) {
 		LIST_REMOVE(&ctx->stopped, req);
@@ -388,7 +395,7 @@ static void requestctx_done(request_ctx_t *ctx)
 }
 
 
-static int storagectx_init(request_ctx_t *ctx, void (*msgHandler)(void *data, msg_t *msg), storage_pool_t *poolctx)
+static int storagectx_init(request_ctx_t *ctx, void (*msgHandler)(void *data, msg_t *msg), storage_pool_t *poolctx, unsigned int reqthrpriority)
 {
 	int err;
 
@@ -409,7 +416,7 @@ static int storagectx_init(request_ctx_t *ctx, void (*msgHandler)(void *data, ms
 	ctx->nreqs = 0;
 	ctx->state = state_stop;
 
-	err = beginthread(storage_reqthr, REQTHR_PRIORITY, ctx->stack, sizeof(ctx->stack), ctx);
+	err = beginthread(storage_reqthr, reqthrpriority, ctx->stack, sizeof(ctx->stack), ctx);
 	if (err < 0) {
 		resourceDestroy(ctx->scond);
 		resourceDestroy(ctx->lock);
@@ -478,14 +485,20 @@ int storage_unregisterfs(const char *name)
 }
 
 
-int storage_mountfs(storage_t *strg, const char *name, const char *data, unsigned long mode, oid_t *mnt, oid_t *root)
+static int storage_mountfsAny(storage_t *strg, storage_pool_t *poolctx, const char *name, const char *data, unsigned long mode, oid_t *mnt, oid_t *root, unsigned int rootPort, unsigned int reqthrpriority)
 {
 	int err;
 	storage_fsctx_t *fsctx;
 	storage_fsHandler_t *handler = storage_getfs(name);
+	oid_t stackRoot;
 
-	if ((strg == NULL) || (strg->dev == NULL) || (strg->parts != NULL) || (handler == NULL) || (root == NULL))
+	if ((strg == NULL) || (strg->dev == NULL) || (strg->parts != NULL) || (handler == NULL))
 		return -EINVAL;
+
+	if (root == NULL) {
+		stackRoot.port = rootPort;
+		root = &stackRoot;
+	}
 
 	if (strg->fs != NULL)
 		return -EBUSY;
@@ -515,7 +528,9 @@ int storage_mountfs(storage_t *strg, const char *name, const char *data, unsigne
 		strg->fs->mnt = NULL;
 	}
 
-	err = portCreate(&fsctx->reqctx.port);
+	fsctx->reqctx.port = root->port;
+
+	err = storagectx_init(&fsctx->reqctx, storage_fsHandler, poolctx, reqthrpriority);
 	if (err < 0) {
 		free(fsctx);
 		free(strg->fs->mnt);
@@ -524,18 +539,6 @@ int storage_mountfs(storage_t *strg, const char *name, const char *data, unsigne
 		return err;
 	}
 
-	err = storagectx_init(&fsctx->reqctx, storage_fsHandler, &storage_common.pool);
-	if (err < 0) {
-		portDestroy(fsctx->reqctx.port);
-		free(fsctx);
-		free(strg->fs->mnt);
-		free(strg->fs);
-		strg->fs = NULL;
-		return err;
-	}
-
-	/* Assign the port to a filesystem from a newly created request context */
-	root->port = fsctx->reqctx.port;
 	/* Pointer to the storage_fs_t is held by a request context and passed to a message handler */
 	fsctx->reqctx.data = strg->fs;
 	/* Set filesystem handler */
@@ -545,7 +548,6 @@ int storage_mountfs(storage_t *strg, const char *name, const char *data, unsigne
 
 	err = handler->mount(strg, strg->fs, data, mode, root);
 	if (err < 0) {
-		portDestroy(fsctx->reqctx.port);
 		requestctx_done(&fsctx->reqctx);
 		free(fsctx);
 		free(strg->fs->mnt);
@@ -557,6 +559,32 @@ int storage_mountfs(storage_t *strg, const char *name, const char *data, unsigne
 	requestctx_run(&fsctx->reqctx);
 
 	return EOK;
+}
+
+
+int storage_mountfsShared(storage_t *strg, storage_pool_t *poolctx, const char *name, const char *data, unsigned long mode, oid_t *mnt, unsigned int rootPort, unsigned int reqthrpriority)
+{
+	return storage_mountfsAny(strg, poolctx, name, data, mode, mnt, NULL, rootPort, reqthrpriority);
+}
+
+
+int storage_mountfs(storage_t *strg, const char *name, const char *data, unsigned long mode, oid_t *mnt, oid_t *root)
+{
+	int err;
+
+	if (root == NULL)
+		return -EINVAL;
+
+	err = portCreate(&root->port);
+	if (err < 0) {
+		return err;
+	}
+
+	err = storage_mountfsAny(strg, &storage_common.pool, name, data, mode, mnt, root, 0U, REQTHR_PRIORITY);
+	if (err < 0) {
+		portDestroy(root->port);
+	}
+	return err;
 }
 
 
@@ -593,6 +621,8 @@ int storage_umountfs(storage_t *strg)
 		return err;
 	}
 
+	/* Destroy port before waiting for request thread to finish */
+	portDestroy(fsctx->reqctx.port); /* noop for shared ports */
 	requestctx_done(&fsctx->reqctx);
 	free(fsctx);
 	free(strg->fs->mnt);
@@ -868,7 +898,7 @@ int storage_init(void (*msgHandler)(void *data, msg_t *msg), unsigned int queues
 		return err;
 	}
 
-	err = storagectx_init(&storage_common.ctx, msgHandler, &storage_common.pool);
+	err = storagectx_init(&storage_common.ctx, msgHandler, &storage_common.pool, REQTHR_PRIORITY);
 	if (err < 0) {
 		portDestroy(storage_common.ctx.port);
 		storage_poolDone(&storage_common.pool);
