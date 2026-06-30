@@ -58,6 +58,15 @@ typedef struct {
 } request_ctx_t;
 
 
+typedef struct {
+	unsigned int port;                     /* Limited port */
+	request_ctx_t *target;                 /* Target request context */
+	int (*limitF)(void *data, msg_t *msg); /* Limiting handler */
+	void *data;                            /* Limiting handler data */
+	char stack[] __attribute__((aligned(8)));
+} limited_request_ctx_t;
+
+
 struct _storage_fsctx_t {
 	request_ctx_t reqctx;         /* Filesystem requests context */
 	storage_fsHandler_t *handler; /* Filesystem data */
@@ -68,6 +77,7 @@ struct _request_t {
 	msg_t msg;              /* Request message */
 	msg_rid_t rid;          /* Request message receiving context */
 	request_ctx_t *ctx;     /* Request handling context */
+	unsigned int port;      /* Request port */
 	request_t *prev, *next; /* Doubly linked list */
 };
 
@@ -141,6 +151,69 @@ static int queue_init(queue_t *q)
 }
 
 
+static void storage_limitedthr(void *arg)
+{
+	limited_request_ctx_t *lctx = (limited_request_ctx_t *)arg;
+	request_ctx_t *ctx = lctx->target;
+	request_t *req = NULL;
+	int err;
+
+	mutexLock(ctx->lock);
+	for (;;) {
+		while ((ctx->state != state_exit) && ((ctx->state == state_stop) || ((req = queue_pop(&storage_common.free)) == NULL)))
+			condWait(storage_common.fcond, ctx->lock, 0);
+
+		if (ctx->state == state_exit) {
+			mutexUnlock(ctx->lock);
+
+			free(lctx->data);
+			free(lctx);
+			endthread();
+		}
+
+		mutexUnlock(ctx->lock);
+
+		while ((err = msgRecv(lctx->port, &req->msg, &req->rid)) < 0) {
+			/* Closed port */
+			if (err == -EINVAL)
+				break;
+		}
+
+		if (err == EOK) {
+			if ((err = lctx->limitF(lctx->data, &req->msg)) < 0) {
+				req->msg.o.err = err;
+				msgRespond(lctx->port, &req->msg, req->rid);
+
+				mutexLock(ctx->lock);
+				queue_push(&ctx->poolctx->free, req);
+				condSignal(ctx->poolctx->fcond);
+				continue;
+			}
+		}
+
+		req->port = lctx->port;
+		req->ctx = ctx;
+		mutexLock(ctx->lock);
+
+		if ((err < 0) || (ctx->state == state_exit)) {
+			queue_push(&storage_common.free, req);
+			condSignal(storage_common.fcond);
+			mutexUnlock(ctx->lock);
+			free(lctx->data);
+			free(lctx);
+			endthread();
+		}
+		else if (ctx->state == state_stop) {
+			LIST_ADD(&ctx->stopped, req);
+		}
+		else if (ctx->state == state_run) {
+			queue_push(&storage_common.ready, req);
+			condSignal(storage_common.rcond);
+		}
+	}
+}
+
+
 static void storage_reqthr(void *arg)
 {
 	request_ctx_t *ctx = (request_ctx_t *)arg;
@@ -167,6 +240,7 @@ static void storage_reqthr(void *arg)
 		}
 
 		req->ctx = ctx;
+		req->port = ctx->port;
 		mutexLock(ctx->lock);
 
 		if ((err < 0) || (ctx->state == state_exit)) {
@@ -222,7 +296,7 @@ static void storage_poolthr(void *arg)
 			ctx->msgHandler(ctx->data, &req->msg);
 			priority(POOLTHR_PRIORITY);
 
-			msgRespond(ctx->port, &req->msg, req->rid);
+			msgRespond(req->port, &req->msg, req->rid);
 
 			mutexLock(ctx->lock);
 			queue_push(&storage_common.free, req);
@@ -559,6 +633,31 @@ int storage_remove(storage_t *strg)
 		LIST_REMOVE(&strg->parent->parts, strg);
 
 	idtree_remove(&storage_common.strgs, &strg->node);
+
+	return EOK;
+}
+
+
+int storage_bindLimitedPort(unsigned int port, int (*limitF)(void *data, msg_t *msg), void *data, unsigned int reqthrpriority, unsigned int stacksz)
+{
+	int err;
+	limited_request_ctx_t *lctx = malloc(sizeof(limited_request_ctx_t) + stacksz);
+	if (lctx == NULL) {
+		return -ENOMEM;
+	}
+
+	/* Bind to flash operations */
+	lctx->target = &storage_common.ctx;
+
+	lctx->port = port;
+	lctx->limitF = limitF;
+	lctx->data = data;
+
+	err = beginthread(storage_limitedthr, reqthrpriority, lctx->stack, stacksz, lctx);
+	if (err < 0) {
+		free(lctx);
+		return err;
+	}
 
 	return EOK;
 }
