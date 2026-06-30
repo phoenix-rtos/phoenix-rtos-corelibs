@@ -35,6 +35,9 @@ typedef struct _storage_t {
 } storage_t;
 
 
+struct _storage_pool_t;
+
+
 /* Returns registered storage device instance */
 extern storage_t *storage_get(int id);
 
@@ -77,6 +80,12 @@ extern int storage_run(unsigned int nthreads, unsigned int stacksz);
 
 /* Initializes storage handling */
 extern int storage_init(void (*msgHandler)(void *data, msg_t *msg), unsigned int queuesz);
+
+
+struct _storage_pool_t *storage_createPool(unsigned int queuesz, unsigned int nthreads, unsigned int stacksz, unsigned int priority);
+
+
+void storage_poolDestroy(struct _storage_pool_t *poolctx);
 
 
 #endif

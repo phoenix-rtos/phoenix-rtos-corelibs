@@ -24,8 +24,9 @@
 #include "include/storage/storage.h"
 
 
-#define REQTHR_PRIORITY  1
-#define POOLTHR_PRIORITY 1
+#define REQTHR_PRIORITY     1
+#define POOLTHR_PRIORITY    1
+#define POOL_FLAG_PRIO_UPGR (1U << 0) /* Allow upgrading priority when handling the requests */
 
 
 /* clang-format off */
@@ -54,6 +55,7 @@ typedef struct {
 	request_t *stopped;                         /* Stopped requests */
 	handle_t scond;                             /* Stopped requests condition variable */
 	handle_t lock;                              /* Context mutex */
+	struct _storage_pool_t *poolctx;            /* Pool context */
 	char stack[512] __attribute__((aligned(8)));
 } request_ctx_t;
 
@@ -88,16 +90,26 @@ typedef struct {
 } queue_t;
 
 
-static struct {
-	int state;         /* Storage handling state */
-	idtree_t strgs;    /* Storages */
-	rbtree_t fss;      /* Registered filesystems */
+typedef struct _storage_pool_t {
+	int state;         /* Pool handling state */
+	size_t threads;    /* Number of remaining pool threads */
+	handle_t lock;     /* Pool handling mutex */
 	queue_t free;      /* Free requests queue */
 	queue_t ready;     /* Ready requests queue */
 	handle_t fcond;    /* Free requests condition variable */
 	handle_t rcond;    /* Ready requests condition variable */
-	handle_t lock;     /* Storage handling mutex */
-	request_ctx_t ctx; /* Storage devices requests context */
+	char *stacks;      /* Pool threads stacks */
+	request_t *reqs;   /* Pool threads context */
+	unsigned int prio; /* Pool threads priority */
+	unsigned int flags;
+} storage_pool_t;
+
+
+static struct {
+	idtree_t strgs;      /* Storages */
+	rbtree_t fss;        /* Registered filesystems */
+	storage_pool_t pool; /* Default request pool */
+	request_ctx_t ctx;   /* Storage devices requests context */
 } storage_common;
 
 
@@ -160,8 +172,8 @@ static void storage_limitedthr(void *arg)
 
 	mutexLock(ctx->lock);
 	for (;;) {
-		while ((ctx->state != state_exit) && ((ctx->state == state_stop) || ((req = queue_pop(&storage_common.free)) == NULL)))
-			condWait(storage_common.fcond, ctx->lock, 0);
+		while ((ctx->state != state_exit) && ((ctx->state == state_stop) || ((req = queue_pop(&ctx->poolctx->free)) == NULL)))
+			condWait(ctx->poolctx->fcond, ctx->lock, 0);
 
 		if (ctx->state == state_exit) {
 			mutexUnlock(ctx->lock);
@@ -196,8 +208,8 @@ static void storage_limitedthr(void *arg)
 		mutexLock(ctx->lock);
 
 		if ((err < 0) || (ctx->state == state_exit)) {
-			queue_push(&storage_common.free, req);
-			condSignal(storage_common.fcond);
+			queue_push(&ctx->poolctx->free, req);
+			condSignal(ctx->poolctx->fcond);
 			mutexUnlock(ctx->lock);
 			free(lctx->data);
 			free(lctx);
@@ -207,8 +219,8 @@ static void storage_limitedthr(void *arg)
 			LIST_ADD(&ctx->stopped, req);
 		}
 		else if (ctx->state == state_run) {
-			queue_push(&storage_common.ready, req);
-			condSignal(storage_common.rcond);
+			queue_push(&ctx->poolctx->ready, req);
+			condSignal(ctx->poolctx->rcond);
 		}
 	}
 }
@@ -222,8 +234,8 @@ static void storage_reqthr(void *arg)
 
 	mutexLock(ctx->lock);
 	for (;;) {
-		while ((ctx->state != state_exit) && ((ctx->state == state_stop) || ((req = queue_pop(&storage_common.free)) == NULL)))
-			condWait(storage_common.fcond, ctx->lock, 0);
+		while ((ctx->state != state_exit) && ((ctx->state == state_stop) || ((req = queue_pop(&ctx->poolctx->free)) == NULL)))
+			condWait(ctx->poolctx->fcond, ctx->lock, 0);
 
 		if (ctx->state == state_exit) {
 			mutexUnlock(ctx->lock);
@@ -244,8 +256,8 @@ static void storage_reqthr(void *arg)
 		mutexLock(ctx->lock);
 
 		if ((err < 0) || (ctx->state == state_exit)) {
-			queue_push(&storage_common.free, req);
-			condSignal(storage_common.fcond);
+			queue_push(&ctx->poolctx->free, req);
+			condSignal(ctx->poolctx->fcond);
 			mutexUnlock(ctx->lock);
 			endthread();
 		}
@@ -253,8 +265,8 @@ static void storage_reqthr(void *arg)
 			LIST_ADD(&ctx->stopped, req);
 		}
 		else if (ctx->state == state_run) {
-			queue_push(&storage_common.ready, req);
-			condSignal(storage_common.rcond);
+			queue_push(&ctx->poolctx->ready, req);
+			condSignal(ctx->poolctx->rcond);
 		}
 	}
 }
@@ -264,20 +276,24 @@ static void storage_poolthr(void *arg)
 {
 	request_ctx_t *ctx;
 	request_t *req = NULL;
+	storage_pool_t *poolctx = (storage_pool_t *)arg;
+	unsigned int handlingPriority;
 
 	for (;;) {
-		mutexLock(storage_common.lock);
+		mutexLock(poolctx->lock);
 
-		while ((storage_common.state != state_exit) && ((storage_common.state == state_stop) || ((req = queue_pop(&storage_common.ready)) == NULL)))
-			condWait(storage_common.rcond, storage_common.lock, 0);
+		while ((poolctx->state != state_exit) && ((poolctx->state == state_stop) || ((req = queue_pop(&poolctx->ready)) == NULL)))
+			condWait(poolctx->rcond, poolctx->lock, 0);
 
-		if (storage_common.state == state_exit) {
-			mutexUnlock(storage_common.lock);
+		if (poolctx->state == state_exit) {
+			poolctx->threads--;
+			condSignal(poolctx->rcond);
+			mutexUnlock(poolctx->lock);
 
 			endthread();
 		}
 
-		mutexUnlock(storage_common.lock);
+		mutexUnlock(poolctx->lock);
 
 		ctx = req->ctx;
 		mutexLock(ctx->lock);
@@ -292,15 +308,20 @@ static void storage_poolthr(void *arg)
 
 			mutexUnlock(ctx->lock);
 
-			priority(req->msg.priority);
+			handlingPriority = req->msg.priority;
+			if (((storage_common.pool.flags & POOL_FLAG_PRIO_UPGR) == 0) &&
+					(handlingPriority < ctx->poolctx->prio)) {
+				handlingPriority = ctx->poolctx->prio;
+			}
+			priority(handlingPriority);
 			ctx->msgHandler(ctx->data, &req->msg);
-			priority(POOLTHR_PRIORITY);
+			priority(poolctx->prio);
 
 			msgRespond(req->port, &req->msg, req->rid);
 
 			mutexLock(ctx->lock);
-			queue_push(&storage_common.free, req);
-			condSignal(storage_common.fcond);
+			queue_push(&poolctx->free, req);
+			condSignal(poolctx->fcond);
 
 			if ((--ctx->nreqs == 0) && (ctx->state == state_stop))
 				condSignal(ctx->scond);
@@ -321,12 +342,12 @@ static void requestctx_run(request_ctx_t *ctx)
 	while (ctx->stopped != NULL) {
 		req = ctx->stopped->prev;
 		LIST_REMOVE(&ctx->stopped, req);
-		queue_push(&storage_common.ready, req);
-		condSignal(storage_common.rcond);
+		queue_push(&ctx->poolctx->ready, req);
+		condSignal(ctx->poolctx->rcond);
 	}
 
 	mutexUnlock(ctx->lock);
-	condBroadcast(storage_common.fcond);
+	condBroadcast(ctx->poolctx->fcond);
 }
 
 
@@ -353,13 +374,13 @@ static void requestctx_done(request_ctx_t *ctx)
 	ctx->state = state_exit;
 	while ((req = ctx->stopped) != NULL) {
 		LIST_REMOVE(&ctx->stopped, req);
-		queue_push(&storage_common.free, req);
+		queue_push(&ctx->poolctx->free, req);
 	}
 
 	mutexUnlock(ctx->lock);
 
 	do {
-		condBroadcast(storage_common.fcond);
+		condBroadcast(ctx->poolctx->fcond);
 	} while (threadJoin(-1, 10000) < 0);
 
 	resourceDestroy(ctx->scond);
@@ -367,7 +388,7 @@ static void requestctx_done(request_ctx_t *ctx)
 }
 
 
-static int storagectx_init(request_ctx_t *ctx, void (*msgHandler)(void *data, msg_t *msg))
+static int storagectx_init(request_ctx_t *ctx, void (*msgHandler)(void *data, msg_t *msg), storage_pool_t *poolctx)
 {
 	int err;
 
@@ -381,13 +402,7 @@ static int storagectx_init(request_ctx_t *ctx, void (*msgHandler)(void *data, ms
 		return err;
 	}
 
-	err = portCreate(&ctx->port);
-	if (err < 0) {
-		resourceDestroy(ctx->scond);
-		resourceDestroy(ctx->lock);
-		return err;
-	}
-
+	ctx->poolctx = poolctx;
 	ctx->msgHandler = msgHandler;
 	ctx->data = NULL;
 	ctx->stopped = NULL;
@@ -396,7 +411,6 @@ static int storagectx_init(request_ctx_t *ctx, void (*msgHandler)(void *data, ms
 
 	err = beginthread(storage_reqthr, REQTHR_PRIORITY, ctx->stack, sizeof(ctx->stack), ctx);
 	if (err < 0) {
-		portDestroy(ctx->port);
 		resourceDestroy(ctx->scond);
 		resourceDestroy(ctx->lock);
 		return err;
@@ -501,8 +515,18 @@ int storage_mountfs(storage_t *strg, const char *name, const char *data, unsigne
 		strg->fs->mnt = NULL;
 	}
 
-	err = storagectx_init(&fsctx->reqctx, storage_fsHandler);
+	err = portCreate(&fsctx->reqctx.port);
 	if (err < 0) {
+		free(fsctx);
+		free(strg->fs->mnt);
+		free(strg->fs);
+		strg->fs = NULL;
+		return err;
+	}
+
+	err = storagectx_init(&fsctx->reqctx, storage_fsHandler, &storage_common.pool);
+	if (err < 0) {
+		portDestroy(fsctx->reqctx.port);
 		free(fsctx);
 		free(strg->fs->mnt);
 		free(strg->fs);
@@ -521,6 +545,7 @@ int storage_mountfs(storage_t *strg, const char *name, const char *data, unsigne
 
 	err = handler->mount(strg, strg->fs, data, mode, root);
 	if (err < 0) {
+		portDestroy(fsctx->reqctx.port);
 		requestctx_done(&fsctx->reqctx);
 		free(fsctx);
 		free(strg->fs->mnt);
@@ -663,41 +688,83 @@ int storage_bindLimitedPort(unsigned int port, int (*limitF)(void *data, msg_t *
 }
 
 
-int storage_run(unsigned int nthreads, unsigned int stacksz)
+static void storage_poolDone(storage_pool_t *poolctx)
 {
-	unsigned int i, j;
-	char *stacks;
+	mutexLock(poolctx->lock);
+
+	poolctx->state = state_exit;
+
+	condBroadcast(poolctx->rcond);
+
+	while (poolctx->threads > 0)
+		condWait(poolctx->rcond, poolctx->lock, 0);
+
+	mutexUnlock(poolctx->lock);
+
+	free(poolctx->stacks);
+	free(poolctx->reqs);
+	queue_done(&poolctx->free);
+	queue_done(&poolctx->ready);
+	resourceDestroy(poolctx->fcond);
+	resourceDestroy(poolctx->rcond);
+	resourceDestroy(poolctx->lock);
+}
+
+
+void storage_poolDestroy(storage_pool_t *poolctx)
+{
+	storage_poolDone(poolctx);
+	free(poolctx);
+}
+
+
+static int storage_runPool(unsigned int nthreads, unsigned int stacksz, storage_pool_t *poolctx, unsigned int priority)
+{
+	unsigned int i;
 	int err;
 
-	stacks = malloc(nthreads * stacksz);
-	if (stacks == NULL)
+	poolctx->stacks = malloc(nthreads * stacksz);
+	if (poolctx->stacks == NULL)
 		return -ENOMEM;
 
-	storage_common.state = state_run;
+	mutexLock(poolctx->lock);
+
+	poolctx->prio = priority;
+	poolctx->threads = 0;
+	poolctx->state = state_run;
 
 	for (i = 0; i < nthreads; i++) {
-		err = beginthread(storage_poolthr, POOLTHR_PRIORITY, stacks + i * stacksz, stacksz, NULL);
+		poolctx->threads++;
+		err = beginthread(storage_poolthr, priority, poolctx->stacks + i * stacksz, stacksz, poolctx);
 		if (err < 0) {
-			mutexLock(storage_common.lock);
-
-			storage_common.state = state_exit;
-
-			mutexUnlock(storage_common.lock);
-			condBroadcast(storage_common.rcond);
-
-			for (j = 0; j < i; j++) {
-				while (threadJoin(-1, 10000) < 0)
-					condSignal(storage_common.rcond);
-			}
-			free(stacks);
+			poolctx->threads--;
+			mutexUnlock(poolctx->lock);
 			return err;
 		}
 	}
-
-	priority(POOLTHR_PRIORITY);
-	storage_poolthr(NULL);
+	mutexUnlock(poolctx->lock);
 
 	return EOK;
+}
+
+
+int storage_run(unsigned int nthreads, unsigned int stacksz)
+{
+	int err = storage_runPool(nthreads, stacksz, &storage_common.pool, POOLTHR_PRIORITY);
+
+	if (err < 0) {
+		storage_poolDone(&storage_common.pool);
+		return err;
+	}
+
+	mutexLock(storage_common.pool.lock);
+	storage_common.pool.threads++;
+	mutexUnlock(storage_common.pool.lock);
+
+	priority(POOLTHR_PRIORITY);
+	storage_poolthr(&storage_common.pool);
+
+	return err;
 }
 
 
@@ -710,65 +777,107 @@ static int storage_cmpfs(rbnode_t *n1, rbnode_t *n2)
 }
 
 
-int storage_init(void (*msgHandler)(void *data, msg_t *msg), unsigned int queuesz)
+static int storage_initPool(storage_pool_t *poolctx, unsigned int queuesz)
 {
-	request_t *reqs;
 	unsigned int i;
 	int err;
 
-	err = mutexCreate(&storage_common.lock);
+	err = mutexCreate(&poolctx->lock);
 	if (err < 0)
 		goto lock_fail;
 
-	err = condCreate(&storage_common.rcond);
+	err = condCreate(&poolctx->rcond);
 	if (err < 0)
 		goto rcond_fail;
 
-	err = condCreate(&storage_common.fcond);
+	err = condCreate(&poolctx->fcond);
 	if (err < 0)
 		goto fcond_fail;
 
-	err = queue_init(&storage_common.ready);
+	err = queue_init(&poolctx->ready);
 	if (err < 0)
 		goto ready_fail;
 
-	err = queue_init(&storage_common.free);
+	err = queue_init(&poolctx->free);
 	if (err < 0)
 		goto free_fail;
 
-	reqs = malloc(queuesz * sizeof(request_t));
-	if (reqs == NULL) {
+	poolctx->reqs = malloc(queuesz * sizeof(request_t));
+	if (poolctx->reqs == NULL) {
 		err = -ENOMEM;
 		goto reqs_fail;
 	}
 
 	for (i = 0; i < queuesz; i++)
-		LIST_ADD(&storage_common.free.reqs, reqs + i);
+		LIST_ADD(&poolctx->free.reqs, poolctx->reqs + i);
 
-	err = storagectx_init(&storage_common.ctx, msgHandler);
-	if (err < 0)
-		goto ctx_fail;
+	poolctx->state = state_stop;
+	poolctx->threads = 0;
+	poolctx->flags = 0;
 
-	storage_common.state = state_stop;
+	return EOK;
+
+reqs_fail:
+	queue_done(&poolctx->free);
+free_fail:
+	queue_done(&poolctx->ready);
+ready_fail:
+	resourceDestroy(poolctx->fcond);
+fcond_fail:
+	resourceDestroy(poolctx->rcond);
+rcond_fail:
+	resourceDestroy(poolctx->lock);
+lock_fail:
+	return err;
+}
+
+
+storage_pool_t *storage_createPool(unsigned int queuesz, unsigned int nthreads, unsigned int stacksz, unsigned int priority)
+{
+	storage_pool_t *poolctx = malloc(sizeof(storage_pool_t));
+	if (poolctx == NULL)
+		return NULL;
+
+	if (storage_initPool(poolctx, queuesz) < 0) {
+		free(poolctx);
+		return NULL;
+	}
+
+	if (storage_runPool(nthreads, stacksz, poolctx, priority) < 0) {
+		storage_poolDestroy(poolctx);
+		return NULL;
+	}
+
+	return poolctx;
+}
+
+
+int storage_init(void (*msgHandler)(void *data, msg_t *msg), unsigned int queuesz)
+{
+	int err;
+
+	err = storage_initPool(&storage_common.pool, queuesz);
+	if (err < 0) {
+		return err;
+	}
+	storage_common.pool.flags |= POOL_FLAG_PRIO_UPGR;
+
+	err = portCreate(&storage_common.ctx.port);
+	if (err < 0) {
+		storage_poolDone(&storage_common.pool);
+		return err;
+	}
+
+	err = storagectx_init(&storage_common.ctx, msgHandler, &storage_common.pool);
+	if (err < 0) {
+		portDestroy(storage_common.ctx.port);
+		storage_poolDone(&storage_common.pool);
+		return err;
+	}
 
 	lib_rbInit(&storage_common.fss, storage_cmpfs, NULL);
 	idtree_init(&storage_common.strgs);
 	requestctx_run(&storage_common.ctx);
 
 	return EOK;
-
-ctx_fail:
-	free(reqs);
-reqs_fail:
-	queue_done(&storage_common.free);
-free_fail:
-	queue_done(&storage_common.ready);
-ready_fail:
-	resourceDestroy(storage_common.fcond);
-fcond_fail:
-	resourceDestroy(storage_common.rcond);
-rcond_fail:
-	resourceDestroy(storage_common.lock);
-lock_fail:
-	return err;
 }
