@@ -67,6 +67,10 @@ extern int storage_add(storage_t *strg, oid_t *oid);
 extern int storage_remove(storage_t *strg);
 
 
+/* Starts flash requests handler with applied limiting for specified port */
+extern int storage_bindLimitedPort(unsigned int port, int (*limit)(void *data, msg_t *msg), void *data, unsigned int reqthrpriority, unsigned int stacksz);
+
+
 /* Starts storage requests handling */
 extern int storage_run(unsigned int nthreads, unsigned int stacksz);
 
