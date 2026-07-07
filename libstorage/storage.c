@@ -110,6 +110,9 @@ static struct {
 	rbtree_t fss;        /* Registered filesystems */
 	storage_pool_t pool; /* Default request pool */
 	request_ctx_t ctx;   /* Storage devices requests context */
+	handle_t lock;       /* Initialization mutex */
+	int state;           /* Initialization state */
+	handle_t icond;      /* Initialization finished condition variable */
 } storage_common;
 
 
@@ -169,6 +172,11 @@ static void storage_limitedthr(void *arg)
 	request_ctx_t *ctx = lctx->target;
 	request_t *req = NULL;
 	int err;
+
+	mutexLock(storage_common.lock);
+	while (storage_common.state != state_run)
+		condWait(storage_common.icond, storage_common.lock, 0);
+	mutexUnlock(storage_common.lock);
 
 	mutexLock(ctx->lock);
 	for (;;) {
@@ -231,6 +239,11 @@ static void storage_reqthr(void *arg)
 	request_ctx_t *ctx = (request_ctx_t *)arg;
 	request_t *req = NULL;
 	int err;
+
+	mutexLock(storage_common.lock);
+	while (storage_common.state != state_run)
+		condWait(storage_common.icond, storage_common.lock, 0);
+	mutexUnlock(storage_common.lock);
 
 	mutexLock(ctx->lock);
 	for (;;) {
@@ -780,7 +793,14 @@ static int storage_runPool(unsigned int nthreads, unsigned int stacksz, storage_
 
 int storage_run(unsigned int nthreads, unsigned int stacksz)
 {
-	int err = storage_runPool(nthreads, stacksz, &storage_common.pool, POOLTHR_PRIORITY);
+	int err;
+
+	mutexLock(storage_common.lock);
+	storage_common.state = state_run;
+	condBroadcast(storage_common.icond);
+	mutexUnlock(storage_common.lock);
+
+	err = storage_runPool(nthreads, stacksz, &storage_common.pool, POOLTHR_PRIORITY);
 
 	if (err < 0) {
 		storage_poolDone(&storage_common.pool);
@@ -885,6 +905,16 @@ storage_pool_t *storage_createPool(unsigned int queuesz, unsigned int nthreads, 
 int storage_init(void (*msgHandler)(void *data, msg_t *msg), unsigned int queuesz)
 {
 	int err;
+
+	storage_common.state = state_stop;
+	err = mutexCreate(&storage_common.lock);
+	if (err < 0) {
+		return err;
+	}
+	err = condCreate(&storage_common.icond);
+	if (err < 0) {
+		return err;
+	}
 
 	err = storage_initPool(&storage_common.pool, queuesz);
 	if (err < 0) {
