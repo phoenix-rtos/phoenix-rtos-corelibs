@@ -139,7 +139,7 @@ static void storage_reqthr(void *arg)
 
 		if ((err < 0) || (ctx->state == state_exit)) {
 			queue_push(&storage_common.free, req);
-			condSignal(storage_common.fcond);
+			condBroadcast(storage_common.fcond);
 			mutexUnlock(storage_common.lock);
 			endthread();
 		}
@@ -188,7 +188,7 @@ static void storage_poolthr(void *arg)
 
 			mutexLock(storage_common.lock);
 			queue_push(&storage_common.free, req);
-			condSignal(storage_common.fcond);
+			condBroadcast(storage_common.fcond);
 
 			if ((--ctx->nreqs == 0) && (ctx->state == state_stop))
 				condSignal(ctx->scond);
