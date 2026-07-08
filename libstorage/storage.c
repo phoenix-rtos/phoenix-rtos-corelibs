@@ -138,6 +138,13 @@ static void storage_reqthr(void *arg)
 		mutexLock(storage_common.lock);
 
 		if ((err < 0) || (ctx->state == state_exit)) {
+			if (err == 0) {
+				mutexUnlock(storage_common.lock);
+				req->msg.o.err = -ENODEV;
+				msgRespond(ctx->port, &req->msg, req->rid);
+				mutexLock(storage_common.lock);
+			}
+
 			queue_push(&storage_common.free, req);
 			condBroadcast(storage_common.fcond);
 			mutexUnlock(storage_common.lock);
@@ -250,14 +257,21 @@ static void requestctx_done(request_ctx_t *ctx)
 	requestctx_stop(ctx);
 	mutexLock(storage_common.lock);
 
-	portDestroy(ctx->port);
 	ctx->state = state_exit;
 	while ((req = ctx->stopped) != NULL) {
 		LIST_REMOVE(&ctx->stopped, req);
+
+		mutexUnlock(storage_common.lock);
+		req->msg.o.err = -ENODEV;
+		msgRespond(ctx->port, &req->msg, req->rid);
+		mutexLock(storage_common.lock);
+
 		queue_push(&storage_common.free, req);
 	}
 
 	mutexUnlock(storage_common.lock);
+
+	portDestroy(ctx->port);
 
 	do {
 		condBroadcast(storage_common.fcond);
