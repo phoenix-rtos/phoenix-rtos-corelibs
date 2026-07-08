@@ -53,7 +53,6 @@ typedef struct {
 	void *data;                                 /* Message handling data */
 	request_t *stopped;                         /* Stopped requests */
 	handle_t scond;                             /* Stopped requests condition variable */
-	handle_t lock;                              /* Context mutex */
 	char stack[512] __attribute__((aligned(8)));
 } request_ctx_t;
 
@@ -74,7 +73,6 @@ struct _request_t {
 
 typedef struct {
 	request_t *reqs; /* Requests queue */
-	handle_t lock;   /* Queue mutex */
 } queue_t;
 
 
@@ -95,17 +93,11 @@ static request_t *queue_pop(queue_t *q)
 {
 	request_t *req;
 
-	mutexLock(q->lock);
-
-	if (q->reqs == NULL) {
-		mutexUnlock(q->lock);
+	if (q->reqs == NULL)
 		return NULL;
-	}
 
 	req = q->reqs;
 	LIST_REMOVE(&q->reqs, req);
-
-	mutexUnlock(q->lock);
 
 	return req;
 }
@@ -113,31 +105,7 @@ static request_t *queue_pop(queue_t *q)
 
 static void queue_push(queue_t *q, request_t *req)
 {
-	mutexLock(q->lock);
-
 	LIST_ADD(&q->reqs, req);
-
-	mutexUnlock(q->lock);
-}
-
-
-static void queue_done(queue_t *q)
-{
-	resourceDestroy(q->lock);
-}
-
-
-static int queue_init(queue_t *q)
-{
-	int err;
-
-	err = mutexCreate(&q->lock);
-	if (err < 0)
-		return err;
-
-	q->reqs = NULL;
-
-	return EOK;
 }
 
 
@@ -147,18 +115,18 @@ static void storage_reqthr(void *arg)
 	request_t *req = NULL;
 	int err;
 
-	mutexLock(ctx->lock);
+	mutexLock(storage_common.lock);
 	for (;;) {
 		while ((ctx->state != state_exit) && ((ctx->state == state_stop) || ((req = queue_pop(&storage_common.free)) == NULL)))
-			condWait(storage_common.fcond, ctx->lock, 0);
+			condWait(storage_common.fcond, storage_common.lock, 0);
 
 		if (ctx->state == state_exit) {
-			mutexUnlock(ctx->lock);
+			mutexUnlock(storage_common.lock);
 
 			endthread();
 		}
 
-		mutexUnlock(ctx->lock);
+		mutexUnlock(storage_common.lock);
 
 		while ((err = msgRecv(ctx->port, &req->msg, &req->rid)) < 0) {
 			/* Closed port */
@@ -167,12 +135,12 @@ static void storage_reqthr(void *arg)
 		}
 
 		req->ctx = ctx;
-		mutexLock(ctx->lock);
+		mutexLock(storage_common.lock);
 
 		if ((err < 0) || (ctx->state == state_exit)) {
 			queue_push(&storage_common.free, req);
 			condSignal(storage_common.fcond);
-			mutexUnlock(ctx->lock);
+			mutexUnlock(storage_common.lock);
 			endthread();
 		}
 		else if (ctx->state == state_stop) {
@@ -191,9 +159,8 @@ static void storage_poolthr(void *arg)
 	request_ctx_t *ctx;
 	request_t *req = NULL;
 
+	mutexLock(storage_common.lock);
 	for (;;) {
-		mutexLock(storage_common.lock);
-
 		while ((storage_common.state != state_exit) && ((storage_common.state == state_stop) || ((req = queue_pop(&storage_common.ready)) == NULL)))
 			condWait(storage_common.rcond, storage_common.lock, 0);
 
@@ -203,20 +170,15 @@ static void storage_poolthr(void *arg)
 			endthread();
 		}
 
-		mutexUnlock(storage_common.lock);
-
 		ctx = req->ctx;
-		mutexLock(ctx->lock);
 
 		if (ctx->state == state_stop) {
 			LIST_ADD(&ctx->stopped, req);
-
-			mutexUnlock(ctx->lock);
 		}
 		else {
 			ctx->nreqs++;
 
-			mutexUnlock(ctx->lock);
+			mutexUnlock(storage_common.lock);
 
 			priority(req->msg.priority);
 			ctx->msgHandler(ctx->data, &req->msg);
@@ -224,14 +186,12 @@ static void storage_poolthr(void *arg)
 
 			msgRespond(ctx->port, &req->msg, req->rid);
 
-			mutexLock(ctx->lock);
+			mutexLock(storage_common.lock);
 			queue_push(&storage_common.free, req);
 			condSignal(storage_common.fcond);
 
 			if ((--ctx->nreqs == 0) && (ctx->state == state_stop))
 				condSignal(ctx->scond);
-
-			mutexUnlock(ctx->lock);
 		}
 	}
 }
@@ -241,7 +201,7 @@ static void requestctx_run(request_ctx_t *ctx)
 {
 	request_t *req;
 
-	mutexLock(ctx->lock);
+	mutexLock(storage_common.lock);
 
 	ctx->state = state_run;
 	while (ctx->stopped != NULL) {
@@ -251,20 +211,20 @@ static void requestctx_run(request_ctx_t *ctx)
 		condSignal(storage_common.rcond);
 	}
 
-	mutexUnlock(ctx->lock);
 	condBroadcast(storage_common.fcond);
+	mutexUnlock(storage_common.lock);
 }
 
 
 static void requestctx_stop(request_ctx_t *ctx)
 {
-	mutexLock(ctx->lock);
+	mutexLock(storage_common.lock);
 
 	ctx->state = state_stop;
 	while (ctx->nreqs)
-		condWait(ctx->scond, ctx->lock, 0);
+		condWait(ctx->scond, storage_common.lock, 0);
 
-	mutexUnlock(ctx->lock);
+	mutexUnlock(storage_common.lock);
 }
 
 
@@ -273,7 +233,7 @@ static void requestctx_done(request_ctx_t *ctx)
 	request_t *req;
 
 	requestctx_stop(ctx);
-	mutexLock(ctx->lock);
+	mutexLock(storage_common.lock);
 
 	portDestroy(ctx->port);
 	ctx->state = state_exit;
@@ -282,14 +242,13 @@ static void requestctx_done(request_ctx_t *ctx)
 		queue_push(&storage_common.free, req);
 	}
 
-	mutexUnlock(ctx->lock);
+	mutexUnlock(storage_common.lock);
 
 	do {
 		condBroadcast(storage_common.fcond);
 	} while (threadJoin(-1, 10000) < 0);
 
 	resourceDestroy(ctx->scond);
-	resourceDestroy(ctx->lock);
 }
 
 
@@ -297,20 +256,13 @@ static int storagectx_init(request_ctx_t *ctx, void (*msgHandler)(void *data, ms
 {
 	int err;
 
-	err = mutexCreate(&ctx->lock);
+	err = condCreate(&ctx->scond);
 	if (err < 0)
 		return err;
-
-	err = condCreate(&ctx->scond);
-	if (err < 0) {
-		resourceDestroy(ctx->lock);
-		return err;
-	}
 
 	err = portCreate(&ctx->port);
 	if (err < 0) {
 		resourceDestroy(ctx->scond);
-		resourceDestroy(ctx->lock);
 		return err;
 	}
 
@@ -324,7 +276,6 @@ static int storagectx_init(request_ctx_t *ctx, void (*msgHandler)(void *data, ms
 	if (err < 0) {
 		portDestroy(ctx->port);
 		resourceDestroy(ctx->scond);
-		resourceDestroy(ctx->lock);
 		return err;
 	}
 
@@ -582,9 +533,9 @@ int storage_run(unsigned int nthreads, unsigned int stacksz)
 			mutexLock(storage_common.lock);
 
 			storage_common.state = state_exit;
+			condBroadcast(storage_common.rcond);
 
 			mutexUnlock(storage_common.lock);
-			condBroadcast(storage_common.rcond);
 
 			for (j = 0; j < i; j++) {
 				while (threadJoin(-1, 10000) < 0)
@@ -629,13 +580,8 @@ int storage_init(void (*msgHandler)(void *data, msg_t *msg), unsigned int queues
 	if (err < 0)
 		goto fcond_fail;
 
-	err = queue_init(&storage_common.ready);
-	if (err < 0)
-		goto ready_fail;
-
-	err = queue_init(&storage_common.free);
-	if (err < 0)
-		goto free_fail;
+	storage_common.ready.reqs = NULL;
+	storage_common.free.reqs = NULL;
 
 	reqs = malloc(queuesz * sizeof(request_t));
 	if (reqs == NULL) {
@@ -661,10 +607,6 @@ int storage_init(void (*msgHandler)(void *data, msg_t *msg), unsigned int queues
 ctx_fail:
 	free(reqs);
 reqs_fail:
-	queue_done(&storage_common.free);
-free_fail:
-	queue_done(&storage_common.ready);
-ready_fail:
 	resourceDestroy(storage_common.fcond);
 fcond_fail:
 	resourceDestroy(storage_common.rcond);
