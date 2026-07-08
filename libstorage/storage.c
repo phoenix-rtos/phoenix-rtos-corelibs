@@ -218,7 +218,22 @@ static void requestctx_run(request_ctx_t *ctx)
 
 static void requestctx_stop(request_ctx_t *ctx)
 {
+	request_t *req, *nreq, *tail;
+
 	mutexLock(storage_common.lock);
+
+	nreq = storage_common.ready.reqs;
+	if (nreq != NULL) {
+		tail = nreq->prev;
+		do {
+			req = nreq;
+			nreq = nreq->next;
+			if (req->ctx == ctx) {
+				LIST_REMOVE(&storage_common.ready, req);
+				LIST_ADD(&ctx->stopped, req);
+			}
+		} while (req != tail);
+	}
 
 	ctx->state = state_stop;
 	while (ctx->nreqs)
