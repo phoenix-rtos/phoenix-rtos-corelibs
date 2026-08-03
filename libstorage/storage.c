@@ -54,6 +54,7 @@ typedef struct {
 	request_t *stopped;                         /* Stopped requests */
 	handle_t scond;                             /* Stopped requests condition variable */
 	handle_t lock;                              /* Context mutex */
+	handle_t hlock;                             /* Serializes message handler execution for this context */
 	char stack[512] __attribute__((aligned(8)));
 } request_ctx_t;
 
@@ -218,9 +219,11 @@ static void storage_poolthr(void *arg)
 
 			mutexUnlock(ctx->lock);
 
+			mutexLock(ctx->hlock);
 			priority(req->msg.priority);
 			ctx->msgHandler(ctx->data, &req->msg);
 			priority(POOLTHR_PRIORITY);
+			mutexUnlock(ctx->hlock);
 
 			msgRespond(ctx->port, &req->msg, req->rid);
 
@@ -288,6 +291,7 @@ static void requestctx_done(request_ctx_t *ctx)
 		condBroadcast(storage_common.fcond);
 	} while (threadJoin(-1, 10000) < 0);
 
+	resourceDestroy(ctx->hlock);
 	resourceDestroy(ctx->scond);
 	resourceDestroy(ctx->lock);
 }
@@ -307,8 +311,16 @@ static int storagectx_init(request_ctx_t *ctx, void (*msgHandler)(void *data, ms
 		return err;
 	}
 
+	err = mutexCreate(&ctx->hlock);
+	if (err < 0) {
+		resourceDestroy(ctx->scond);
+		resourceDestroy(ctx->lock);
+		return err;
+	}
+
 	err = portCreate(&ctx->port);
 	if (err < 0) {
+		resourceDestroy(ctx->hlock);
 		resourceDestroy(ctx->scond);
 		resourceDestroy(ctx->lock);
 		return err;
@@ -323,6 +335,7 @@ static int storagectx_init(request_ctx_t *ctx, void (*msgHandler)(void *data, ms
 	err = beginthread(storage_reqthr, REQTHR_PRIORITY, ctx->stack, sizeof(ctx->stack), ctx);
 	if (err < 0) {
 		portDestroy(ctx->port);
+		resourceDestroy(ctx->hlock);
 		resourceDestroy(ctx->scond);
 		resourceDestroy(ctx->lock);
 		return err;
