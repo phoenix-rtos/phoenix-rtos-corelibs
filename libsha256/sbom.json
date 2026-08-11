@@ -1,0 +1,45 @@
+{
+	"bomFormat": "CycloneDX",
+	"specVersion": "1.5",
+	"version": 1,
+	"metadata": {
+		"component": {
+			"type": "library",
+			"name": "libsha256",
+			"description": "SHA-256 (FIPS 180-4) for Phoenix-RTOS"
+		},
+		"properties": [
+			{
+				"name": "scope",
+				"value": "Third-party code vendored by this component only. Meant to be merged into a product-level SBOM, not scanned on its own."
+			}
+		]
+	},
+	"components": [
+		{
+			"type": "library",
+			"name": "libtomcrypt",
+			"version": "7e863d21429f94ed6a720e24499a12a3f852bb31",
+			"purl": "pkg:github/libtom/libtomcrypt@7e863d21429f94ed6a720e24499a12a3f852bb31",
+			"cpe": "cpe:2.3:a:libtom:libtomcrypt:*:*:*:*:*:*:*:*",
+			"description": "SHA-256 and mem_neq extracted into sha256.c",
+			"licenses": [
+				{
+					"license": {
+						"id": "Unlicense"
+					}
+				}
+			],
+			"properties": [
+				{
+					"name": "source",
+					"value": "src/hashes/sha2/sha256.c, src/misc/mem_neq.c and the headers they need, concatenated with the preprocessor directives resolved (LTC_SHA256 and LTC_SMALL_CODE defined, LTC_CLEAN_STACK undefined)"
+				},
+				{
+					"name": "note",
+					"value": "Tracked by commit, not by version: the snapshot is taken from master past the last release tag, so a version string would match no advisory. Formatting is left as upstream so the extract stays diffable against it."
+				}
+			]
+		}
+	]
+}
