@@ -1,0 +1,12 @@
+test:
+  type: unity
+  tests:
+    - name: unit
+      execute: test-libsha256
+      targets:
+        include: [host-generic-pc]
+
+    - name: unit-internal
+      execute: test-libsha256-internal
+      targets:
+        include: [host-generic-pc]
