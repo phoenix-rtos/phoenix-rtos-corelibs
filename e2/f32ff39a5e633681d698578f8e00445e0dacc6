@@ -1,0 +1,22 @@
+libsha256/tests/Makefile
+  s_cad972159e663d::t_9b65b5e5462aa5 1-18
+libsha256/tests/test_sha256.c
+  s_cad972159e663d::t_3f470266f3b623 50
+  s_cad972159e663d::t_a28e99e34b00ba 2,5-6,17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "e2f32ff39a5e633681d698578f8e00445e0dacc6",
+  "prompts": {},
+  "sessions": {
+    "s_cad972159e663d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "146002b0-a47c-43c2-b86f-75a537b3e3c1",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Marek Białowąs <marek.bialowas@phoenix-rtos.com>"
+    }
+  }
+}
