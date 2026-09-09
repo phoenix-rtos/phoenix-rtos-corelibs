@@ -218,9 +218,9 @@ static void storage_poolthr(void *arg)
 
 			mutexUnlock(ctx->lock);
 
-			priority(req->msg.priority);
+			setPriority(req->msg.priority);
 			ctx->msgHandler(ctx->data, &req->msg);
-			priority(POOLTHR_PRIORITY);
+			setPriority(POOLTHR_PRIORITY);
 
 			msgRespond(ctx->port, &req->msg, req->rid);
 
@@ -595,7 +595,7 @@ int storage_run(unsigned int nthreads, unsigned int stacksz)
 		}
 	}
 
-	priority(POOLTHR_PRIORITY);
+	setPriority(POOLTHR_PRIORITY);
 	storage_poolthr(NULL);
 
 	return EOK;
