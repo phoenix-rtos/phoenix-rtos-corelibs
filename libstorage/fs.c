@@ -62,7 +62,8 @@ void storage_fsHandler(void *data, msg_t *msg)
 				msg->o.err = -ENOSYS;
 				break;
 			}
-			msg->o.err = fs->ops->write(fs->info, &msg->oid, msg->i.io.offs, msg->i.data, msg->i.size);
+			msg->o.io.offs = msg->i.io.offs;
+			msg->o.err = fs->ops->write(fs->info, &msg->oid, &msg->o.io.offs, msg->i.data, msg->i.size, msg->i.io.mode);
 			break;
 
 		case mtTruncate:

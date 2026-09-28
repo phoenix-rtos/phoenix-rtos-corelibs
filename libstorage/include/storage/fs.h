@@ -28,7 +28,7 @@ typedef struct {
 	int (*close)(void *info, oid_t *oid);
 
 	ssize_t (*read)(void *info, oid_t *oid, off_t offs, void *data, size_t len);
-	ssize_t (*write)(void *info, oid_t *oid, off_t offs, const void *data, size_t len);
+	ssize_t (*write)(void *info, oid_t *oid, off_t *offs, const void *data, size_t len, unsigned int mode);
 	int (*setattr)(void *info, oid_t *oid, int type, long long attr, const void *data, size_t len);
 	int (*getattr)(void *info, oid_t *oid, int type, long long *attr);
 	int (*getattrall)(void *info, oid_t *oid, struct _attrAll *attrs);
