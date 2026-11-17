@@ -1329,6 +1329,7 @@ static void runner(void)
 
 	RUN_TEST_GROUP(test_model);
 	RUN_TEST_GROUP(test_faults);
+	RUN_TEST_GROUP(test_bounds);
 }
 
 

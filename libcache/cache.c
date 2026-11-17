@@ -160,10 +160,19 @@ static uint64_t cache_computeAddr(const cachectx_t *cache, uint64_t tag, uint64_
 }
 
 
+/* The last line is shorter when the source memory size is not a multiple of the line size */
+static size_t cache_computeLineLen(const cachectx_t *cache, uint64_t addr)
+{
+	uint64_t left = cache->srcMemSize - addr;
+
+	return (left < cache->lineSize) ? (size_t)left : cache->lineSize;
+}
+
+
 static int cache_flushLine(cachectx_t *cache, cacheline_t *linePtr, uint64_t addr)
 {
 	ssize_t writeCount = 0, position = 0;
-	size_t left = cache->lineSize;
+	size_t left = cache_computeLineLen(cache, addr);
 
 	if ((linePtr != NULL) && IS_VALID(linePtr->flags) && IS_DIRTY(linePtr->flags)) {
 		while (left > 0) {
@@ -350,7 +359,7 @@ static int cache_fetchLine(cachectx_t *cache, cacheline_t *linePtr, const uint64
 {
 	uint64_t tempAddr = 0;
 	ssize_t readCount = 0, position = 0;
-	size_t left = cache->lineSize;
+	size_t left = cache_computeLineLen(cache, addr);
 
 	tempAddr = addr;
 
@@ -383,10 +392,10 @@ ssize_t cache_write(cachectx_t *cache, uint64_t addr, const void *buffer, size_t
 	if (buffer == NULL || (policy != LIBCACHE_WRITE_BACK && policy != LIBCACHE_WRITE_THROUGH) || addr > cache->srcMemSize) {
 		return -EINVAL;
 	}
-	if (count == 0) {
+	if (count == 0 || addr == cache->srcMemSize) {
 		return 0;
 	}
-	if ((addr < cache->srcMemSize) && (addr + count > cache->srcMemSize)) {
+	if (count > cache->srcMemSize - addr) {
 		count = cache->srcMemSize - addr;
 	}
 
@@ -453,10 +462,10 @@ ssize_t cache_read(cachectx_t *cache, uint64_t addr, void *buffer, size_t count)
 	if (buffer == NULL || addr > cache->srcMemSize) {
 		return -EINVAL;
 	}
-	if (count == 0) {
+	if (count == 0 || addr == cache->srcMemSize) {
 		return 0;
 	}
-	if ((addr < cache->srcMemSize) && (addr + count > cache->srcMemSize)) {
+	if (count > cache->srcMemSize - addr) {
 		count = cache->srcMemSize - addr;
 	}
 
@@ -513,8 +522,12 @@ int cache_flush(cachectx_t *cache, const uint64_t begAddr, const uint64_t endAdd
 		return -EINVAL;
 	}
 
-	if (begAddr < cache->srcMemSize && endAddr > cache->srcMemSize) {
+	if (endAddr > cache->srcMemSize) {
 		end = cache->srcMemSize;
+	}
+	/* An empty range does not cover the line it lies in */
+	if (begAddr == end) {
+		return EOK;
 	}
 
 	begOffset = cache_computeOffset(cache, begAddr);
@@ -565,8 +578,12 @@ int cache_invalidate(cachectx_t *cache, const uint64_t begAddr, const uint64_t e
 	if (begAddr > endAddr || begAddr > cache->srcMemSize) {
 		return -EINVAL;
 	}
-	if (begAddr < cache->srcMemSize && endAddr > cache->srcMemSize) {
+	if (endAddr > cache->srcMemSize) {
 		end = cache->srcMemSize;
+	}
+	/* An empty range does not cover the line it lies in */
+	if (begAddr == end) {
+		return EOK;
 	}
 
 	begOffset = cache_computeOffset(cache, begAddr);
@@ -602,8 +619,12 @@ int cache_clean(cachectx_t *cache, const uint64_t begAddr, const uint64_t endAdd
 	if (begAddr > endAddr || begAddr > cache->srcMemSize) {
 		return -EINVAL;
 	}
-	if (begAddr < cache->srcMemSize && endAddr > cache->srcMemSize) {
+	if (endAddr > cache->srcMemSize) {
 		end = cache->srcMemSize;
+	}
+	/* An empty range does not cover the line it lies in */
+	if (begAddr == end) {
+		return EOK;
 	}
 
 	begOffset = cache_computeOffset(cache, begAddr);
