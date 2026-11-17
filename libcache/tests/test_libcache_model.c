@@ -574,6 +574,15 @@ TEST(test_model, randomReadsOfChangingDevice)
 }
 
 
+/* The source memory ends in the middle of a line */
+TEST(test_model, randomOperationsShortLastLine)
+{
+	teardown();
+	setup(DEV_SIZE + 7, NUM_SETS * NUM_WAYS);
+	randomOps(20000, false);
+}
+
+
 TEST_GROUP_RUNNER(test_model)
 {
 	RUN_TEST_CASE(test_model, lru_evictionOrder);
@@ -590,4 +599,5 @@ TEST_GROUP_RUNNER(test_model)
 	RUN_TEST_CASE(test_model, partialLines);
 	RUN_TEST_CASE(test_model, randomOperations);
 	RUN_TEST_CASE(test_model, randomReadsOfChangingDevice);
+	RUN_TEST_CASE(test_model, randomOperationsShortLastLine);
 }
