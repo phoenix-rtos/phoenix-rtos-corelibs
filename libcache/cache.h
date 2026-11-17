@@ -29,6 +29,11 @@ typedef struct cachectx_s cachectx_t;
 typedef struct cache_devCtx_s cache_devCtx_t; /* Device driver context should be defined by flash driver */
 
 
+/*
+ * Callbacks return the number of transferred bytes or a negative error code, which is returned to the caller
+ * of the cache function. A transfer shorter than count is continued, a transfer of 0 bytes ends with -EIO.
+ * They are called with the cache locked, so they must not use the cache.
+ */
 typedef ssize_t (*cache_readCb_t)(uint64_t offset, void *buffer, size_t count, cache_devCtx_t *ctx);
 
 
@@ -45,6 +50,7 @@ typedef struct {
 
 cachectx_t *cache_init(size_t srcMemSize, size_t lineSize, size_t linesCnt, const cache_ops_t *ops);
 
+/* Writes not written lines first, the cache stays usable when it fails */
 int cache_deinit(cachectx_t *cache);
 
 

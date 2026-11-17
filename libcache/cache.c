@@ -168,7 +168,11 @@ static int cache_flushLine(cachectx_t *cache, cacheline_t *linePtr, uint64_t add
 	if ((linePtr != NULL) && IS_VALID(linePtr->flags) && IS_DIRTY(linePtr->flags)) {
 		while (left > 0) {
 			writeCount = cache->ops.writeCb(addr, (const unsigned char *)linePtr->data + position, left, cache->ops.ctx);
-			if (writeCount <= 0) {
+			if (writeCount < 0) {
+				return (int)writeCount;
+			}
+			/* No progress or more than requested */
+			if ((writeCount == 0) || ((size_t)writeCount > left)) {
 				return -EIO;
 			}
 
@@ -230,7 +234,7 @@ static int cache_executePolicy(cachectx_t *cache, cacheline_t *linePtr, uint64_t
 }
 
 
-static cacheline_t *cache_allocateLine(cachectx_t *cache, const uint64_t setIndex, const uint64_t tag)
+static int cache_allocateLine(cachectx_t *cache, const uint64_t setIndex, const uint64_t tag, cacheline_t **res)
 {
 	int i;
 	uint64_t addr = 0;
@@ -253,7 +257,7 @@ static cacheline_t *cache_allocateLine(cachectx_t *cache, const uint64_t setInde
 
 			if (linePtr->data == NULL) {
 				setPtr->count--;
-				return NULL;
+				return -ENOMEM;
 			}
 		}
 	}
@@ -265,7 +269,7 @@ static cacheline_t *cache_allocateLine(cachectx_t *cache, const uint64_t setInde
 			addr = cache_computeAddr(cache, linePtr->tag, setIndex);
 			int err = cache_flushLine(cache, linePtr, addr);
 			if (err < 0) {
-				return NULL;
+				return err;
 			}
 		}
 
@@ -277,8 +281,9 @@ static cacheline_t *cache_allocateLine(cachectx_t *cache, const uint64_t setInde
 	unsigned char flags = 0;
 	SET_VALID(flags);
 	linePtr->flags = flags;
+	*res = linePtr;
 
-	return linePtr;
+	return 0;
 }
 
 
@@ -351,7 +356,11 @@ static int cache_fetchLine(cachectx_t *cache, cacheline_t *linePtr, const uint64
 
 	while (left > 0) {
 		readCount = cache->ops.readCb(tempAddr, (unsigned char *)linePtr->data + position, left, cache->ops.ctx);
-		if (readCount <= 0) {
+		if (readCount < 0) {
+			return (int)readCount;
+		}
+		/* No progress or more than requested */
+		if ((readCount == 0) || ((size_t)readCount > left)) {
 			return -EIO;
 		}
 
@@ -397,15 +406,14 @@ ssize_t cache_write(cachectx_t *cache, uint64_t addr, const void *buffer, size_t
 
 		/* cache miss */
 		if (linePtr == NULL) {
-			linePtr = cache_allocateLine(cache, index, tag);
-
-			if (linePtr == NULL) {
-				position = -ENOMEM;
+			int err = cache_allocateLine(cache, index, tag, &linePtr);
+			if (err < 0) {
+				position = err;
 				break;
 			}
 
 			if (tempCount < cache->lineSize) {
-				int err = cache_fetchLine(cache, linePtr, addr);
+				err = cache_fetchLine(cache, linePtr, addr);
 				if (err < 0) {
 					cache_invalidateLine(&cache->sets[index], linePtr);
 					position = err;
@@ -468,14 +476,13 @@ ssize_t cache_read(cachectx_t *cache, uint64_t addr, void *buffer, size_t count)
 
 		/* cache miss */
 		if (linePtr == NULL) {
-			linePtr = cache_allocateLine(cache, index, tag);
-
-			if (linePtr == NULL) {
-				position = -ENOMEM;
+			int err = cache_allocateLine(cache, index, tag, &linePtr);
+			if (err < 0) {
+				position = err;
 				break;
 			}
 
-			int err = cache_fetchLine(cache, linePtr, addr);
+			err = cache_fetchLine(cache, linePtr, addr);
 			if (err < 0) {
 				cache_invalidateLine(&cache->sets[index], linePtr);
 				position = err;
