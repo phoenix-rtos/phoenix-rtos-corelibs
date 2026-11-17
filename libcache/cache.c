@@ -242,6 +242,12 @@ int cache_deinit(cachectx_t *cache)
 		return err;
 	}
 
+	for (size_t i = 0; i < cache->numSets; ++i) {
+		for (size_t j = 0; j < LIBCACHE_NUM_WAYS; ++j) {
+			free(cache->sets[i].lines[j].data);
+		}
+	}
+
 	free(cache->sets);
 	free(cache);
 
@@ -318,7 +324,8 @@ static cacheline_t *cache_findLine(cacheset_t *setPtr, uint64_t tag, int update)
 		cacheline_t *linePtr = &setPtr->lines[i];
 
 		if (IS_VALID(linePtr->flags) && (linePtr->tag == tag)) {
-			if (update != LIBCACHE_TIMESTAMPS_NO_UPDATE) {
+			/* The tail of the list is the most recently used line */
+			if ((update != LIBCACHE_TIMESTAMPS_NO_UPDATE) && (setPtr->timestamps->prev != linePtr)) {
 				LIST_REMOVE(&setPtr->timestamps, linePtr);
 				LIST_ADD(&setPtr->timestamps, linePtr);
 			}
@@ -421,7 +428,7 @@ ssize_t cache_write(cachectx_t *cache, uint64_t addr, const void *buffer, size_t
 
 	left = count;
 	offset = cache_computeOffset(cache, addr);
-	remainder = (left - (cache->lineSize - offset)) % cache->lineSize;
+	remainder = (left - (cache->lineSize - offset)) & cache->offMask;
 
 	mutexLock(cache->lock);
 
@@ -491,7 +498,7 @@ ssize_t cache_read(cachectx_t *cache, uint64_t addr, void *buffer, size_t count)
 
 	left = count;
 	offset = cache_computeOffset(cache, addr);
-	remainder = (left - (cache->lineSize - offset)) % cache->lineSize;
+	remainder = (left - (cache->lineSize - offset)) & cache->offMask;
 
 	mutexLock(cache->lock);
 
@@ -581,9 +588,8 @@ static void cache_invalidateLine(cacheset_t *setPtr, cacheline_t *linePtr)
 {
 	LIST_REMOVE(&setPtr->timestamps, linePtr);
 
+	/* The buffer is kept for the next line allocated in this way */
 	CLEAR_VALID(linePtr->flags);
-	free(linePtr->data);
-	linePtr->data = NULL;
 	linePtr->tag = 0;
 
 	setPtr->count -= 1;
