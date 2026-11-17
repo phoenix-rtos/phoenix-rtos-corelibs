@@ -67,7 +67,6 @@ struct cacheline_s {
 
 typedef struct {
 	cacheline_t *timestamps;
-	cacheline_t *tags[LIBCACHE_NUM_WAYS];
 	cacheline_t lines[LIBCACHE_NUM_WAYS];
 	size_t count;
 } cacheset_t;
@@ -221,38 +220,6 @@ int cache_deinit(cachectx_t *cache)
 }
 
 
-static int cache_compareTags(const void *lhs, const void *rhs)
-{
-	int ret = 0;
-
-	cacheline_t **lhsLine = (cacheline_t **)lhs;
-	cacheline_t **rhsLine = (cacheline_t **)rhs;
-
-	if (*lhsLine == NULL && *rhsLine == NULL) {
-		ret = 0;
-	}
-	else if (*lhsLine == NULL && *rhsLine != NULL) {
-		ret = -1;
-	}
-	else if (*lhsLine != NULL && *rhsLine == NULL) {
-		ret = 1;
-	}
-	else {
-		if ((*lhsLine)->tag < (*rhsLine)->tag) {
-			ret = -1;
-		}
-		else if ((*lhsLine)->tag == (*rhsLine)->tag) {
-			ret = 0;
-		}
-		else {
-			ret = 1;
-		}
-	}
-
-	return ret;
-}
-
-
 static int cache_executePolicy(cachectx_t *cache, cacheline_t *linePtr, uint64_t addr, int policy)
 {
 	if (policy == LIBCACHE_WRITE_THROUGH) {
@@ -277,13 +244,6 @@ static cacheline_t *cache_allocateLine(cachectx_t *cache, const uint64_t setInde
 		for (i = 0; i < setPtr->count; ++i) {
 			if (!IS_VALID(setPtr->lines[i].flags)) {
 				linePtr = &(setPtr->lines[i]);
-				break;
-			}
-		}
-
-		for (i = 0; i < setPtr->count; ++i) {
-			if (setPtr->tags[i] == NULL) {
-				setPtr->tags[i] = linePtr;
 				break;
 			}
 		}
@@ -318,30 +278,26 @@ static cacheline_t *cache_allocateLine(cachectx_t *cache, const uint64_t setInde
 	SET_VALID(flags);
 	linePtr->flags = flags;
 
-	qsort(setPtr->tags, LIBCACHE_NUM_WAYS, sizeof(cacheline_t *), cache_compareTags);
-
 	return linePtr;
 }
 
 
 static cacheline_t *cache_findLine(cacheset_t *setPtr, uint64_t tag, int update)
 {
-	cacheline_t key, *keyPtr = &key, *linePtr = NULL, **temp = NULL;
+	for (size_t i = 0; i < LIBCACHE_NUM_WAYS; ++i) {
+		cacheline_t *linePtr = &setPtr->lines[i];
 
-	key.tag = tag;
+		if (IS_VALID(linePtr->flags) && (linePtr->tag == tag)) {
+			if (update != LIBCACHE_TIMESTAMPS_NO_UPDATE) {
+				LIST_REMOVE(&setPtr->timestamps, linePtr);
+				LIST_ADD(&setPtr->timestamps, linePtr);
+			}
 
-	temp = bsearch(&keyPtr, setPtr->tags, LIBCACHE_NUM_WAYS, sizeof(cacheline_t *), cache_compareTags);
-
-	if (temp != NULL && IS_VALID((*temp)->flags)) {
-		if (update != LIBCACHE_TIMESTAMPS_NO_UPDATE) {
-			LIST_REMOVE(&setPtr->timestamps, *temp);
-			LIST_ADD(&setPtr->timestamps, *temp);
+			return linePtr;
 		}
-
-		linePtr = *temp;
 	}
 
-	return linePtr;
+	return NULL;
 }
 
 

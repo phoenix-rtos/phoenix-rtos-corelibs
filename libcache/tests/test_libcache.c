@@ -1326,6 +1326,8 @@ static void runner(void)
 	RUN_TEST_GROUP(test_clean);
 	RUN_TEST_GROUP(test_callback_err);
 	RUN_TEST_GROUP(test_integers);
+
+	RUN_TEST_GROUP(test_model);
 }
 
 
