@@ -1,0 +1,35 @@
+libcache/tests/test_libcache.c
+  s_aefb43ae6c4ab5::t_bfae16f16a6a37 1-294,296-1335
+  s_aefb43ae6c4ab5::t_d49e4b90cda69d 295
+libcache/tests/Makefile
+  s_aefb43ae6c4ab5::t_e47ce9a212817f 1-10,12-16
+  s_aefb43ae6c4ab5::t_853ae11678022d 11
+libcache/Makefile
+  s_aefb43ae6c4ab5::t_5a2d3694174da1 12,16-21
+libcache/tests/host/sys/list.h
+  s_aefb43ae6c4ab5::t_e47ce9a212817f 1-52
+libcache/tests/libcache_utils.c
+  s_aefb43ae6c4ab5::t_bfae16f16a6a37 1-84
+libcache/tests/host/sys/threads.h
+  s_aefb43ae6c4ab5::t_e47ce9a212817f 1-60
+libcache/tests/test.yaml
+  s_aefb43ae6c4ab5::t_e47ce9a212817f 1-7
+libcache/tests/libcache_utils.h
+  s_aefb43ae6c4ab5::t_bfae16f16a6a37 1-82
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "269b6396a97caf5612d493d1fed344bc245b6ffd",
+  "prompts": {},
+  "sessions": {
+    "s_aefb43ae6c4ab5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "47024dd1-9607-45d7-a8d8-bac9bdaa5945",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Marek Białowąs <marek.bialowas@phoenix-rtos.com>"
+    }
+  }
+}
