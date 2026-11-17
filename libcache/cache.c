@@ -15,6 +15,7 @@
 
 #include <sys/list.h>
 #include <sys/threads.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -97,7 +98,13 @@ static void cache_invalidateLine(cacheset_t *setPtr, cacheline_t *linePtr);
 
 static uint64_t cache_generateMask(int numBits)
 {
-	return ((uint64_t)1 << numBits) - 1;
+	return (numBits < LIBCACHE_ADDR_WIDTH) ? (((uint64_t)1 << numBits) - 1) : UINT64_MAX;
+}
+
+
+static bool cache_isPowerOfTwo(size_t x)
+{
+	return (x != 0) && ((x & (x - 1)) == 0);
 }
 
 
@@ -111,6 +118,15 @@ cachectx_t *cache_init(uint64_t srcMemSize, size_t lineSize, size_t linesCnt, co
 	}
 
 	if (linesCnt % LIBCACHE_NUM_WAYS != 0) {
+		return NULL;
+	}
+
+	/* An address is split into the tag, the set index and the offset in a line with bit masks */
+	if (!cache_isPowerOfTwo(lineSize) || !cache_isPowerOfTwo(linesCnt / LIBCACHE_NUM_WAYS)) {
+		return NULL;
+	}
+
+	if (ops == NULL || ops->readCb == NULL) {
 		return NULL;
 	}
 
@@ -391,6 +407,10 @@ ssize_t cache_write(cachectx_t *cache, uint64_t addr, const void *buffer, size_t
 
 	if (buffer == NULL || (policy != LIBCACHE_WRITE_BACK && policy != LIBCACHE_WRITE_THROUGH) || addr > cache->srcMemSize) {
 		return -EINVAL;
+	}
+	/* Read-only cache */
+	if (cache->ops.writeCb == NULL) {
+		return -ENOSYS;
 	}
 	if (count == 0 || addr == cache->srcMemSize) {
 		return 0;

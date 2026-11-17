@@ -43,12 +43,14 @@ typedef ssize_t (*cache_writeCb_t)(uint64_t offset, const void *buffer, size_t c
 /* Cached source memory interface */
 typedef struct {
 	cache_readCb_t readCb;
-	cache_writeCb_t writeCb;
-	cache_devCtx_t *ctx; /* Device driver context */
+	cache_writeCb_t writeCb; /* NULL: read-only cache */
+	cache_devCtx_t *ctx;     /* Device driver context */
 } cache_ops_t;
 
 
+/* lineSize and linesCnt / 4 (number of sets, 4 lines each) have to be powers of two */
 cachectx_t *cache_init(uint64_t srcMemSize, size_t lineSize, size_t linesCnt, const cache_ops_t *ops);
+
 
 /* Writes not written lines first, the cache stays usable when it fails */
 int cache_deinit(cachectx_t *cache);
