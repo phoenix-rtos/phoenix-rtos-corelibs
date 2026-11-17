@@ -75,7 +75,7 @@ typedef struct {
 struct cachectx_s {
 	cacheset_t *sets;
 
-	size_t srcMemSize;
+	uint64_t srcMemSize;
 	size_t lineSize;
 	size_t linesCnt;
 	size_t numSets;
@@ -101,7 +101,7 @@ static uint64_t cache_generateMask(int numBits)
 }
 
 
-cachectx_t *cache_init(size_t srcMemSize, size_t lineSize, size_t linesCnt, const cache_ops_t *ops)
+cachectx_t *cache_init(uint64_t srcMemSize, size_t lineSize, size_t linesCnt, const cache_ops_t *ops)
 {
 	int err;
 	cachectx_t *cache = NULL;

@@ -129,6 +129,46 @@ TEST(test_bounds, ranges_atEnd)
 }
 
 
+/* Source memory which does not fit in 32 bits: the content is a function of the address */
+static ssize_t bigRead(uint64_t offset, void *buffer, size_t count, cache_devCtx_t *ctx)
+{
+	for (size_t i = 0; i < count; ++i) {
+		uint64_t addr = offset + i;
+		((unsigned char *)buffer)[i] = (unsigned char)(addr ^ (addr >> 8) ^ ((addr >> 32) * 0x5bU));
+	}
+
+	return (ssize_t)count;
+}
+
+
+TEST(test_bounds, sourceMemoryOver4GiB)
+{
+	static const cache_ops_t bigOps = { .readCb = bigRead };
+	const uint64_t size = ((uint64_t)5 << 32) + 3 * LINE_SIZE;
+	const uint64_t addrs[] = { LINE_ADDR(2) + 3, ((uint64_t)1 << 32) + LINE_ADDR(2) + 3, ((uint64_t)5 << 32) + LINE_ADDR(2) + 3 };
+	unsigned char expected[LINE_SIZE];
+	cachectx_t *big = cache_init(size, LINE_SIZE, LINES_CNT, &bigOps);
+
+	TEST_ASSERT_NOT_NULL(big);
+
+	/* Twice: the lines differ only in the address bits over 32 and all have to be kept apart in the cache */
+	for (int i = 0; i < 2; ++i) {
+		for (size_t j = 0; j < sizeof(addrs) / sizeof(addrs[0]); ++j) {
+			(void)bigRead(addrs[j], expected, LINE_SIZE - 3, NULL);
+			memset(buff, 0xa5, sizeof(buff));
+			TEST_ASSERT_EQUAL_INT(LINE_SIZE - 3, cache_read(big, addrs[j], buff, LINE_SIZE - 3));
+			TEST_ASSERT_EQUAL_MEMORY(expected, buff, LINE_SIZE - 3);
+		}
+	}
+
+	TEST_ASSERT_EQUAL_INT(1, cache_read(big, size - 1, buff, sizeof(buff)));
+	TEST_ASSERT_EQUAL_INT(0, cache_read(big, size, buff, sizeof(buff)));
+	TEST_ASSERT_EQUAL_INT(-EINVAL, cache_read(big, size + 1, buff, sizeof(buff)));
+
+	TEST_ASSERT_EQUAL_INT(EOK, cache_deinit(big));
+}
+
+
 TEST_GROUP_RUNNER(test_bounds)
 {
 	RUN_TEST_CASE(test_bounds, read_atEndReadsNothing);
@@ -136,4 +176,5 @@ TEST_GROUP_RUNNER(test_bounds)
 	RUN_TEST_CASE(test_bounds, read_lastLineIsShort);
 	RUN_TEST_CASE(test_bounds, write_lastLineIsShort);
 	RUN_TEST_CASE(test_bounds, ranges_atEnd);
+	RUN_TEST_CASE(test_bounds, sourceMemoryOver4GiB);
 }
