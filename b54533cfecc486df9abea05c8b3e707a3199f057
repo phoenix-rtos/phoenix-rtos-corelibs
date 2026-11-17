@@ -1,0 +1,37 @@
+libsha256/include/libsha256.h
+  s_a92fd5c43d1ea2::t_7316c992eae1a1 1-60
+libsha256/sha256.c
+  s_a92fd5c43d1ea2::t_57f9779aab566a 1,3,6-8,12-19,22-26,32,34-327
+  s_a92fd5c43d1ea2::t_318ef372c5643d 2,4-5,9-11,20-21,27-31,33
+Makefile
+  s_a92fd5c43d1ea2::t_45361317507712 16
+libsha256/Makefile
+  s_a92fd5c43d1ea2::t_9b7a7afd6d5199 1-13
+libsha256/sbom.json
+  s_a92fd5c43d1ea2::t_e3e772bffe462c 1-45
+libsha256/tests/test_libsha256_internal.c
+  s_a92fd5c43d1ea2::t_d9a1bfabb3a0c2 1-140
+libsha256/tests/test_libsha256.c
+  s_a92fd5c43d1ea2::t_84711fbaa8bb64 38,40-41
+  s_a92fd5c43d1ea2::t_9fdd1532015765 1-37,39,42-197
+libsha256/tests/Makefile
+  s_a92fd5c43d1ea2::t_3485851ece1a6b 1-31
+libsha256/README.md
+  s_a92fd5c43d1ea2::t_4a9a9db60b463c 1-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "b54533cfecc486df9abea05c8b3e707a3199f057",
+  "prompts": {},
+  "sessions": {
+    "s_a92fd5c43d1ea2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fafa4549-8072-4273-a3cf-6ddb203540c5",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Marek Białowąs <marek.bialowas@phoenix-rtos.com>"
+    }
+  }
+}

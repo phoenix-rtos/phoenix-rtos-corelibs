@@ -1,0 +1,24 @@
+libsha256/tests/test_libsha256_internal.c
+  s_a92fd5c43d1ea2::t_d9a1bfabb3a0c2 1-140
+libsha256/tests/test_libsha256.c
+  s_a92fd5c43d1ea2::t_84711fbaa8bb64 38,40-41
+  s_a92fd5c43d1ea2::t_9fdd1532015765 1-37,39,42-197
+libsha256/tests/Makefile
+  s_a92fd5c43d1ea2::t_3485851ece1a6b 1-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "1ec1c6ffab929fd6d2a8335241617cb7a0117e9f",
+  "prompts": {},
+  "sessions": {
+    "s_a92fd5c43d1ea2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fafa4549-8072-4273-a3cf-6ddb203540c5",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Marek Białowąs <marek.bialowas@phoenix-rtos.com>"
+    }
+  }
+}

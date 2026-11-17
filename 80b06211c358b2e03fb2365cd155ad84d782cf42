@@ -1,0 +1,19 @@
+libsha256/README.md
+  s_a92fd5c43d1ea2::t_4a9a9db60b463c 1-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "80b06211c358b2e03fb2365cd155ad84d782cf42",
+  "prompts": {},
+  "sessions": {
+    "s_a92fd5c43d1ea2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fafa4549-8072-4273-a3cf-6ddb203540c5",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Marek Białowąs <marek.bialowas@phoenix-rtos.com>"
+    }
+  }
+}
