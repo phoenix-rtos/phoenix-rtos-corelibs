@@ -458,12 +458,17 @@ ssize_t cache_write(cachectx_t *cache, uint64_t addr, const void *buffer, size_t
 			}
 		}
 		/* cache hit */
+		int wasDirty = IS_DIRTY(linePtr->flags);
 		memcpy((unsigned char *)linePtr->data + offset, (const unsigned char *)buffer + position, tempCount);
 
 		SET_DIRTY(linePtr->flags);
 
 		int err = cache_executePolicy(cache, linePtr, addr, policy);
 		if (err < 0) {
+			/* The caller handles the failed write, the source content is unknown: neither serve nor retry it */
+			if (wasDirty == 0) {
+				cache_invalidateLine(&cache->sets[index], linePtr);
+			}
 			position = err;
 			break;
 		}

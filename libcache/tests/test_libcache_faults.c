@@ -156,12 +156,83 @@ TEST(test_faults, writeThrough_errorCodeIsPropagated)
 	test_dev.failResult = -ENOSPC;
 	TEST_ASSERT_EQUAL_INT(-ENOSPC, cache_write(cache, LINE_ADDR(3), pattern, LINE_SIZE, LIBCACHE_WRITE_THROUGH));
 	TEST_ASSERT_EQUAL_UINT(1, test_dev.writes);
+}
 
-	/* The line stays dirty, so a flush writes it */
+
+TEST(test_faults, writeThrough_failedLineIsDropped)
+{
+	unsigned char orig[LINE_SIZE];
+
+	memcpy(orig, test_dev.mem + LINE_ADDR(3), LINE_SIZE);
+	test_dev.failWrite = true;
+	test_dev.failResult = -EIO;
+	TEST_ASSERT_EQUAL_INT(-EIO, cache_write(cache, LINE_ADDR(3), pattern, LINE_SIZE, LIBCACHE_WRITE_THROUGH));
+
+	/* Reads get what the source holds, not the data which failed to be written */
+	test_dev.failWrite = false;
+	TEST_ASSERT_EQUAL_INT(LINE_SIZE, cache_read(cache, LINE_ADDR(3), buff, LINE_SIZE));
+	TEST_ASSERT_EQUAL_MEMORY(orig, buff, LINE_SIZE);
+	TEST_ASSERT_EQUAL_UINT(1, test_dev.reads);
+
+	/* The cache does not retry the write behind the caller's back */
+	TEST_ASSERT_EQUAL_INT(EOK, cache_flush(cache, 0, DEV_SIZE));
+	TEST_ASSERT_EQUAL_INT(EOK, cache_deinit(cache));
+	cache = NULL;
+	TEST_ASSERT_EQUAL_UINT(1, test_dev.writes);
+	TEST_ASSERT_EQUAL_MEMORY(orig, test_dev.mem + LINE_ADDR(3), LINE_SIZE);
+}
+
+
+TEST(test_faults, writeThrough_failedCachedLineIsDropped)
+{
+	unsigned char orig[LINE_SIZE];
+
+	memcpy(orig, test_dev.mem + LINE_ADDR(3), LINE_SIZE);
+	TEST_ASSERT_EQUAL_INT(LINE_SIZE, cache_read(cache, LINE_ADDR(3), buff, LINE_SIZE));
+
+	test_dev.failWrite = true;
+	test_dev.failResult = -EIO;
+	TEST_ASSERT_EQUAL_INT(-EIO, cache_write(cache, LINE_ADDR(3) + 2, pattern, 4, LIBCACHE_WRITE_THROUGH));
+
+	test_dev.failWrite = false;
+	TEST_ASSERT_EQUAL_INT(LINE_SIZE, cache_read(cache, LINE_ADDR(3), buff, LINE_SIZE));
+	TEST_ASSERT_EQUAL_MEMORY(orig, buff, LINE_SIZE);
+	TEST_ASSERT_EQUAL_UINT(2, test_dev.reads);
+}
+
+
+TEST(test_faults, writeThrough_errorKeepsWrittenLines)
+{
+	test_dev.failWrite = true;
+	test_dev.failResult = -EIO;
+	test_dev.failBeg = LINE_ADDR(4);
+	test_dev.failEnd = LINE_ADDR(5);
+	TEST_ASSERT_EQUAL_INT(-EIO, cache_write(cache, LINE_ADDR(3), pattern, 2 * LINE_SIZE, LIBCACHE_WRITE_THROUGH));
+	TEST_ASSERT_EQUAL_MEMORY(pattern, test_dev.mem + LINE_ADDR(3), LINE_SIZE);
+
+	/* The written line is a hit, the failed one is read again */
+	test_dev.failWrite = false;
+	TEST_ASSERT_EQUAL_INT(2 * LINE_SIZE, cache_read(cache, LINE_ADDR(3), buff, 2 * LINE_SIZE));
+	TEST_ASSERT_EQUAL_MEMORY(test_dev.mem + LINE_ADDR(3), buff, 2 * LINE_SIZE);
+	TEST_ASSERT_EQUAL_UINT(1, test_dev.reads);
+	TEST_ASSERT_TRUE(test_dev.lastReadAddr == LINE_ADDR(4));
+}
+
+
+TEST(test_faults, writeThrough_errorKeepsNotWrittenData)
+{
+	TEST_ASSERT_EQUAL_INT(LINE_SIZE, cache_write(cache, LINE_ADDR(3), pattern, LINE_SIZE, LIBCACHE_WRITE_BACK));
+
+	test_dev.failWrite = true;
+	test_dev.failResult = -ENOSPC;
+	TEST_ASSERT_EQUAL_INT(-ENOSPC, cache_write(cache, LINE_ADDR(3), pattern + 1, 2, LIBCACHE_WRITE_THROUGH));
+
+	/* The line held write-back data, which only the cache has: it stays dirty, so a flush writes it */
 	test_dev.failWrite = false;
 	TEST_ASSERT_EQUAL_INT(EOK, cache_flush(cache, 0, DEV_SIZE));
 	TEST_ASSERT_EQUAL_UINT(2, test_dev.writes);
-	TEST_ASSERT_EQUAL_MEMORY(pattern, test_dev.mem + LINE_ADDR(3), LINE_SIZE);
+	TEST_ASSERT_EQUAL_MEMORY(pattern + 1, test_dev.mem + LINE_ADDR(3), 2);
+	TEST_ASSERT_EQUAL_MEMORY(pattern + 2, test_dev.mem + LINE_ADDR(3) + 2, LINE_SIZE - 2);
 }
 
 
@@ -261,6 +332,10 @@ TEST_GROUP_RUNNER(test_faults)
 	RUN_TEST_CASE(test_faults, write_shortTransfersAreContinued);
 	RUN_TEST_CASE(test_faults, write_fetchErrorCodeIsPropagated);
 	RUN_TEST_CASE(test_faults, writeThrough_errorCodeIsPropagated);
+	RUN_TEST_CASE(test_faults, writeThrough_failedLineIsDropped);
+	RUN_TEST_CASE(test_faults, writeThrough_failedCachedLineIsDropped);
+	RUN_TEST_CASE(test_faults, writeThrough_errorKeepsWrittenLines);
+	RUN_TEST_CASE(test_faults, writeThrough_errorKeepsNotWrittenData);
 	RUN_TEST_CASE(test_faults, flush_errorCodeIsPropagated);
 	RUN_TEST_CASE(test_faults, clean_errorKeepsLine);
 	RUN_TEST_CASE(test_faults, eviction_writeErrorCodeIsPropagated);
