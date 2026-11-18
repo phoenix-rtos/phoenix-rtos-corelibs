@@ -1110,11 +1110,7 @@ TEST(test_callback_err, cache_write_writeCallbackErr)
 	writeCount = cache_write(cache, addr, buffer, count, LIBCACHE_WRITE_THROUGH);
 	TEST_ASSERT_EQUAL_INT(-EIO, writeCount);
 
-	ret = cache_deinit(cache);
-	TEST_ASSERT_EQUAL_INT(-EIO, ret);
-
-	/* The cache is kept on a failed deinit */
-	test_writeCbErrOff = true;
+	/* The failed line is dropped, deinit has nothing to write */
 	ret = cache_deinit(cache);
 	TEST_ASSERT_EQUAL_INT(EOK, ret);
 }

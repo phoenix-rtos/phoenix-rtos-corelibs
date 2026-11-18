@@ -59,6 +59,7 @@ int cache_deinit(cachectx_t *cache);
 ssize_t cache_read(cachectx_t *cache, uint64_t addr, void *buffer, size_t count);
 
 
+/* LIBCACHE_WRITE_THROUGH: a line which failed to be written is dropped, unless it held earlier not written data */
 ssize_t cache_write(cachectx_t *cache, uint64_t addr, const void *buffer, size_t count, int policy);
 
 
