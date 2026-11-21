@@ -10,6 +10,6 @@
 #
 
 NAME := libalgo
-LOCAL_HEADERS := lf-fifo.h
+LOCAL_HEADERS := lf-fifo.h a3buf.h
 LOCAL_SRCS :=
 include $(static-lib.mk)
