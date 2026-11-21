@@ -1,0 +1,7 @@
+test:
+  type: unity
+  tests:
+    - name: unit-a3buf
+      execute: test-libalgo-a3buf
+      targets:
+        include: [host-generic-pc]
