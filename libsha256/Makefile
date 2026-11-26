@@ -9,5 +9,6 @@
 
 NAME := libsha256
 LOCAL_SRCS := sha256.c
+LOCAL_SBOM := sbom.json
 
 include $(static-lib.mk)
